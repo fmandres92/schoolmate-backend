@@ -28,6 +28,10 @@ public class LoginUsuario {
         }
 
         if (!passwordEncoder.matches(request.getPassword(), usuario.getPasswordHash())) {
+            // TEMPORAL: Generar hash correcto para actualizar en BD
+            String correctHash = passwordEncoder.encode(request.getPassword());
+            System.out.println("HASH CORRECTO PARA ACTUALIZAR EN BD:");
+            System.out.println("UPDATE usuario SET password_hash = '" + correctHash + "' WHERE id = '" + usuario.getId() + "';");
             throw new BadCredentialsException("Credenciales inválidas");
         }
 
