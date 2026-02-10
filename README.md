@@ -2,70 +2,62 @@
 
 Backend REST API para SchoolMate Hub - Sistema de Gestión Escolar
 
+## Estado
+
+✅ **FASE 0 COMPLETADA** - Backend operativo con autenticación JWT y Supabase PostgreSQL
+
 ## Requisitos
 
-- Java 17+
-- Maven 3.8+
+- Java 21 LTS
+- Maven 3.9+
 
-## Estructura del Proyecto
-
-```
-schoolmate-hub-api/
-├── src/main/java/com/schoolmate/api/
-│   ├── config/         # Configuraciones (Security, CORS)
-│   ├── security/       # JWT, UserPrincipal, Filtros
-│   ├── entity/         # Entidades JPA
-│   ├── enums/          # Enums (Rol, etc.)
-│   ├── repository/     # Repositorios Spring Data
-│   ├── usecase/        # Casos de uso
-│   ├── controller/     # Controladores REST
-│   ├── dto/            # DTOs (Request/Response)
-│   └── exception/      # Manejo de excepciones
-├── src/main/resources/
-│   ├── application.yml
-│   ├── application-dev.yml
-│   ├── application-prod.yml
-│   └── db/migration/   # Migraciones Flyway
-└── pom.xml
-```
-
-## Configuración
-
-### Desarrollo (H2)
-
-La aplicación usa H2 en memoria por defecto (perfil `dev`).
+## Ejecución Rápida
 
 ```bash
-./mvnw spring-boot:run
-```
+# Clonar y ejecutar
+git clone https://github.com/fmandres92/schoolmate-backend.git
+cd schoolmate-backend
+mvn spring-boot:run
 
-### Producción (PostgreSQL)
-
-Configurar variables de entorno:
-
-```bash
-export DB_HOST=db.xxx.supabase.co
-export DB_PORT=5432
-export DB_NAME=postgres
-export DB_USERNAME=postgres
-export DB_PASSWORD=tu_password
-export JWT_SECRET=tu_secret_largo
-```
-
-```bash
-./mvnw spring-boot:run -Dspring.profiles.active=prod
+# La API estará disponible en http://localhost:8080
 ```
 
 ## Endpoints
 
-### Auth
+### Autenticación
 
-- `POST /api/auth/login` - Login (público)
-- `GET /api/auth/me` - Datos del usuario autenticado
+| Método | Endpoint | Descripción | Acceso |
+|--------|----------|-------------|--------|
+| POST | `/api/auth/login` | Login con email y password | Público |
+| GET | `/api/auth/me` | Datos del usuario autenticado | Autenticado |
 
-### Consola H2 (solo dev)
+### Ejemplos
 
-- `http://localhost:8080/h2-console`
+**Login:**
+```bash
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@edugestio.cl","password":"admin123"}'
+```
+
+**Respuesta:**
+```json
+{
+  "token": "eyJhbGciOiJIUzUxMiJ9...",
+  "tipo": "Bearer",
+  "id": "admin-1",
+  "email": "admin@edugestio.cl",
+  "nombre": "Carlos",
+  "apellido": "Mendoza",
+  "rol": "ADMIN"
+}
+```
+
+**Obtener datos del usuario:**
+```bash
+curl http://localhost:8080/api/auth/me \
+  -H "Authorization: Bearer eyJhbGciOiJIUzUxMiJ9..."
+```
 
 ## Usuarios de Prueba
 
@@ -75,10 +67,27 @@ export JWT_SECRET=tu_secret_largo
 | profesor@edugestio.cl | prof123 | PROFESOR |
 | apoderado@edugestio.cl | apod123 | APODERADO |
 
+## Stack Tecnológico
+
+- **Java 21 LTS**
+- **Spring Boot 4.0.2**
+- **Spring Security + JWT**
+- **PostgreSQL** (Supabase)
+- **Flyway** para migraciones
+- **Maven** para build
+
+## Documentación
+
+Ver [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) para documentación técnica completa.
+
 ## Compilación
 
 ```bash
-./mvnw clean compile
-./mvnw test
-./mvnw package
+mvn clean compile    # Compilar
+mvn test             # Tests
+mvn package          # Crear JAR
 ```
+
+---
+
+**Repositorio:** https://github.com/fmandres92/schoolmate-backend

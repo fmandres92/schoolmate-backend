@@ -2,7 +2,7 @@
 
 > **Versión**: 0.1.0  
 > **Última Actualización**: Febrero 2026  
-> **Estado**: Fase 0 Completada - Fundación del Backend  
+> **Estado**: ✅ FASE 0 COMPLETADA - Backend operativo con autenticación JWT y Supabase PostgreSQL  
 
 ---
 
@@ -40,8 +40,7 @@
 #### Base de Datos
 | Tecnología | Versión | Propósito |
 |------------|---------|-----------|
-| H2 | 2.4.240 | Base de datos en memoria (dev) |
-| PostgreSQL | 42.7.9 | Base de datos producción |
+| PostgreSQL | 42.7.9 | Base de datos (Supabase) |
 | Flyway | 11.14.1 | Migraciones de schema |
 
 #### Utilidades
@@ -1067,7 +1066,7 @@ logging:
 - ✅ Proyecto Maven con Spring Boot 4.0.2
 - ✅ Java 21 LTS
 - ✅ Spring Security + JWT
-- ✅ H2 para desarrollo, PostgreSQL para prod
+- ✅ Supabase PostgreSQL (dev y prod)
 - ✅ Flyway migraciones
 - ✅ Tabla `usuario` con 3 usuarios seed
 - ✅ Endpoints: `/api/auth/login`, `/api/auth/me`
@@ -1075,10 +1074,19 @@ logging:
 **Use Cases:**
 - ✅ LoginUsuario
 
+**Usuarios de Prueba Configurados:**
+| Email | Password | Rol |
+|-------|----------|-----|
+| admin@edugestio.cl | admin123 | ADMIN |
+| profesor@edugestio.cl | prof123 | PROFESOR |
+| apoderado@edugestio.cl | apod123 | APODERADO |
+
 **Criterio de éxito:**
-- ✅ Login via API retorna JWT
-- ✅ Endpoints protegidos rechazan sin token
+- ✅ Login via API retorna JWT válido
+- ✅ Endpoint `/api/auth/me` funciona con token
+- ✅ 3 usuarios pueden hacer login
 - ✅ Compila y ejecuta sin errores
+- ✅ Conectado a Supabase PostgreSQL
 
 ---
 

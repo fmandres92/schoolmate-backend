@@ -19,7 +19,7 @@ spring:
     validate-on-migrate: true
 
 jwt:
-  secret: schoolmate-dev-secret-key-que-debe-tener-al-menos-256-bits-para-hs256-algorithm-ok
+  secret: c2Nob29sbWF0ZS1kZXYtc2VjcmV0LWtleS1xdWUtZGViZS10ZW5lci1hbC1tZW5vcy0yNTYtYml0cy1wYXJhLWJhc2U2NC1lbmNvZGluZw==
   expiration: 86400000
 
 logging:
