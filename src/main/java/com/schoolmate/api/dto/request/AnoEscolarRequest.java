@@ -15,6 +15,9 @@ public class AnoEscolarRequest {
     @NotNull(message = "El año es obligatorio")
     private Integer ano;
 
+    @NotNull(message = "La fecha de inicio de planificación es obligatoria")
+    private LocalDate fechaInicioPlanificacion;
+
     @NotNull(message = "La fecha de inicio es obligatoria")
     private LocalDate fechaInicio;
 

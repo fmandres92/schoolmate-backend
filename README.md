@@ -4,7 +4,14 @@ Backend REST API para SchoolMate Hub - Sistema de Gestión Escolar
 
 ## Estado
 
-✅ **FASE 0 COMPLETADA** - Backend operativo con autenticación JWT y Supabase PostgreSQL
+✅ **FASE 2 COMPLETADA** - Catálogo Base operativo con Años Escolares, Grados y Materias
+
+### Última Actualización (Febrero 2026)
+**Refactorización del Sistema de Estados de Año Escolar:**
+- El estado ahora se calcula automáticamente basado en fechas
+- Estados: `FUTURO`, `PLANIFICACION`, `ACTIVO`, `CERRADO`
+- Eliminada la activación manual mediante campo `activo`
+- Nuevo campo: `fecha_inicio_planificacion` (3 meses antes del inicio)
 
 ## Requisitos
 
@@ -30,6 +37,22 @@ mvn spring-boot:run
 |--------|----------|-------------|--------|
 | POST | `/api/auth/login` | Login con email y password | Público |
 | GET | `/api/auth/me` | Datos del usuario autenticado | Autenticado |
+
+### Años Escolares (Estados Calculados)
+
+| Método | Endpoint | Descripción | Acceso |
+|--------|----------|-------------|--------|
+| GET | `/api/anos-escolares` | Listar todos con estado calculado | ADMIN |
+| GET | `/api/anos-escolares/{id}` | Obtener por ID | ADMIN |
+| GET | `/api/anos-escolares/activo` | Obtener año activo actual | Autenticado |
+| POST | `/api/anos-escolares` | Crear nuevo año escolar | ADMIN |
+| PUT | `/api/anos-escolares/{id}` | Actualizar fechas | ADMIN |
+
+**Estados Calculados:**
+- `FUTURO`: Hoy < fecha_inicio_planificacion
+- `PLANIFICACION`: fecha_inicio_planificacion <= hoy < fecha_inicio
+- `ACTIVO`: fecha_inicio <= hoy <= fecha_fin
+- `CERRADO`: hoy > fecha_fin
 
 ### Ejemplos
 

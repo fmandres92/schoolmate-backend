@@ -1,8 +1,9 @@
 # SchoolMate Hub API - Documentación Técnica Completa
 
-> **Versión**: 0.2.0  
+> **Versión**: 0.2.1  
 > **Última Actualización**: Febrero 2026  
 > **Estado**: ✅ FASE 2 COMPLETADA - Catálogo Base (Años Escolares, Grados, Materias) operativo  
+> **Nota**: Sistema de estados de Año Escolar refactorizado a cálculo automático por fechas  
 
 ---
 
@@ -270,7 +271,8 @@ schoolmate-hub-api/
 │  │  │  │   └── 📄 Materia.java                # Tabla materia
 │  │  │  │
 │  │  │  ├── 📁 enums/                          # Enumeraciones
-│  │  │  │   └── 📄 Rol.java                    # ADMIN, PROFESOR, APODERADO
+│  │  │  │   ├── 📄 Rol.java                    # ADMIN, PROFESOR, APODERADO
+│  │  │  │   └── 📄 EstadoAnoEscolar.java       # FUTURO, PLANIFICACION, ACTIVO, CERRADO
 │  │  │  │
 │  │  │  ├── 📁 repository/                     # Repositorios Spring Data
 │  │  │  │   ├── 📄 UsuarioRepository.java      # Acceso a tabla usuario
@@ -279,10 +281,8 @@ schoolmate-hub-api/
 │  │  │  │   └── 📄 MateriaRepository.java      # Acceso a tabla materia
 │  │  │  │
 │  │  │  ├── 📁 usecase/                        # Casos de uso
-│  │  │  │   ├── 📁 auth/
-│  │  │  │   │   └── 📄 LoginUsuario.java       # Login de usuarios
-│  │  │  │   └── 📁 anoescolar/
-│  │  │  │       └── 📄 ActivarAnoEscolar.java  # Activar año escolar
+│  │  │  │   └── 📁 auth/
+│  │  │  │       └── 📄 LoginUsuario.java       # Login de usuarios
 │  │  │  │
 │  │  │  ├── 📁 controller/                     # Controladores REST
 │  │  │  │   ├── 📄 AuthController.java         # Endpoints de auth
@@ -292,9 +292,11 @@ schoolmate-hub-api/
 │   │   │   │
 │   │   │   ├── 📁 dto/                            # Data Transfer Objects
 │   │   │   │   ├── 📁 request/
-│   │   │   │   │   └── 📄 LoginRequest.java       # Request de login
+│   │   │   │   │   ├── 📄 LoginRequest.java       # Request de login
+│   │   │   │   │   └── 📄 AnoEscolarRequest.java  # Request de año escolar
 │   │   │   │   └── 📁 response/
-│   │   │   │       └── 📄 AuthResponse.java       # Response de auth
+│   │   │   │       ├── 📄 AuthResponse.java       # Response de auth
+│   │   │   │       └── 📄 AnoEscolarResponse.java # Response de año escolar
 │   │   │   │
 │   │   │   └── 📁 exception/                      # Manejo de excepciones
 │   │   │       ├── 📄 GlobalExceptionHandler.java # Handler global
@@ -580,15 +582,25 @@ public class CursoController {
 | Campo | Tipo | Constraints | Descripción |
 |-------|------|-------------|-------------|
 | id | VARCHAR(36) | PK | Identificador único |
-| ano | INTEGER | NOT NULL | Año escolar (ej: 2026) |
+| ano | INTEGER | NOT NULL, UNIQUE | Año escolar (ej: 2026) |
+| fecha_inicio_planificacion | DATE | NOT NULL | Inicio de planificación (3 meses antes) |
 | fecha_inicio | DATE | NOT NULL | Fecha de inicio del año |
 | fecha_fin | DATE | NOT NULL | Fecha de término del año |
-| activo | BOOLEAN | NOT NULL, DEFAULT FALSE | Año escolar activo (solo uno) |
 | created_at | TIMESTAMP | NOT NULL | Fecha de creación |
 | updated_at | TIMESTAMP | NOT NULL | Fecha de actualización |
 
+**Constraints:**
+- chk_fechas_orden: fecha_inicio_planificacion < fecha_inicio < fecha_fin
+- uq_ano_escolar_ano: UNIQUE (ano)
+
+**Estado Calculado (no persistido):**
+El estado se calcula automáticamente comparando `LocalDate.now()` con las fechas:
+- **FUTURO**: Hoy < fecha_inicio_planificacion
+- **PLANIFICACION**: fecha_inicio_planificacion <= hoy < fecha_inicio
+- **ACTIVO**: fecha_inicio <= hoy <= fecha_fin
+- **CERRADO**: hoy > fecha_fin
+
 **Índices:**
-- idx_ano_escolar_activo (activo)
 - idx_ano_escolar_ano (ano)
 
 #### Grado
@@ -633,7 +645,8 @@ public class CursoController {
 │ ano          │     │ nombre       │     │ nombre       │
 │ fecha_inicio │     │ letra        │     │ nivel        │
 │ fecha_fin    │     │ grado_id(FK) │     └──────────────┘
-│ activo       │     │ ano_id (FK)  │
+│ fecha_inicio_│     │ ano_id (FK)  │
+│  planificacion
 └──────────────┘     │ activo       │
                      └──────┬───────┘
                             │
@@ -784,11 +797,12 @@ CREATE TABLE materia_grado (
 
 **V4__seed_catalogo_base.sql**
 ```sql
--- Años Escolares (3 años, 2026 es el activo)
-INSERT INTO ano_escolar (id, ano, fecha_inicio, fecha_fin, activo) VALUES
-    ('1', 2025, '2025-03-01', '2025-12-15', FALSE),
-    ('2', 2026, '2026-03-01', '2026-12-15', TRUE),
-    ('3', 2027, '2027-03-01', '2027-12-15', FALSE);
+-- Años Escolares (3 años con fecha_inicio_planificacion calculada)
+-- El estado (FUTURO, PLANIFICACION, ACTIVO, CERRADO) se calcula automáticamente
+INSERT INTO ano_escolar (id, ano, fecha_inicio_planificacion, fecha_inicio, fecha_fin) VALUES
+    ('1', 2025, '2024-12-01', '2025-03-01', '2025-12-15'),
+    ('2', 2026, '2025-12-01', '2026-03-01', '2026-12-15'),
+    ('3', 2027, '2026-12-01', '2027-03-01', '2027-12-15');
 
 -- Grados (8 grados: 1° Básico a 8° Básico)
 INSERT INTO grado (id, nombre, nivel) VALUES
@@ -901,7 +915,8 @@ public class LoginUsuario {
 | Dominio | Use Case | Descripción | Estado |
 |---------|----------|-------------|--------|
 | **Auth** | LoginUsuario | Login con JWT | ✅ Implementado |
-| **Año Escolar** | ActivarAnoEscolar | Desactiva actual, activa nuevo | ✅ Implementado |
+
+**Nota sobre Año Escolar:** El sistema de activación manual fue eliminado. El estado ahora se calcula automáticamente basado en fechas. Ver sección 7.1 - Años Escolares.
 
 ### 6.5 Use Cases Futuros
 
@@ -940,11 +955,41 @@ public class LoginUsuario {
 
 | Método | Endpoint | Descripción | Acceso |
 |--------|----------|-------------|--------|
-| GET | `/api/anos-escolares` | Listar todos (ordenados por año desc) | ADMIN |
+| GET | `/api/anos-escolares` | Listar todos con estado calculado | ADMIN |
 | GET | `/api/anos-escolares/{id}` | Obtener por ID | ADMIN |
+| GET | `/api/anos-escolares/activo` | Obtener año escolar activo actual | Autenticado |
 | POST | `/api/anos-escolares` | Crear nuevo año escolar | ADMIN |
-| PUT | `/api/anos-escolares/{id}` | Actualizar año escolar | ADMIN |
-| PATCH | `/api/anos-escolares/{id}/activar` | Activar año (desactiva el actual) | ADMIN |
+| PUT | `/api/anos-escolares/{id}` | Actualizar fechas (solo si no CERRADO) | ADMIN |
+
+**Estado Calculado:**
+Los años escolares retornan un campo `estado` calculado automáticamente:
+- `FUTURO`: Hoy < fecha_inicio_planificacion
+- `PLANIFICACION`: fecha_inicio_planificacion <= hoy < fecha_inicio
+- `ACTIVO`: fecha_inicio <= hoy <= fecha_fin
+- `CERRADO`: hoy > fecha_fin
+
+**Reglas de Negocio:**
+- Solo puede haber UN año activo a la vez (garantizado por fechas sin solapamiento)
+- Años CERRADOS son inmutables (no se pueden editar)
+- Validaciones al crear/editar:
+  - `planificacion < inicio < fin`
+  - No solapamiento con otros años
+  - `ano` debe coincidir con año de `fecha_inicio`
+  - No crear años con `fecha_fin` en el pasado
+
+**Response de ejemplo:**
+```json
+{
+  "id": "2",
+  "ano": 2026,
+  "fechaInicioPlanificacion": "2025-12-01",
+  "fechaInicio": "2026-03-01",
+  "fechaFin": "2026-12-15",
+  "estado": "ACTIVO",
+  "createdAt": "2025-01-15T10:30:00",
+  "updatedAt": "2025-01-15T10:30:00"
+}
+```
 
 #### Grados
 
@@ -1269,8 +1314,15 @@ logging:
 - ✅ Entidades JPA con relaciones
 - ✅ Repositorios con métodos de consulta
 - ✅ Endpoints CRUD protegidos con @PreAuthorize("hasRole('ADMIN')")
-- ✅ Use case ActivarAnoEscolar (transaccional)
 - ✅ DTOs con validación Bean Validation
+
+**Nota importante (Refactorización Febrero 2026):**
+El sistema de estados de Año Escolar fue refactorizado. Anteriormente existía un campo `activo` booleano y un use case `ActivarAnoEscolar` para activar/desactivar manualmente. Ahora el estado se calcula automáticamente basado en fechas:
+- Campo `fecha_inicio_planificacion` agregado (3 meses antes del inicio)
+- Estados calculados: FUTURO, PLANIFICACION, ACTIVO, CERRADO
+- Endpoint PATCH `/activar` eliminado
+- Endpoint GET `/activo` agregado (obtiene año activo por fecha)
+- Validaciones de negocio: años CERRADOS son inmutables, no solapamiento de fechas
 
 **Migraciones ejecutadas en Supabase:**
 - ✅ V3__create_catalogo_base.sql
@@ -1281,7 +1333,7 @@ logging:
 - ✅ GET /api/anos-escolares/{id} - Obtener año por ID
 - ✅ POST /api/anos-escolares - Crear año
 - ✅ PUT /api/anos-escolares/{id} - Actualizar año
-- ✅ PATCH /api/anos-escolares/{id}/activar - Activar año
+- ✅ GET /api/anos-escolares/activo - Obtener año activo actual
 - ✅ GET /api/grados - Listar grados (ordenados asc)
 - ✅ GET /api/grados/{id} - Obtener grado por ID
 - ✅ GET /api/materias - Listar materias (ordenadas asc)
@@ -1330,20 +1382,29 @@ logging:
 - ✅ Tablas: `ano_escolar`, `grado`, `materia`, `materia_grado`
 - ✅ Seed data con IDs compatibles con frontend
 - ✅ Endpoints CRUD protegidos con ADMIN
-- ✅ Use case ActivarAnoEscolar implementado
+- ✅ Estados de Año Escolar calculados automáticamente por fechas
 
 **Entidades creadas:**
-- AnoEscolar: id, ano, fechaInicio, fechaFin, activo
+- AnoEscolar: id, ano, fechaInicioPlanificacion, fechaInicio, fechaFin, estado (calculado)
 - Grado: id, nombre, nivel
 - Materia: id, nombre, icono, gradoIds (relación)
 
 **Endpoints implementados:**
-- GET/POST/PUT/PATCH `/api/anos-escolares`
+- GET/POST/PUT `/api/anos-escolares`
+- GET `/api/anos-escolares/activo` (obtiene año activo por fecha actual)
 - GET `/api/grados`
 - GET/POST/PUT/DELETE `/api/materias`
 
-**Use Cases:**
-- ✅ ActivarAnoEscolar (transaccional)
+**Estados de Año Escolar (calculados automáticamente):**
+- FUTURO: Hoy < fecha_inicio_planificacion
+- PLANIFICACION: fecha_inicio_planificacion <= hoy < fecha_inicio
+- ACTIVO: fecha_inicio <= hoy <= fecha_fin
+- CERRADO: hoy > fecha_fin
+
+**Reglas de Negocio:**
+- Solo un año ACTIVO a la vez (garantizado por fechas sin solapamiento)
+- Años CERRADOS son inmutables
+- Validaciones: planificacion < inicio < fin, no solapamiento
 
 **Frontend:**
 - ⏳ Hooks TanStack Query reemplazan DataContext
