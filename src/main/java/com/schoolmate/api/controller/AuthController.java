@@ -33,8 +33,8 @@ public class AuthController {
                 "nombre", user.getNombre(),
                 "apellido", user.getApellido(),
                 "rol", user.getRol().name(),
-                "profesorId", user.getProfesorId() != null ? user.getProfesorId() : "",
-                "alumnoId", user.getAlumnoId() != null ? user.getAlumnoId() : ""
+                "profesorId", user.getProfesorId(),
+                "alumnoId", user.getAlumnoId()
         ));
     }
 }

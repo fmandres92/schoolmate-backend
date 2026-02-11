@@ -16,9 +16,9 @@ Este es el backend REST API de **SchoolMate Hub**, un Sistema de Gestión Escola
 El frontend de SchoolMate Hub ya está completo y funcional con tres portales (Administrador, Profesor, Apoderado), pero toda la información se pierde al recargar la página porque vive en memoria. Para que el sistema sea usable en un entorno real necesitamos:
 
 - **Persistencia real** de datos en base de datos
-- **Autenticación segura** con JWT (no credenciales hardcodeadas)
-- **Control de acceso** a nivel de API (que un apoderado no pueda ver datos de otro alumno)
-- **Escalabilidad** para múltiples usuarios concurrentes
+  - **Autenticación segura** con JWT (no credenciales hardcodeadas)
+  - **Control de acceso** a nivel de API (que un apoderado no pueda ver datos de otro alumno)
+  - **Escalabilidad** para múltiples usuarios concurrentes
 
 ### ¿Quién lo consume?
 
@@ -67,23 +67,23 @@ Con use cases, cada acción es una clase independiente. Si necesitas cambiar có
 ### Reglas (mantenerlo simple)
 
 1. **Un use case = una clase = una acción de negocio**
-2. **Un solo método público**: `execute(...)` — siempre se llama `execute`
-3. **La clase se nombra como verbo + sustantivo**: `GuardarAsistenciaClase`, `ObtenerClasesHoyProfesor`, `LoginUsuario`
-4. **Sin interfaces ni abstracciones**: la clase es concreta, directa, inyecta repositorios y listo
-5. **Sin herencia**: no hay `BaseUseCase<T>` ni genéricos
-6. **Se agrupa por dominio en carpetas**, no en una carpeta gigante
-7. **Si la acción es CRUD simple** (listar, obtener por ID), va directo del controller al repository. No forzar use cases donde no hay lógica.
+   2. **Un solo método público**: `execute(...)` — siempre se llama `execute`
+   3. **La clase se nombra como verbo + sustantivo**: `GuardarAsistenciaClase`, `ObtenerClasesHoyProfesor`, `LoginUsuario`
+   4. **Sin interfaces ni abstracciones**: la clase es concreta, directa, inyecta repositorios y listo
+   5. **Sin herencia**: no hay `BaseUseCase<T>` ni genéricos
+   6. **Se agrupa por dominio en carpetas**, no en una carpeta gigante
+   7. **Si la acción es CRUD simple** (listar, obtener por ID), va directo del controller al repository. No forzar use cases donde no hay lógica.
 
 ### ¿Cuándo SÍ crear un use case?
 
 - Hay lógica de negocio (validaciones, cálculos, reglas)
-- Se tocan múltiples repositorios en una operación
-- El controller tendría más de 5 líneas de lógica
+  - Se tocan múltiples repositorios en una operación
+  - El controller tendría más de 5 líneas de lógica
 
 ### ¿Cuándo NO crear un use case?
 
 - CRUD simple: listar todos, obtener por ID, crear/actualizar sin reglas especiales
-- En esos casos el controller llama directo al repository
+  - En esos casos el controller llama directo al repository
 
 ### Anatomía de un use case
 
@@ -426,9 +426,9 @@ public class GuardarAsistenciaClase {
 ### 4.6 Reglas para el agente
 
 - **Todo endpoint tiene `@PreAuthorize`** excepto los de `/api/auth/**`
-- **Nunca confiar solo en el rol**: si el recurso tiene dueño, validar propiedad en el use case
-- **El `profesorId` y `alumnoId` siempre vienen del token**, nunca del request body. El frontend no decide quién es, el backend lo sabe por el JWT
-- **No crear roles custom ni permisos granulares**: 3 roles fijos (`ADMIN`, `PROFESOR`, `APODERADO`) resuelven todo el sistema. No necesitamos `ROLE_TOMAR_ASISTENCIA` ni `ROLE_VER_REPORTES` — eso es sobreingeniería para este proyecto
+  - **Nunca confiar solo en el rol**: si el recurso tiene dueño, validar propiedad en el use case
+  - **El `profesorId` y `alumnoId` siempre vienen del token**, nunca del request body. El frontend no decide quién es, el backend lo sabe por el JWT
+  - **No crear roles custom ni permisos granulares**: 3 roles fijos (`ADMIN`, `PROFESOR`, `APODERADO`) resuelven todo el sistema. No necesitamos `ROLE_TOMAR_ASISTENCIA` ni `ROLE_VER_REPORTES` — eso es sobreingeniería para este proyecto
 
 ---
 
@@ -775,8 +775,8 @@ schoolmate-hub-api/
 ### 9.2 Notas
 
 - **`usuario`** está separada de `profesor` y `alumno`. PROFESOR tiene `profesor_id`, APODERADO tiene `alumno_id`.
-- **`registro_asistencia`** se normaliza como tabla hija de `asistencia_clase`.
-- **Estado de asistencia binario**: solo `PRESENTE` o `AUSENTE`.
+  - **`registro_asistencia`** se normaliza como tabla hija de `asistencia_clase`.
+  - **Estado de asistencia binario**: solo `PRESENTE` o `AUSENTE`.
 
 ---
 
@@ -1009,7 +1009,7 @@ Eliminar DataContext.tsx, datos mock, imports huérfanos. Revisar seguridad, agr
 
 ### Crear Proyecto
 1. [supabase.com](https://supabase.com) → crear proyecto
-2. Guardar password de BD
+   2. Guardar password de BD
 
 ### Connection String
 Dashboard → Settings → Database → JDBC:
@@ -1047,17 +1047,17 @@ server:
 
 ### Código Java
 - **Entidades**: singular PascalCase (`Alumno.java`)
-- **Repositories**: `{Entity}Repository`
-- **Use cases**: `{Verbo}{Sustantivo}` (`GuardarAsistenciaClase.java`)
-- **Controllers**: `{Entity}Controller`, prefijo `/api/`
-- **DTOs**: sufijo `Request` / `Response`
-- **Sin interfaces innecesarias**: clases concretas, no `IAlumnoRepository` ni `UseCase<T>`
-- **Sin services genéricos**: lógica → use case. CRUD simple → controller directo a repo.
+  - **Repositories**: `{Entity}Repository`
+  - **Use cases**: `{Verbo}{Sustantivo}` (`GuardarAsistenciaClase.java`)
+  - **Controllers**: `{Entity}Controller`, prefijo `/api/`
+  - **DTOs**: sufijo `Request` / `Response`
+  - **Sin interfaces innecesarias**: clases concretas, no `IAlumnoRepository` ni `UseCase<T>`
+  - **Sin services genéricos**: lógica → use case. CRUD simple → controller directo a repo.
 
 ### API REST
 - Español, kebab-case: `/api/anos-escolares`
-- JSON, errores: `{ "error": "mensaje", "status": 404 }`
-- Fechas ISO 8601
+  - JSON, errores: `{ "error": "mensaje", "status": 404 }`
+  - Fechas ISO 8601
 
 ### Base de datos
 - snake_case, PKs UUID, timestamps automáticos, soft delete con `activo`
@@ -1067,11 +1067,11 @@ server:
 ## 14. CHECKLIST POR FASE
 
 - [ ] Migración SQL ejecuta sin errores
-- [ ] Entities JPA mapean correctamente
-- [ ] Use cases tienen tests unitarios
-- [ ] Endpoints protegidos por rol
-- [ ] Frontend consume la API
-- [ ] Datos mock del módulo ya no se usan
-- [ ] No hay breaking changes en módulos no migrados
-- [ ] `npm run build` compila
-- [ ] `mvn spring-boot:run` arranca
+  - [ ] Entities JPA mapean correctamente
+  - [ ] Use cases tienen tests unitarios
+  - [ ] Endpoints protegidos por rol
+  - [ ] Frontend consume la API
+  - [ ] Datos mock del módulo ya no se usan
+  - [ ] No hay breaking changes en módulos no migrados
+  - [ ] `npm run build` compila
+  - [ ] `mvn spring-boot:run` arranca
