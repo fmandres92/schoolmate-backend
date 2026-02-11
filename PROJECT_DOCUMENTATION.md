@@ -1,8 +1,8 @@
 # SchoolMate Hub API - Documentación Técnica Completa
 
-> **Versión**: 0.1.0  
+> **Versión**: 0.2.0  
 > **Última Actualización**: Febrero 2026  
-> **Estado**: ✅ FASE 0 COMPLETADA - Backend operativo con autenticación JWT y Supabase PostgreSQL  
+> **Estado**: ✅ FASE 2 COMPLETADA - Catálogo Base (Años Escolares, Grados, Materias) operativo  
 
 ---
 
@@ -263,21 +263,32 @@ schoolmate-hub-api/
 │   │   │   │   ├── 📄 UserPrincipal.java          # Implementa UserDetails
 │   │   │   │   └── 📄 CustomUserDetailsService.java # Carga usuario desde BD
 │   │   │   │
-│   │   │   ├── 📁 entity/                         # Entidades JPA
-│   │   │   │   └── 📄 Usuario.java                # Tabla usuario
-│   │   │   │
-│   │   │   ├── 📁 enums/                          # Enumeraciones
-│   │   │   │   └── 📄 Rol.java                    # ADMIN, PROFESOR, APODERADO
-│   │   │   │
-│   │   │   ├── 📁 repository/                     # Repositorios Spring Data
-│   │   │   │   └── 📄 UsuarioRepository.java      # Acceso a tabla usuario
-│   │   │   │
-│   │   │   ├── 📁 usecase/                        # Casos de uso
-│   │   │   │   └── 📁 auth/
-│   │   │   │       └── 📄 LoginUsuario.java       # Login de usuarios
-│   │   │   │
-│   │   │   ├── 📁 controller/                     # Controladores REST
-│   │   │   │   └── 📄 AuthController.java         # Endpoints de auth
+│  │  │  ├── 📁 entity/                         # Entidades JPA
+│  │  │  │   ├── 📄 Usuario.java                # Tabla usuario
+│  │  │  │   ├── 📄 AnoEscolar.java             # Tabla año escolar
+│  │  │  │   ├── 📄 Grado.java                  # Tabla grado
+│  │  │  │   └── 📄 Materia.java                # Tabla materia
+│  │  │  │
+│  │  │  ├── 📁 enums/                          # Enumeraciones
+│  │  │  │   └── 📄 Rol.java                    # ADMIN, PROFESOR, APODERADO
+│  │  │  │
+│  │  │  ├── 📁 repository/                     # Repositorios Spring Data
+│  │  │  │   ├── 📄 UsuarioRepository.java      # Acceso a tabla usuario
+│  │  │  │   ├── 📄 AnoEscolarRepository.java   # Acceso a tabla año escolar
+│  │  │  │   ├── 📄 GradoRepository.java        # Acceso a tabla grado
+│  │  │  │   └── 📄 MateriaRepository.java      # Acceso a tabla materia
+│  │  │  │
+│  │  │  ├── 📁 usecase/                        # Casos de uso
+│  │  │  │   ├── 📁 auth/
+│  │  │  │   │   └── 📄 LoginUsuario.java       # Login de usuarios
+│  │  │  │   └── 📁 anoescolar/
+│  │  │  │       └── 📄 ActivarAnoEscolar.java  # Activar año escolar
+│  │  │  │
+│  │  │  ├── 📁 controller/                     # Controladores REST
+│  │  │  │   ├── 📄 AuthController.java         # Endpoints de auth
+│  │  │  │   ├── 📄 AnoEscolarController.java   # Endpoints de años escolares
+│  │  │  │   ├── 📄 GradoController.java        # Endpoints de grados
+│  │  │  │   └── 📄 MateriaController.java      # Endpoints de materias
 │   │   │   │
 │   │   │   ├── 📁 dto/                            # Data Transfer Objects
 │   │   │   │   ├── 📁 request/
@@ -297,7 +308,9 @@ schoolmate-hub-api/
 │   │       ├── 📄 application-prod.yml            # Configuración producción (PostgreSQL)
 │   │       └── 📁 db/migration/                   # Migraciones Flyway
 │   │           ├── 📄 V1__create_usuario_table.sql
-│   │           └── 📄 V2__seed_usuarios.sql
+│   │           ├── 📄 V2__seed_usuarios.sql
+│   │           ├── 📄 V3__create_catalogo_base.sql
+│   │           └── 📄 V4__seed_catalogo_base.sql
 │   │
 │   └── 📁 test/                                   # Tests
 │       └── 📁 java/com/schoolmate/api/
@@ -542,7 +555,7 @@ public class CursoController {
 
 ## 5. MODELO DE DATOS
 
-### 5.1 Entidades Actuales (Fase 0)
+### 5.1 Entidades Actuales (Fase 2)
 
 #### Usuario
 | Campo | Tipo | Constraints | Descripción |
@@ -563,7 +576,54 @@ public class CursoController {
 - idx_usuario_email (email)
 - idx_usuario_rol (rol)
 
-### 5.2 Entidades Futuras (Fases 1-9)
+#### AnoEscolar
+| Campo | Tipo | Constraints | Descripción |
+|-------|------|-------------|-------------|
+| id | VARCHAR(36) | PK | Identificador único |
+| ano | INTEGER | NOT NULL | Año escolar (ej: 2026) |
+| fecha_inicio | DATE | NOT NULL | Fecha de inicio del año |
+| fecha_fin | DATE | NOT NULL | Fecha de término del año |
+| activo | BOOLEAN | NOT NULL, DEFAULT FALSE | Año escolar activo (solo uno) |
+| created_at | TIMESTAMP | NOT NULL | Fecha de creación |
+| updated_at | TIMESTAMP | NOT NULL | Fecha de actualización |
+
+**Índices:**
+- idx_ano_escolar_activo (activo)
+- idx_ano_escolar_ano (ano)
+
+#### Grado
+| Campo | Tipo | Constraints | Descripción |
+|-------|------|-------------|-------------|
+| id | VARCHAR(36) | PK | Identificador único |
+| nombre | VARCHAR(50) | NOT NULL | Nombre del grado (ej: "1° Básico") |
+| nivel | INTEGER | NOT NULL | Nivel numérico (1-8) |
+| created_at | TIMESTAMP | NOT NULL | Fecha de creación |
+| updated_at | TIMESTAMP | NOT NULL | Fecha de actualización |
+
+**Índices:**
+- idx_grado_nivel (nivel)
+
+#### Materia
+| Campo | Tipo | Constraints | Descripción |
+|-------|------|-------------|-------------|
+| id | VARCHAR(36) | PK | Identificador único |
+| nombre | VARCHAR(100) | NOT NULL | Nombre de la materia |
+| icono | VARCHAR(50) | NULL | Icono Lucide (ej: "Calculator") |
+| created_at | TIMESTAMP | NOT NULL | Fecha de creación |
+| updated_at | TIMESTAMP | NOT NULL | Fecha de actualización |
+
+#### MateriaGrado (Tabla intermedia)
+| Campo | Tipo | Constraints | Descripción |
+|-------|------|-------------|-------------|
+| materia_id | VARCHAR(36) | PK, FK | Referencia a materia |
+| grado_id | VARCHAR(36) | PK, FK | Referencia a grado |
+
+**Notas:**
+- Relación muchos-a-muchos entre Materia y Grado
+- Una materia puede aplicar a múltiples grados
+- Religión solo aplica a grados 3-8
+
+### 5.2 Entidades Futuras (Fases 3-9)
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -676,6 +736,86 @@ VALUES
     ('apod-1', 'apoderado@edugestio.cl', '$2a$10$...', 'Carlos', 'Soto', 'APODERADO', NULL, 'al1', TRUE);
 ```
 
+**V3__create_catalogo_base.sql**
+```sql
+-- Tabla: ano_escolar
+CREATE TABLE ano_escolar (
+    id VARCHAR(36) PRIMARY KEY,
+    ano INTEGER NOT NULL,
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NOT NULL,
+    activo BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_ano_escolar_activo ON ano_escolar(activo);
+CREATE INDEX idx_ano_escolar_ano ON ano_escolar(ano);
+
+-- Tabla: grado
+CREATE TABLE grado (
+    id VARCHAR(36) PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL,
+    nivel INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_grado_nivel ON grado(nivel);
+
+-- Tabla: materia
+CREATE TABLE materia (
+    id VARCHAR(36) PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    icono VARCHAR(50),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla intermedia: materia_grado
+CREATE TABLE materia_grado (
+    materia_id VARCHAR(36) NOT NULL,
+    grado_id VARCHAR(36) NOT NULL,
+    PRIMARY KEY (materia_id, grado_id),
+    FOREIGN KEY (materia_id) REFERENCES materia(id),
+    FOREIGN KEY (grado_id) REFERENCES grado(id)
+);
+```
+
+**V4__seed_catalogo_base.sql**
+```sql
+-- Años Escolares (3 años, 2026 es el activo)
+INSERT INTO ano_escolar (id, ano, fecha_inicio, fecha_fin, activo) VALUES
+    ('1', 2025, '2025-03-01', '2025-12-15', FALSE),
+    ('2', 2026, '2026-03-01', '2026-12-15', TRUE),
+    ('3', 2027, '2027-03-01', '2027-12-15', FALSE);
+
+-- Grados (8 grados: 1° Básico a 8° Básico)
+INSERT INTO grado (id, nombre, nivel) VALUES
+    ('1', '1° Básico', 1),
+    ('2', '2° Básico', 2),
+    ('3', '3° Básico', 3),
+    ('4', '4° Básico', 4),
+    ('5', '5° Básico', 5),
+    ('6', '6° Básico', 6),
+    ('7', '7° Básico', 7),
+    ('8', '8° Básico', 8);
+
+-- Materias (11 materias con iconos Lucide)
+INSERT INTO materia (id, nombre, icono) VALUES
+    ('1',  'Matemáticas',              'Calculator'),
+    ('2',  'Lenguaje y Comunicación',  'BookOpen'),
+    ('3',  'Ciencias Naturales',       'Microscope'),
+    ('4',  'Historia y Geografía',     'Globe'),
+    ('5',  'Inglés',                   'Languages'),
+    ('6',  'Educación Física',         'Dumbbell'),
+    ('7',  'Artes Visuales',           'Palette'),
+    ('8',  'Música',                   'Music'),
+    ('9',  'Tecnología',              'Monitor'),
+    ('10', 'Orientación',             'Heart'),
+    ('11', 'Religión',                'BookHeart');
+```
+
 ---
 
 ## 6. USE CASES
@@ -756,13 +896,18 @@ public class LoginUsuario {
 }
 ```
 
-### 6.4 Use Cases Futuros
+### 6.4 Use Cases Implementados
+
+| Dominio | Use Case | Descripción | Estado |
+|---------|----------|-------------|--------|
+| **Auth** | LoginUsuario | Login con JWT | ✅ Implementado |
+| **Año Escolar** | ActivarAnoEscolar | Desactiva actual, activa nuevo | ✅ Implementado |
+
+### 6.5 Use Cases Futuros
 
 | Dominio | Use Case | Descripción |
 |---------|----------|-------------|
-| **Auth** | LoginUsuario | Login con JWT |
-| | RefrescarToken | Renovación de token |
-| **Año Escolar** | ActivarAnoEscolar | Desactiva actual, activa nuevo |
+| **Auth** | RefrescarToken | Renovación de token |
 | **Curso** | ObtenerDetalleCurso | Curso + alumnos + horario |
 | **Profesor** | ObtenerDetalleProfesor | Profesor + asignaciones |
 | | ObtenerClasesHoyProfesor | Clases del día con estados |
@@ -782,7 +927,7 @@ public class LoginUsuario {
 
 ## 7. API REST
 
-### 7.1 Endpoints Actuales (Fase 0)
+### 7.1 Endpoints Actuales (Fase 2)
 
 #### Autenticación
 
@@ -790,6 +935,33 @@ public class LoginUsuario {
 |--------|----------|-------------|--------|
 | POST | `/api/auth/login` | Login con email y password | Público |
 | GET | `/api/auth/me` | Datos del usuario autenticado | Autenticado |
+
+#### Años Escolares
+
+| Método | Endpoint | Descripción | Acceso |
+|--------|----------|-------------|--------|
+| GET | `/api/anos-escolares` | Listar todos (ordenados por año desc) | ADMIN |
+| GET | `/api/anos-escolares/{id}` | Obtener por ID | ADMIN |
+| POST | `/api/anos-escolares` | Crear nuevo año escolar | ADMIN |
+| PUT | `/api/anos-escolares/{id}` | Actualizar año escolar | ADMIN |
+| PATCH | `/api/anos-escolares/{id}/activar` | Activar año (desactiva el actual) | ADMIN |
+
+#### Grados
+
+| Método | Endpoint | Descripción | Acceso |
+|--------|----------|-------------|--------|
+| GET | `/api/grados` | Listar todos (ordenados por nivel asc) | ADMIN |
+| GET | `/api/grados/{id}` | Obtener por ID | ADMIN |
+
+#### Materias
+
+| Método | Endpoint | Descripción | Acceso |
+|--------|----------|-------------|--------|
+| GET | `/api/materias` | Listar todas (ordenadas por nombre asc) | ADMIN |
+| GET | `/api/materias/{id}` | Obtener por ID | ADMIN |
+| POST | `/api/materias` | Crear nueva materia | ADMIN |
+| PUT | `/api/materias/{id}` | Actualizar materia | ADMIN |
+| DELETE | `/api/materias/{id}` | Eliminar materia | ADMIN |
 
 **POST /api/auth/login**
 ```bash
@@ -847,9 +1019,6 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 
 | Método | Endpoint | Use Case | Acceso |
 |--------|----------|----------|--------|
-| GET | `/api/anos-escolares` | - | ADMIN |
-| POST | `/api/anos-escolares` | - | ADMIN |
-| PATCH | `/api/anos-escolares/{id}/activar` | ActivarAnoEscolar | ADMIN |
 | GET | `/api/cursos` | - | ADMIN |
 | GET | `/api/cursos/{id}` | ObtenerDetalleCurso | ADMIN |
 | POST | `/api/cursos` | - | ADMIN |
@@ -1090,38 +1259,95 @@ logging:
 
 ---
 
-### FASE 1 - Auth en Frontend ⏳ PENDIENTE
+### FASE 2 - Catálogo Base ✅ COMPLETADA
+
+**Objetivo**: Crear catálogo base del sistema (Años Escolares, Grados, Materias)
+
+**Backend:**
+- ✅ Tablas: `ano_escolar`, `grado`, `materia`, `materia_grado`
+- ✅ Seed data con IDs compatibles con frontend
+- ✅ Entidades JPA con relaciones
+- ✅ Repositorios con métodos de consulta
+- ✅ Endpoints CRUD protegidos con @PreAuthorize("hasRole('ADMIN')")
+- ✅ Use case ActivarAnoEscolar (transaccional)
+- ✅ DTOs con validación Bean Validation
+
+**Migraciones ejecutadas en Supabase:**
+- ✅ V3__create_catalogo_base.sql
+- ✅ V4__seed_catalogo_base.sql
+
+**Endpoints implementados:**
+- ✅ GET /api/anos-escolares - Listar años (ordenados desc)
+- ✅ GET /api/anos-escolares/{id} - Obtener año por ID
+- ✅ POST /api/anos-escolares - Crear año
+- ✅ PUT /api/anos-escolares/{id} - Actualizar año
+- ✅ PATCH /api/anos-escolares/{id}/activar - Activar año
+- ✅ GET /api/grados - Listar grados (ordenados asc)
+- ✅ GET /api/grados/{id} - Obtener grado por ID
+- ✅ GET /api/materias - Listar materias (ordenadas asc)
+- ✅ GET /api/materias/{id} - Obtener materia por ID
+- ✅ POST /api/materias - Crear materia
+- ✅ PUT /api/materias/{id} - Actualizar materia
+- ✅ DELETE /api/materias/{id} - Eliminar materia
+
+**Datos de prueba cargados:**
+- ✅ 3 años escolares (2025, 2026 activo, 2027)
+- ✅ 8 grados (1° a 8° Básico)
+- ✅ 11 materias con iconos Lucide
+- ✅ Relaciones materia-grado (Religión solo en 3°-8°)
+
+**Criterio de éxito:**
+- ✅ Todos los endpoints GET funcionan correctamente
+- ✅ POST/PUT/PATCH/DELETE operativos
+- ✅ Validación de datos con @Valid
+- ✅ Protección por rol ADMIN
+- ✅ Compila y ejecuta sin errores
+
+---
+
+### FASE 1 - Auth en Frontend ✅ COMPLETADA
 
 **Objetivo**: Login real desde React
 
 **Frontend:**
-- Servicio HTTP con JWT
-- AuthContext consume API en vez de mockUsers
-- Almacenar token en localStorage
-- Incluir token en headers de requests
+- ✅ Servicio HTTP con JWT
+- ✅ AuthContext consume API en vez de mockUsers
+- ✅ Almacenar token en localStorage
+- ✅ Incluir token en headers de requests
 
 **Criterio de éxito:**
-- Login contra backend real
-- Sesión persiste con JWT
-- 3 roles redirigen correctamente
+- ✅ Login contra backend real
+- ✅ Sesión persiste con JWT
+- ✅ 3 roles redirigen correctamente
 
 ---
 
-### FASE 2 - Catálogo Base ⏳ PENDIENTE
+### FASE 2 - Catálogo Base ✅ COMPLETADA
 
 **Objetivo**: Años, grados, materias desde BD
 
 **Backend:**
-- Tablas: `ano_escolar`, `grado`, `materia`
-- Seed data
-- Endpoints CRUD
+- ✅ Tablas: `ano_escolar`, `grado`, `materia`, `materia_grado`
+- ✅ Seed data con IDs compatibles con frontend
+- ✅ Endpoints CRUD protegidos con ADMIN
+- ✅ Use case ActivarAnoEscolar implementado
+
+**Entidades creadas:**
+- AnoEscolar: id, ano, fechaInicio, fechaFin, activo
+- Grado: id, nombre, nivel
+- Materia: id, nombre, icono, gradoIds (relación)
+
+**Endpoints implementados:**
+- GET/POST/PUT/PATCH `/api/anos-escolares`
+- GET `/api/grados`
+- GET/POST/PUT/DELETE `/api/materias`
 
 **Use Cases:**
-- ActivarAnoEscolar
+- ✅ ActivarAnoEscolar (transaccional)
 
 **Frontend:**
-- Hooks TanStack Query reemplazan DataContext
-- Migrar páginas: Años Escolares, Grados, Materias
+- ⏳ Hooks TanStack Query reemplazan DataContext
+- ⏳ Migrar páginas: Años Escolares, Grados, Materias
 
 ---
 
@@ -1280,6 +1506,9 @@ docs: actualizar README con instrucciones de instalación
 | `http://localhost:8080` | API Base |
 | `http://localhost:8080/api/auth/login` | Login |
 | `http://localhost:8080/api/auth/me` | Datos del usuario |
+| `http://localhost:8080/api/anos-escolares` | Años escolares |
+| `http://localhost:8080/api/grados` | Grados |
+| `http://localhost:8080/api/materias` | Materias |
 | `http://localhost:8080/h2-console` | Consola H2 (dev) |
 | `https://github.com/fmandres92/schoolmate-backend` | Repositorio GitHub |
 
@@ -1310,6 +1539,27 @@ TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
 # Usar token
 curl http://localhost:8080/api/auth/me \
   -H "Authorization: Bearer $TOKEN"
+
+# Probar endpoints de catálogo
+curl http://localhost:8080/api/anos-escolares -H "Authorization: Bearer $TOKEN"
+curl http://localhost:8080/api/grados -H "Authorization: Bearer $TOKEN"
+curl http://localhost:8080/api/materias -H "Authorization: Bearer $TOKEN"
+
+# Crear nuevo año escolar
+curl -X POST http://localhost:8080/api/anos-escolares \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"ano":2028,"fechaInicio":"2028-03-01","fechaFin":"2028-12-15"}'
+
+# Activar año escolar
+curl -X PATCH http://localhost:8080/api/anos-escolares/1/activar \
+  -H "Authorization: Bearer $TOKEN"
+
+# Crear nueva materia
+curl -X POST http://localhost:8080/api/materias \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Filosofía","icono":"Brain","gradoIds":["7","8"]}'
 ```
 
 ### 12.3 Documentación Relacionada
@@ -1323,4 +1573,4 @@ curl http://localhost:8080/api/auth/me \
 
 **Fin de la Documentación**
 
-*Documento actualizado para SchoolMate Hub API v0.1.0 - Febrero 2026*
+*Documento actualizado para SchoolMate Hub API v0.2.0 - Febrero 2026*
