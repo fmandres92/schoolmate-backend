@@ -1466,6 +1466,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 - `VALIDATION_FAILED`
 - `BUSINESS_RULE`
 - `PROFESOR_RUT_DUPLICADO`
+- `PROFESOR_RUT_INMUTABLE`
 - `PROFESOR_EMAIL_DUPLICADO`
 - `PROFESOR_TELEFONO_DUPLICADO`
 - `DATA_INTEGRITY`
@@ -2162,4 +2163,6 @@ curl -X POST http://localhost:8080/api/cursos \
   - Email duplicado
   - Teléfono duplicado
   - Materias inexistentes en `materiaIds`
+- Regla de negocio en edición:
+  - `PUT /api/profesores/{id}` no permite cambiar RUT (`PROFESOR_RUT_INMUTABLE`, status `400`, `field=rut`)
 - El backend retorna `409` con `field` cuando hay conflicto de unicidad, para mostrar errores por input en frontend.

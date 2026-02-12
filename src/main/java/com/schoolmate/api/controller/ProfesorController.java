@@ -73,6 +73,10 @@ public class ProfesorController {
         Profesor profesor = profesorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
 
+        if (!profesor.getRut().equals(request.getRut())) {
+            throw new ApiException(ErrorCode.PROFESOR_RUT_INMUTABLE, "rut");
+        }
+
         validarUnicidadEnActualizacion(request, id);
         List<Materia> materias = resolverMaterias(request.getMateriaIds());
 

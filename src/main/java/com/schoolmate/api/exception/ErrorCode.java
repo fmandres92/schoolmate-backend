@@ -16,6 +16,7 @@ public enum ErrorCode {
     BUSINESS_RULE(HttpStatus.BAD_REQUEST, "error.business.rule"),
 
     PROFESOR_RUT_DUPLICADO(HttpStatus.CONFLICT, "error.profesor.rut_duplicado"),
+    PROFESOR_RUT_INMUTABLE(HttpStatus.BAD_REQUEST, "error.profesor.rut_inmutable"),
     PROFESOR_EMAIL_DUPLICADO(HttpStatus.CONFLICT, "error.profesor.email_duplicado"),
     PROFESOR_TELEFONO_DUPLICADO(HttpStatus.CONFLICT, "error.profesor.telefono_duplicado"),
 
