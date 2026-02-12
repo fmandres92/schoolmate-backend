@@ -1,9 +1,9 @@
 # SchoolMate Hub API - Documentación Técnica Completa
 
-> **Versión**: 0.2.1  
+> **Versión**: 0.3.0  
 > **Última Actualización**: Febrero 2026  
-> **Estado**: ✅ FASE 2 COMPLETADA - Catálogo Base (Años Escolares, Grados, Materias) operativo  
-> **Nota**: Sistema de estados de Año Escolar refactorizado a cálculo automático por fechas  
+> **Estado**: ✅ FASE 3 COMPLETADA - Profesores y Cursos operativos  
+> **Nota**: CRUD completo para Profesores y Cursos con relaciones ManyToMany y ManyToOne  
 
 ---
 
@@ -268,7 +268,9 @@ schoolmate-hub-api/
 │  │  │  │   ├── 📄 Usuario.java                # Tabla usuario
 │  │  │  │   ├── 📄 AnoEscolar.java             # Tabla año escolar
 │  │  │  │   ├── 📄 Grado.java                  # Tabla grado
-│  │  │  │   └── 📄 Materia.java                # Tabla materia
+│  │  │  │   ├── 📄 Materia.java                # Tabla materia
+│  │  │  │   ├── 📄 Profesor.java               # Tabla profesor
+│  │  │  │   └── 📄 Curso.java                  # Tabla curso
 │  │  │  │
 │  │  │  ├── 📁 enums/                          # Enumeraciones
 │  │  │  │   ├── 📄 Rol.java                    # ADMIN, PROFESOR, APODERADO
@@ -278,25 +280,33 @@ schoolmate-hub-api/
 │  │  │  │   ├── 📄 UsuarioRepository.java      # Acceso a tabla usuario
 │  │  │  │   ├── 📄 AnoEscolarRepository.java   # Acceso a tabla año escolar
 │  │  │  │   ├── 📄 GradoRepository.java        # Acceso a tabla grado
-│  │  │  │   └── 📄 MateriaRepository.java      # Acceso a tabla materia
+│  │  │  │   ├── 📄 MateriaRepository.java      # Acceso a tabla materia
+│  │  │  │   ├── 📄 ProfesorRepository.java     # Acceso a tabla profesor
+│  │  │  │   └── 📄 CursoRepository.java        # Acceso a tabla curso
 │  │  │  │
 │  │  │  ├── 📁 usecase/                        # Casos de uso
 │  │  │  │   └── 📁 auth/
 │  │  │  │       └── 📄 LoginUsuario.java       # Login de usuarios
 │  │  │  │
-│  │  │  ├── 📁 controller/                     # Controladores REST
-│  │  │  │   ├── 📄 AuthController.java         # Endpoints de auth
-│  │  │  │   ├── 📄 AnoEscolarController.java   # Endpoints de años escolares
-│  │  │  │   ├── 📄 GradoController.java        # Endpoints de grados
-│  │  │  │   └── 📄 MateriaController.java      # Endpoints de materias
+│   │   │   ├── 📁 controller/                     # Controladores REST
+│   │   │   │   ├── 📄 AuthController.java         # Endpoints de auth
+│   │   │   │   ├── 📄 AnoEscolarController.java   # Endpoints de años escolares
+│   │   │   │   ├── 📄 GradoController.java        # Endpoints de grados
+│   │   │   │   ├── 📄 MateriaController.java      # Endpoints de materias
+│   │   │   │   ├── 📄 ProfesorController.java     # Endpoints de profesores
+│   │   │   │   └── 📄 CursoController.java        # Endpoints de cursos
 │   │   │   │
 │   │   │   ├── 📁 dto/                            # Data Transfer Objects
 │   │   │   │   ├── 📁 request/
 │   │   │   │   │   ├── 📄 LoginRequest.java       # Request de login
-│   │   │   │   │   └── 📄 AnoEscolarRequest.java  # Request de año escolar
+│   │   │   │   │   ├── 📄 AnoEscolarRequest.java  # Request de año escolar
+│   │   │   │   │   ├── 📄 ProfesorRequest.java    # Request de profesor
+│   │   │   │   │   └── 📄 CursoRequest.java       # Request de curso
 │   │   │   │   └── 📁 response/
 │   │   │   │       ├── 📄 AuthResponse.java       # Response de auth
-│   │   │   │       └── 📄 AnoEscolarResponse.java # Response de año escolar
+│   │   │   │       ├── 📄 AnoEscolarResponse.java # Response de año escolar
+│   │   │   │       ├── 📄 ProfesorResponse.java   # Response de profesor
+│   │   │   │       └── 📄 CursoResponse.java      # Response de curso
 │   │   │   │
 │   │   │   └── 📁 exception/                      # Manejo de excepciones
 │   │   │       ├── 📄 GlobalExceptionHandler.java # Handler global
@@ -312,7 +322,9 @@ schoolmate-hub-api/
 │   │           ├── 📄 V1__create_usuario_table.sql
 │   │           ├── 📄 V2__seed_usuarios.sql
 │   │           ├── 📄 V3__create_catalogo_base.sql
-│   │           └── 📄 V4__seed_catalogo_base.sql
+│   │           ├── 📄 V4__seed_catalogo_base.sql
+│   │           ├── 📄 V5__create_profesores_cursos.sql
+│   │           └── 📄 V6__seed_profesores_cursos.sql
 │   │
 │   └── 📁 test/                                   # Tests
 │       └── 📁 java/com/schoolmate/api/
@@ -557,7 +569,7 @@ public class CursoController {
 
 ## 5. MODELO DE DATOS
 
-### 5.1 Entidades Actuales (Fase 2)
+### 5.1 Entidades Actuales (Fase 3)
 
 #### Usuario
 | Campo | Tipo | Constraints | Descripción |
@@ -635,7 +647,61 @@ El estado se calcula automáticamente comparando `LocalDate.now()` con las fecha
 - Una materia puede aplicar a múltiples grados
 - Religión solo aplica a grados 3-8
 
-### 5.2 Entidades Futuras (Fases 3-9)
+#### Profesor
+| Campo | Tipo | Constraints | Descripción |
+|-------|------|-------------|-------------|
+| id | VARCHAR(36) | PK | Identificador único |
+| rut | VARCHAR(20) | NOT NULL, UNIQUE | RUT del profesor |
+| nombre | VARCHAR(100) | NOT NULL | Nombre |
+| apellido | VARCHAR(100) | NOT NULL | Apellido |
+| email | VARCHAR(255) | NOT NULL, UNIQUE | Email |
+| telefono | VARCHAR(30) | NULL | Teléfono |
+| fecha_contratacion | DATE | NOT NULL | Fecha de contratación |
+| activo | BOOLEAN | NOT NULL, DEFAULT TRUE | Estado |
+| created_at | TIMESTAMP | NOT NULL | Fecha de creación |
+| updated_at | TIMESTAMP | NOT NULL | Fecha de actualización |
+
+**Relaciones:**
+- ManyToMany con Materia (tabla intermedia: profesor_materia)
+- Un profesor imparte 1-3 materias
+
+**Índices:**
+- idx_profesor_email (email)
+- idx_profesor_activo (activo)
+
+#### ProfesorMateria (Tabla intermedia)
+| Campo | Tipo | Constraints | Descripción |
+|-------|------|-------------|-------------|
+| profesor_id | VARCHAR(36) | PK, FK | Referencia a profesor |
+| materia_id | VARCHAR(36) | PK, FK | Referencia a materia |
+
+**Notas:**
+- Relación muchos-a-muchos entre Profesor y Materia
+- Cada profesor imparte 1-3 materias
+
+#### Curso
+| Campo | Tipo | Constraints | Descripción |
+|-------|------|-------------|-------------|
+| id | VARCHAR(36) | PK | Identificador único |
+| nombre | VARCHAR(50) | NOT NULL | Nombre del curso (ej: "1° Básico A") |
+| letra | VARCHAR(5) | NOT NULL | Letra del curso (A, B, C) |
+| grado_id | VARCHAR(36) | NOT NULL, FK | Referencia a grado |
+| ano_escolar_id | VARCHAR(36) | NOT NULL, FK | Referencia a año escolar |
+| activo | BOOLEAN | NOT NULL, DEFAULT TRUE | Estado |
+| created_at | TIMESTAMP | NOT NULL | Fecha de creación |
+| updated_at | TIMESTAMP | NOT NULL | Fecha de actualización |
+
+**Relaciones:**
+- ManyToOne con Grado
+- ManyToOne con AnoEscolar
+- 2-3 cursos por grado
+
+**Índices:**
+- idx_curso_grado (grado_id)
+- idx_curso_ano_escolar (ano_escolar_id)
+- idx_curso_activo (activo)
+
+### 5.2 Entidades Futuras (Fases 4-9)
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
@@ -830,6 +896,93 @@ INSERT INTO materia (id, nombre, icono) VALUES
     ('11', 'Religión',                'BookHeart');
 ```
 
+**V5__create_profesores_cursos.sql**
+```sql
+-- Tabla: profesor
+CREATE TABLE profesor (
+    id VARCHAR(36) PRIMARY KEY,
+    rut VARCHAR(20) NOT NULL UNIQUE,
+    nombre VARCHAR(100) NOT NULL,
+    apellido VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    telefono VARCHAR(30),
+    fecha_contratacion DATE NOT NULL,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_profesor_email ON profesor(email);
+CREATE INDEX idx_profesor_activo ON profesor(activo);
+
+-- Tabla intermedia: profesor_materia (muchos a muchos)
+CREATE TABLE profesor_materia (
+    profesor_id VARCHAR(36) NOT NULL,
+    materia_id VARCHAR(36) NOT NULL,
+    PRIMARY KEY (profesor_id, materia_id),
+    FOREIGN KEY (profesor_id) REFERENCES profesor(id),
+    FOREIGN KEY (materia_id) REFERENCES materia(id)
+);
+
+-- Tabla: curso
+CREATE TABLE curso (
+    id VARCHAR(36) PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL,
+    letra VARCHAR(5) NOT NULL,
+    grado_id VARCHAR(36) NOT NULL,
+    ano_escolar_id VARCHAR(36) NOT NULL,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (grado_id) REFERENCES grado(id),
+    FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id)
+);
+
+CREATE INDEX idx_curso_grado ON curso(grado_id);
+CREATE INDEX idx_curso_ano_escolar ON curso(ano_escolar_id);
+CREATE INDEX idx_curso_activo ON curso(activo);
+```
+
+**V6__seed_profesores_cursos.sql**
+```sql
+-- PROFESORES (15 profesores, IDs p1-p15)
+INSERT INTO profesor (id, rut, nombre, apellido, email, telefono, fecha_contratacion, activo) VALUES
+('p1',  '12.345.678-9', 'María',    'González',  'maria.gonzalez@colegio.cl',  '+56 9 1234 5678', '2020-03-01', TRUE),
+('p2',  '13.456.789-0', 'Carlos',   'Rodríguez', 'carlos.rodriguez@colegio.cl','+56 9 2345 6789', '2019-03-01', TRUE),
+('p3',  '14.567.890-1', 'Ana',      'Martínez',  'ana.martinez@colegio.cl',    '+56 9 3456 7890', '2021-03-01', TRUE),
+('p4',  '15.678.901-2', 'Pedro',    'López',     'pedro.lopez@colegio.cl',     '+56 9 4567 8901', '2018-03-01', TRUE),
+('p5',  '16.789.012-3', 'Sofía',    'Hernández', 'sofia.hernandez@colegio.cl', '+56 9 5678 9012', '2022-03-01', TRUE),
+('p6',  '17.890.123-4', 'Jorge',    'García',    'jorge.garcia@colegio.cl',    '+56 9 6789 0123', '2020-03-01', TRUE),
+('p7',  '18.901.234-5', 'Valentina','Díaz',      'valentina.diaz@colegio.cl',  '+56 9 7890 1234', '2021-03-01', TRUE),
+('p8',  '19.012.345-6', 'Andrés',   'Muñoz',     'andres.munoz@colegio.cl',    '+56 9 8901 2345', '2019-03-01', TRUE),
+('p9',  '20.123.456-7', 'Camila',   'Rojas',     'camila.rojas@colegio.cl',    '+56 9 9012 3456', '2023-03-01', TRUE),
+('p10', '21.234.567-8', 'Roberto',  'Sánchez',   'roberto.sanchez@colegio.cl', '+56 9 0123 4567', '2020-03-01', TRUE),
+('p11', '22.345.678-9', 'Isabel',   'Torres',    'isabel.torres@colegio.cl',   '+56 9 1234 5670', '2022-03-01', TRUE),
+('p12', '23.456.789-0', 'Fernando', 'Vargas',    'fernando.vargas@colegio.cl', '+56 9 2345 6780', '2018-03-01', TRUE),
+('p13', '24.567.890-1', 'Daniela',  'Morales',   'daniela.morales@colegio.cl', '+56 9 3456 7891', '2021-03-01', TRUE),
+('p14', '25.678.901-2', 'Alejandro','Flores',    'alejandro.flores@colegio.cl','+56 9 4567 8902', '2023-03-01', TRUE),
+('p15', '26.789.012-3', 'Patricia', 'Castillo',  'patricia.castillo@colegio.cl','+56 9 5678 9013', '2017-03-01', FALSE);
+
+-- RELACIÓN PROFESOR-MATERIA (26 relaciones)
+INSERT INTO profesor_materia (profesor_id, materia_id) VALUES
+('p1', '1'), ('p1', '3'), ('p2', '1'), ('p2', '9'), ('p3', '2'), ('p4', '4'), ('p4', '10'),
+('p5', '5'), ('p6', '6'), ('p7', '7'), ('p7', '8'), ('p8', '3'), ('p8', '9'), ('p9', '2'),
+('p9', '4'), ('p10', '1'), ('p10', '3'), ('p11', '5'), ('p11', '2'), ('p12', '6'), ('p13', '7'),
+('p13', '8'), ('p14', '11'), ('p14', '10'), ('p15', '4'), ('p15', '10');
+
+-- CURSOS (18 cursos para año 2026)
+INSERT INTO curso (id, nombre, letra, grado_id, ano_escolar_id, activo) VALUES
+('c1', '1° Básico A', 'A', '1', '2', TRUE), ('c2', '1° Básico B', 'B', '1', '2', TRUE),
+('c3', '2° Básico A', 'A', '2', '2', TRUE), ('c4', '2° Básico B', 'B', '2', '2', TRUE),
+('c5', '3° Básico A', 'A', '3', '2', TRUE), ('c6', '3° Básico B', 'B', '3', '2', TRUE),
+('c7', '4° Básico A', 'A', '4', '2', TRUE), ('c8', '4° Básico B', 'B', '4', '2', TRUE),
+('c9', '5° Básico A', 'A', '5', '2', TRUE), ('c10', '5° Básico B', 'B', '5', '2', TRUE),
+('c11', '6° Básico A', 'A', '6', '2', TRUE), ('c12', '6° Básico B', 'B', '6', '2', TRUE),
+('c13', '7° Básico A', 'A', '7', '2', TRUE), ('c14', '7° Básico B', 'B', '7', '2', TRUE),
+('c15', '7° Básico C', 'C', '7', '2', TRUE), ('c16', '8° Básico A', 'A', '8', '2', TRUE),
+('c17', '8° Básico B', 'B', '8', '2', TRUE), ('c18', '8° Básico C', 'C', '8', '2', TRUE);
+```
+
 ---
 
 ## 6. USE CASES
@@ -942,7 +1095,7 @@ public class LoginUsuario {
 
 ## 7. API REST
 
-### 7.1 Endpoints Actuales (Fase 2)
+Ahora actualicemos la sección de Fases para marcar la Fase 3 como completada:### 7.1 Endpoints Actuales (Fase 3)
 
 #### Autenticación
 
@@ -1007,6 +1160,80 @@ Los años escolares retornan un campo `estado` calculado automáticamente:
 | POST | `/api/materias` | Crear nueva materia | ADMIN |
 | PUT | `/api/materias/{id}` | Actualizar materia | ADMIN |
 | DELETE | `/api/materias/{id}` | Eliminar materia | ADMIN |
+
+#### Profesores
+
+| Método | Endpoint | Descripción | Acceso |
+|--------|----------|-------------|--------|
+| GET | `/api/profesores` | Listar todos (ordenados por apellido asc) | ADMIN |
+| GET | `/api/profesores/{id}` | Obtener profesor por ID con materias | ADMIN |
+| POST | `/api/profesores` | Crear nuevo profesor con materias | ADMIN |
+| PUT | `/api/profesores/{id}` | Actualizar profesor y materias | ADMIN |
+
+**Notas:**
+- Los profesores tienen relación ManyToMany con Materias
+- Cada profesor imparte 1-3 materias
+- El campo `activo` permite desactivar sin eliminar
+
+**Response de ejemplo:**
+```json
+{
+  "id": "p2",
+  "rut": "13.456.789-0",
+  "nombre": "Carlos",
+  "apellido": "Rodríguez",
+  "email": "carlos.rodriguez@colegio.cl",
+  "telefono": "+56 9 2345 6789",
+  "fechaContratacion": "2019-03-01",
+  "activo": true,
+  "materias": [
+    {
+      "id": "1",
+      "nombre": "Matemáticas",
+      "icono": "Calculator"
+    },
+    {
+      "id": "9",
+      "nombre": "Tecnología",
+      "icono": "Monitor"
+    }
+  ],
+  "createdAt": "2026-02-11T19:09:43.398047",
+  "updatedAt": "2026-02-11T19:09:43.398047"
+}
+```
+
+#### Cursos
+
+| Método | Endpoint | Descripción | Acceso |
+|--------|----------|-------------|--------|
+| GET | `/api/cursos` | Listar todos los cursos | ADMIN |
+| GET | `/api/cursos?anoEscolarId={id}` | Filtrar por año escolar | ADMIN |
+| GET | `/api/cursos?anoEscolarId={id}&gradoId={id}` | Filtrar por año y grado | ADMIN |
+| GET | `/api/cursos/{id}` | Obtener curso por ID | ADMIN |
+| POST | `/api/cursos` | Crear nuevo curso | ADMIN |
+| PUT | `/api/cursos/{id}` | Actualizar curso | ADMIN |
+
+**Notas:**
+- Los cursos tienen relación ManyToOne con Grado y AnoEscolar
+- 2-3 cursos por grado (letras A, B, C)
+- Response incluye datos del grado y año escolar
+
+**Response de ejemplo:**
+```json
+{
+  "id": "c1",
+  "nombre": "1° Básico A",
+  "letra": "A",
+  "gradoId": "1",
+  "gradoNombre": "1° Básico",
+  "anoEscolarId": "2",
+  "anoEscolar": 2026,
+  "activo": true,
+  "createdAt": "2026-02-11T19:09:43.398047",
+  "updatedAt": "2026-02-11T19:09:43.398047"
+}
+```
 
 **POST /api/auth/login**
 ```bash
@@ -1412,15 +1639,61 @@ El sistema de estados de Año Escolar fue refactorizado. Anteriormente existía 
 
 ---
 
-### FASE 3 - Profesores y Cursos ⏳ PENDIENTE
+### FASE 3 - Profesores y Cursos ✅ COMPLETADA
+
+**Objetivo**: Crear entidades, tablas, endpoints y use cases para Profesores y Cursos
 
 **Backend:**
-- Tablas: `profesor`, `curso`
-- Relaciones y constraints
+- ✅ Tablas: `profesor`, `curso`, `profesor_materia`
+- ✅ Entidades JPA con relaciones ManyToMany y ManyToOne
+- ✅ Repositories con métodos de búsqueda personalizados
+- ✅ DTOs Request/Response con Bean Validation
+- ✅ Controllers con CRUD completo
+- ✅ Seed data con 15 profesores y 18 cursos
 
-**Use Cases:**
-- ObtenerDetalleCurso
-- ObtenerDetalleProfesor
+**Entidades creadas:**
+- Profesor: id, rut, nombre, apellido, email, telefono, fechaContratacion, activo, materias (ManyToMany)
+- Curso: id, nombre, letra, grado (ManyToOne), anoEscolar (ManyToOne), activo
+
+**Migraciones ejecutadas en Supabase:**
+- ✅ V5__create_profesores_cursos.sql
+- ✅ V6__seed_profesores_cursos.sql
+
+**Endpoints implementados:**
+
+**Profesores:**
+- ✅ GET /api/profesores - Listar todos (ordenados por apellido)
+- ✅ GET /api/profesores/{id} - Obtener profesor por ID
+- ✅ POST /api/profesores - Crear profesor con materias
+- ✅ PUT /api/profesores/{id} - Actualizar profesor
+
+**Cursos:**
+- ✅ GET /api/cursos - Listar todos
+- ✅ GET /api/cursos?anoEscolarId={id} - Filtrar por año escolar
+- ✅ GET /api/cursos?anoEscolarId={id}&gradoId={id} - Filtrar por año y grado
+- ✅ GET /api/cursos/{id} - Obtener curso por ID
+- ✅ POST /api/cursos - Crear curso
+- ✅ PUT /api/cursos/{id} - Actualizar curso
+
+**Datos de prueba cargados:**
+- ✅ 15 profesores (14 activos, 1 inactivo)
+- ✅ 26 relaciones profesor-materia (cada profesor imparte 1-3 materias)
+- ✅ 18 cursos para año 2026 (2-3 cursos por grado, letras A, B, C)
+
+**Notas de implementación:**
+- CRUD directo (controller → repository), sin use cases para operaciones simples
+- Relación ManyToMany Profesor-Materia mediante tabla intermedia
+- Response de Profesor incluye lista de materias con iconos
+- Response de Curso incluye datos del grado y año escolar
+- Todos los endpoints protegidos con @PreAuthorize("hasRole('ADMIN')")
+
+**Criterio de éxito:**
+- ✅ Todos los endpoints funcionan correctamente
+- ✅ GET con filtros operativos
+- ✅ POST/PUT funcionan con validaciones
+- ✅ Relaciones ManyToMany y ManyToOne cargan correctamente
+- ✅ Datos seed coinciden con frontend mock
+- ✅ Compila y ejecuta sin errores
 
 ---
 
@@ -1570,6 +1843,8 @@ docs: actualizar README con instrucciones de instalación
 | `http://localhost:8080/api/anos-escolares` | Años escolares |
 | `http://localhost:8080/api/grados` | Grados |
 | `http://localhost:8080/api/materias` | Materias |
+| `http://localhost:8080/api/profesores` | Profesores |
+| `http://localhost:8080/api/cursos` | Cursos |
 | `http://localhost:8080/h2-console` | Consola H2 (dev) |
 | `https://github.com/fmandres92/schoolmate-backend` | Repositorio GitHub |
 
@@ -1621,6 +1896,37 @@ curl -X POST http://localhost:8080/api/materias \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"nombre":"Filosofía","icono":"Brain","gradoIds":["7","8"]}'
+
+# Probar endpoints de profesores y cursos
+curl http://localhost:8080/api/profesores -H "Authorization: Bearer $TOKEN"
+curl http://localhost:8080/api/profesores/p2 -H "Authorization: Bearer $TOKEN"
+curl "http://localhost:8080/api/cursos?anoEscolarId=2" -H "Authorization: Bearer $TOKEN"
+curl "http://localhost:8080/api/cursos?anoEscolarId=2&gradoId=1" -H "Authorization: Bearer $TOKEN"
+
+# Crear nuevo profesor
+curl -X POST http://localhost:8080/api/profesores \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "rut": "27.890.123-4",
+    "nombre": "Test",
+    "apellido": "Profesor",
+    "email": "test.profesor@colegio.cl",
+    "telefono": "+56 9 9999 9999",
+    "fechaContratacion": "2024-03-01",
+    "materiaIds": ["1", "2"]
+  }'
+
+# Crear nuevo curso
+curl -X POST http://localhost:8080/api/cursos \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "1° Básico C",
+    "letra": "C",
+    "gradoId": "1",
+    "anoEscolarId": "2"
+  }'
 ```
 
 ### 12.3 Documentación Relacionada
@@ -1634,4 +1940,4 @@ curl -X POST http://localhost:8080/api/materias \
 
 **Fin de la Documentación**
 
-*Documento actualizado para SchoolMate Hub API v0.2.0 - Febrero 2026*
+*Documento actualizado para SchoolMate Hub API v0.3.0 - Febrero 2026*

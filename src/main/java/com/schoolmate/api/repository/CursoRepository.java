@@ -1,0 +1,11 @@
+package com.schoolmate.api.repository;
+
+import com.schoolmate.api.entity.Curso;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface CursoRepository extends JpaRepository<Curso, String> {
+    List<Curso> findByAnoEscolarIdOrderByNombreAsc(String anoEscolarId);
+    List<Curso> findByAnoEscolarIdAndGradoIdOrderByLetraAsc(String anoEscolarId, String gradoId);
+    List<Curso> findByActivoTrueAndAnoEscolarIdOrderByNombreAsc(String anoEscolarId);
+}
