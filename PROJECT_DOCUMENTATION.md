@@ -890,13 +890,20 @@ CREATE TABLE materia (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabla intermedia: materia_grado
-CREATE TABLE materia_grado (
+-- Tabla: malla_curricular
+CREATE TABLE malla_curricular (
+    id VARCHAR(36) PRIMARY KEY,
     materia_id VARCHAR(36) NOT NULL,
     grado_id VARCHAR(36) NOT NULL,
-    PRIMARY KEY (materia_id, grado_id),
+    ano_escolar_id VARCHAR(36) NOT NULL,
+    horas_semanales INTEGER NOT NULL DEFAULT 2,
+    activo BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (materia_id) REFERENCES materia(id),
-    FOREIGN KEY (grado_id) REFERENCES grado(id)
+    FOREIGN KEY (grado_id) REFERENCES grado(id),
+    FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id),
+    CONSTRAINT uq_malla_materia_grado_ano UNIQUE (materia_id, grado_id, ano_escolar_id)
 );
 ```
 
@@ -1194,11 +1201,29 @@ Los años escolares retornan un campo `estado` calculado automáticamente:
 
 | Método | Endpoint | Descripción | Acceso |
 |--------|----------|-------------|--------|
-| GET | `/api/materias` | Listar todas (ordenadas por nombre asc) | ADMIN |
+| GET | `/api/materias` | Listar paginado (`page`,`size`,`sortBy`,`sortDir`) | ADMIN |
 | GET | `/api/materias/{id}` | Obtener por ID | ADMIN |
 | POST | `/api/materias` | Crear nueva materia | ADMIN |
 | PUT | `/api/materias/{id}` | Actualizar materia | ADMIN |
 | DELETE | `/api/materias/{id}` | Eliminar materia | ADMIN |
+
+**Defaults de listado (`GET /api/materias`):**
+- `page=0`
+- `size=20` (max 100)
+- `sortBy=nombre`
+- `sortDir=desc`
+
+#### Malla Curricular
+
+| Método | Endpoint | Descripción | Acceso |
+|--------|----------|-------------|--------|
+| GET | `/api/malla-curricular?anoEscolarId={id}` | Listar malla activa por año | ADMIN |
+| GET | `/api/malla-curricular/materia/{materiaId}?anoEscolarId={id}` | Malla de una materia por año | ADMIN |
+| GET | `/api/malla-curricular/grado/{gradoId}?anoEscolarId={id}` | Materias de un grado por año | ADMIN |
+| POST | `/api/malla-curricular` | Crear asignación materia-grado-año | ADMIN |
+| PUT | `/api/malla-curricular/{id}` | Actualizar `horasSemanales` y `activo` | ADMIN |
+| POST | `/api/malla-curricular/bulk` | Guardado masivo por materia y año | ADMIN |
+| DELETE | `/api/malla-curricular/{id}` | Borrado lógico (`activo=false`) | ADMIN |
 
 #### Profesores
 
@@ -1643,7 +1668,8 @@ logging:
 **Objetivo**: Crear catálogo base del sistema (Años Escolares, Grados, Materias)
 
 **Backend:**
-- ✅ Tablas: `ano_escolar`, `grado`, `materia`, `materia_grado`
+- ✅ Tablas: `ano_escolar`, `grado`, `materia`
+- ✅ Refactor: `materia_grado` eliminada y reemplazada por `malla_curricular` (V9 de tracking)
 - ✅ Seed data con IDs compatibles con frontend
 - ✅ Entidades JPA con relaciones
 - ✅ Repositorios con métodos de consulta
@@ -1670,17 +1696,18 @@ El sistema de estados de Año Escolar fue refactorizado. Anteriormente existía 
 - ✅ GET /api/anos-escolares/activo - Obtener año activo actual
 - ✅ GET /api/grados - Listar grados (ordenados asc)
 - ✅ GET /api/grados/{id} - Obtener grado por ID
-- ✅ GET /api/materias - Listar materias (ordenadas asc)
+- ✅ GET /api/materias - Listar materias paginado (sort default nombre desc)
 - ✅ GET /api/materias/{id} - Obtener materia por ID
 - ✅ POST /api/materias - Crear materia
 - ✅ PUT /api/materias/{id} - Actualizar materia
 - ✅ DELETE /api/materias/{id} - Eliminar materia
+- ✅ CRUD `/api/malla-curricular` + endpoint bulk transaccional
 
 **Datos de prueba cargados:**
 - ✅ 3 años escolares (2025, 2026 activo, 2027)
 - ✅ 8 grados (1° a 8° Básico)
 - ✅ 11 materias con iconos Lucide
-- ✅ Relaciones materia-grado (Religión solo en 3°-8°)
+- ✅ Malla curricular por año escolar (con `horas_semanales` y `activo`)
 
 **Criterio de éxito:**
 - ✅ Todos los endpoints GET funcionan correctamente
@@ -1713,7 +1740,7 @@ El sistema de estados de Año Escolar fue refactorizado. Anteriormente existía 
 **Objetivo**: Años, grados, materias desde BD
 
 **Backend:**
-- ✅ Tablas: `ano_escolar`, `grado`, `materia`, `materia_grado`
+- ✅ Tablas: `ano_escolar`, `grado`, `materia`, `malla_curricular`
 - ✅ Seed data con IDs compatibles con frontend
 - ✅ Endpoints CRUD protegidos con ADMIN
 - ✅ Estados de Año Escolar calculados automáticamente por fechas
@@ -1721,13 +1748,16 @@ El sistema de estados de Año Escolar fue refactorizado. Anteriormente existía 
 **Entidades creadas:**
 - AnoEscolar: id, ano, fechaInicioPlanificacion, fechaInicio, fechaFin, estado (calculado)
 - Grado: id, nombre, nivel
-- Materia: id, nombre, icono, gradoIds (relación)
+- Materia: id, nombre, icono
+- MallaCurricular: materia + grado + año + horasSemanales + activo
 
 **Endpoints implementados:**
 - GET/POST/PUT `/api/anos-escolares`
 - GET `/api/anos-escolares/activo` (obtiene año activo por fecha actual)
 - GET `/api/grados`
 - GET/POST/PUT/DELETE `/api/materias`
+- GET/POST/PUT/DELETE `/api/malla-curricular`
+- POST `/api/malla-curricular/bulk`
 
 **Estados de Año Escolar (calculados automáticamente):**
 - FUTURO: Hoy < fecha_inicio_planificacion
@@ -1968,6 +1998,7 @@ docs: actualizar README con instrucciones de instalación
 | `http://localhost:8080/api/anos-escolares` | Años escolares |
 | `http://localhost:8080/api/grados` | Grados |
 | `http://localhost:8080/api/materias` | Materias |
+| `http://localhost:8080/api/malla-curricular?anoEscolarId=2` | Malla curricular |
 | `http://localhost:8080/api/profesores` | Profesores |
 | `http://localhost:8080/api/cursos` | Cursos |
 | `http://localhost:8080/api/alumnos` | Alumnos (paginado + filtros + búsqueda) |
@@ -2005,7 +2036,8 @@ curl http://localhost:8080/api/auth/me \
 # Probar endpoints de catálogo
 curl http://localhost:8080/api/anos-escolares -H "Authorization: Bearer $TOKEN"
 curl http://localhost:8080/api/grados -H "Authorization: Bearer $TOKEN"
-curl http://localhost:8080/api/materias -H "Authorization: Bearer $TOKEN"
+curl "http://localhost:8080/api/materias?page=0&size=10&sortBy=nombre&sortDir=desc" -H "Authorization: Bearer $TOKEN"
+curl "http://localhost:8080/api/malla-curricular?anoEscolarId=2" -H "Authorization: Bearer $TOKEN"
 
 # Crear nuevo año escolar
 curl -X POST http://localhost:8080/api/anos-escolares \
@@ -2013,15 +2045,17 @@ curl -X POST http://localhost:8080/api/anos-escolares \
   -H "Content-Type: application/json" \
   -d '{"ano":2028,"fechaInicio":"2028-03-01","fechaFin":"2028-12-15"}'
 
-# Activar año escolar
-curl -X PATCH http://localhost:8080/api/anos-escolares/1/activar \
-  -H "Authorization: Bearer $TOKEN"
-
 # Crear nueva materia
 curl -X POST http://localhost:8080/api/materias \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"nombre":"Filosofía","icono":"Brain","gradoIds":["7","8"]}'
+  -d '{"nombre":"Filosofía","icono":"Brain"}'
+
+# Guardar malla curricular completa para una materia en un año
+curl -X POST http://localhost:8080/api/malla-curricular/bulk \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"materiaId":"1","anoEscolarId":"2","grados":[{"gradoId":"1","horasSemanales":2},{"gradoId":"3","horasSemanales":4}]}'
 
 # Probar endpoints de profesores y cursos
 curl http://localhost:8080/api/profesores -H "Authorization: Bearer $TOKEN"
@@ -2067,3 +2101,27 @@ curl -X POST http://localhost:8080/api/cursos \
 **Fin de la Documentación**
 
 *Documento actualizado para SchoolMate Hub API v0.3.0 - Febrero 2026*
+
+---
+
+## 13. ACTUALIZACIONES RECIENTES (FEBRERO 2026)
+
+### 13.1 Refactor Materias y Malla Curricular
+
+- Se eliminó la dependencia funcional de `materia_grado` en backend.
+- Se incorporó `malla_curricular` como fuente de verdad para asignación por año/grado con `horas_semanales` y `activo`.
+- `Materia` queda como catálogo maestro (`id`, `nombre`, `icono`).
+
+### 13.2 Contrato actualizado de `/api/materias`
+
+- `GET /api/materias` ahora retorna respuesta paginada (`MateriaPageResponse`) y no un arreglo plano.
+- Orden por defecto: `nombre desc`.
+- Campos de orden permitidos: `nombre`, `createdAt`, `updatedAt`, `id`.
+
+### 13.3 Manejo de errores y seguridad
+
+- Se habilitó `/error` en seguridad para evitar enmascarar errores internos como 403.
+- Se agregó manejo global de:
+  - `DataIntegrityViolationException` → `409`
+  - `Exception` no controlada → `500`
+- En `MallaCurricularController`, la generación de `id` se ajustó para no exceder `VARCHAR(36)` cuando `materiaId` es UUID.

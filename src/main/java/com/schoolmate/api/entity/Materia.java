@@ -7,7 +7,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Entity
 @Table(name = "materia")
@@ -25,15 +24,6 @@ public class Materia {
 
     @Column
     private String icono;
-
-    // Relación muchos-a-muchos con Grado a través de materia_grado
-    @ElementCollection
-    @CollectionTable(
-        name = "materia_grado",
-        joinColumns = @JoinColumn(name = "materia_id")
-    )
-    @Column(name = "grado_id", nullable = false)
-    private List<String> gradoIds;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -1,6 +1,7 @@
 package com.schoolmate.api.exception;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -46,6 +47,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(403).body(Map.of(
                 "error", "No tienes permiso para esta acción",
                 "status", 403
+        ));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<?> handleDataIntegrity(DataIntegrityViolationException ex) {
+        return ResponseEntity.status(409).body(Map.of(
+                "error", "Violación de integridad de datos. Verifica duplicados o formato de IDs.",
+                "status", 409
+        ));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<?> handleUnhandled(Exception ex) {
+        return ResponseEntity.status(500).body(Map.of(
+                "error", "Error interno del servidor",
+                "status", 500
         ));
     }
 }
