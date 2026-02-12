@@ -1442,7 +1442,34 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 | 401 | Unauthorized | Credenciales inválidas o token expirado |
 | 403 | Forbidden | Usuario autenticado pero sin permisos |
 | 404 | Not Found | Recurso no existe |
+| 409 | Conflict | Duplicados o violación de integridad |
 | 500 | Internal Server Error | Error inesperado |
+
+**Formato estándar de error (backend unificado):**
+```json
+{
+  "code": "PROFESOR_RUT_DUPLICADO",
+  "message": "Ya existe un profesor con ese RUT",
+  "status": 409,
+  "field": "rut",
+  "path": "/api/profesores",
+  "timestamp": "2026-02-12T19:17:00",
+  "details": null
+}
+```
+
+**Códigos implementados actualmente (catálogo inicial):**
+- `AUTH_BAD_CREDENTIALS`
+- `ACCESS_DENIED`
+- `RESOURCE_NOT_FOUND`
+- `MATERIAS_NOT_FOUND`
+- `VALIDATION_FAILED`
+- `BUSINESS_RULE`
+- `PROFESOR_RUT_DUPLICADO`
+- `PROFESOR_EMAIL_DUPLICADO`
+- `PROFESOR_TELEFONO_DUPLICADO`
+- `DATA_INTEGRITY`
+- `INTERNAL_SERVER_ERROR`
 
 ---
 
@@ -2121,7 +2148,18 @@ curl -X POST http://localhost:8080/api/cursos \
 ### 13.3 Manejo de errores y seguridad
 
 - Se habilitó `/error` en seguridad para evitar enmascarar errores internos como 403.
-- Se agregó manejo global de:
-  - `DataIntegrityViolationException` → `409`
-  - `Exception` no controlada → `500`
+- Se migró a arquitectura centralizada de errores:
+  - `ErrorCode` (códigos y status HTTP)
+  - `ApiException` (excepción de dominio)
+  - `ApiErrorResponse` (contrato único para frontend)
+  - `messages_es.properties` (mensajes externalizados)
 - En `MallaCurricularController`, la generación de `id` se ajustó para no exceder `VARCHAR(36)` cuando `materiaId` es UUID.
+
+### 13.4 Validaciones declarativas en Profesor
+
+- Validaciones previas (antes de persistir) para:
+  - RUT duplicado
+  - Email duplicado
+  - Teléfono duplicado
+  - Materias inexistentes en `materiaIds`
+- El backend retorna `409` con `field` cuando hay conflicto de unicidad, para mostrar errores por input en frontend.

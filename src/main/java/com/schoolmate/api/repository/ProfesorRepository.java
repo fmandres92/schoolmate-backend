@@ -9,4 +9,8 @@ public interface ProfesorRepository extends JpaRepository<Profesor, String> {
     List<Profesor> findAllByOrderByApellidoAsc();
     boolean existsByRut(String rut);
     boolean existsByEmail(String email);
+    boolean existsByTelefono(String telefono);
+    boolean existsByRutAndIdNot(String rut, String id);
+    boolean existsByEmailAndIdNot(String email, String id);
+    boolean existsByTelefonoAndIdNot(String telefono, String id);
 }

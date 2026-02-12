@@ -1,68 +1,111 @@
 package com.schoolmate.api.exception;
 
+import com.schoolmate.api.dto.response.ApiErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.context.MessageSource;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private final MessageSource messageSource;
+
+    public GlobalExceptionHandler(MessageSource messageSource) {
+        this.messageSource = messageSource;
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<?> handleBadCredentials(BadCredentialsException ex) {
-        return ResponseEntity.status(401).body(Map.of(
-                "error", ex.getMessage(),
-                "status", 401
-        ));
+    public ResponseEntity<ApiErrorResponse> handleBadCredentials(BadCredentialsException ex, HttpServletRequest request) {
+        return buildErrorResponse(ErrorCode.AUTH_BAD_CREDENTIALS, null, null, null, request);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<?> handleNotFound(ResourceNotFoundException ex) {
-        return ResponseEntity.status(404).body(Map.of(
-                "error", ex.getMessage(),
-                "status", 404
-        ));
+    public ResponseEntity<ApiErrorResponse> handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
+        return buildErrorResponse(ErrorCode.RESOURCE_NOT_FOUND, ex.getMessage(), null, null, request);
+    }
+
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiErrorResponse> handleBusiness(BusinessException ex, HttpServletRequest request) {
+        return buildErrorResponse(ErrorCode.BUSINESS_RULE, ex.getMessage(), null, null, request);
+    }
+
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<ApiErrorResponse> handleApi(ApiException ex, HttpServletRequest request) {
+        return buildErrorResponse(ex.getErrorCode(), null, ex.getField(), ex.getMessageArgs(), request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<?> handleValidation(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiErrorResponse> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         Map<String, String> errors = new HashMap<>();
         ex.getBindingResult().getFieldErrors()
                 .forEach(e -> errors.put(e.getField(), e.getDefaultMessage()));
-        return ResponseEntity.status(400).body(Map.of(
-                "error", "Errores de validación",
-                "detalles", errors,
-                "status", 400
-        ));
+        return buildErrorResponse(ErrorCode.VALIDATION_FAILED, null, null, null, request, errors);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<?> handleAccessDenied(AccessDeniedException ex) {
-        return ResponseEntity.status(403).body(Map.of(
-                "error", "No tienes permiso para esta acción",
-                "status", 403
-        ));
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        return buildErrorResponse(ErrorCode.ACCESS_DENIED, null, null, null, request);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<?> handleDataIntegrity(DataIntegrityViolationException ex) {
-        return ResponseEntity.status(409).body(Map.of(
-                "error", "Violación de integridad de datos. Verifica duplicados o formato de IDs.",
-                "status", 409
-        ));
+    public ResponseEntity<ApiErrorResponse> handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
+        return buildErrorResponse(ErrorCode.DATA_INTEGRITY, null, null, null, request);
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<?> handleUnhandled(Exception ex) {
-        return ResponseEntity.status(500).body(Map.of(
-                "error", "Error interno del servidor",
-                "status", 500
-        ));
+    public ResponseEntity<ApiErrorResponse> handleUnhandled(Exception ex, HttpServletRequest request) {
+        return buildErrorResponse(ErrorCode.INTERNAL_SERVER_ERROR, null, null, null, request);
+    }
+
+    private ResponseEntity<ApiErrorResponse> buildErrorResponse(
+            ErrorCode errorCode,
+            String directMessage,
+            String field,
+            Object[] messageArgs,
+            HttpServletRequest request
+    ) {
+        return buildErrorResponse(errorCode, directMessage, field, messageArgs, request, null);
+    }
+
+    private ResponseEntity<ApiErrorResponse> buildErrorResponse(
+            ErrorCode errorCode,
+            String directMessage,
+            String field,
+            Object[] messageArgs,
+            HttpServletRequest request,
+            Map<String, String> details
+    ) {
+        String message = directMessage;
+        if (message == null || message.isBlank()) {
+            message = messageSource.getMessage(
+                    errorCode.getMessageKey(),
+                    messageArgs,
+                    errorCode.name(),
+                    LocaleContextHolder.getLocale()
+            );
+        }
+
+        ApiErrorResponse body = ApiErrorResponse.builder()
+                .code(errorCode.name())
+                .message(message)
+                .status(errorCode.getStatus().value())
+                .field(field)
+                .path(request.getRequestURI())
+                .timestamp(LocalDateTime.now())
+                .details(details)
+                .build();
+
+        return ResponseEntity.status(errorCode.getStatus()).body(body);
     }
 }

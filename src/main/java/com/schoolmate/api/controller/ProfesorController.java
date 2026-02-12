@@ -2,11 +2,13 @@ package com.schoolmate.api.controller;
 
 import com.schoolmate.api.dto.request.ProfesorRequest;
 import com.schoolmate.api.dto.response.ProfesorResponse;
-import com.schoolmate.api.entity.Profesor;
 import com.schoolmate.api.entity.Materia;
+import com.schoolmate.api.entity.Profesor;
+import com.schoolmate.api.exception.ApiException;
+import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
-import com.schoolmate.api.repository.ProfesorRepository;
 import com.schoolmate.api.repository.MateriaRepository;
+import com.schoolmate.api.repository.ProfesorRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +16,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/profesores")
@@ -43,7 +47,8 @@ public class ProfesorController {
 
     @PostMapping
     public ResponseEntity<ProfesorResponse> crear(@Valid @RequestBody ProfesorRequest request) {
-        List<Materia> materias = materiaRepository.findAllById(request.getMateriaIds());
+        validarUnicidadEnCreacion(request);
+        List<Materia> materias = resolverMaterias(request.getMateriaIds());
 
         Profesor profesor = Profesor.builder()
                 .rut(request.getRut())
@@ -68,7 +73,8 @@ public class ProfesorController {
         Profesor profesor = profesorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
 
-        List<Materia> materias = materiaRepository.findAllById(request.getMateriaIds());
+        validarUnicidadEnActualizacion(request, id);
+        List<Materia> materias = resolverMaterias(request.getMateriaIds());
 
         profesor.setRut(request.getRut());
         profesor.setNombre(request.getNombre());
@@ -80,5 +86,42 @@ public class ProfesorController {
 
         Profesor saved = profesorRepository.save(profesor);
         return ResponseEntity.ok(ProfesorResponse.fromEntity(saved));
+    }
+
+    private void validarUnicidadEnCreacion(ProfesorRequest request) {
+        if (profesorRepository.existsByRut(request.getRut())) {
+            throw new ApiException(ErrorCode.PROFESOR_RUT_DUPLICADO, "rut");
+        }
+        if (profesorRepository.existsByEmail(request.getEmail())) {
+            throw new ApiException(ErrorCode.PROFESOR_EMAIL_DUPLICADO, "email");
+        }
+        if (request.getTelefono() != null && !request.getTelefono().isBlank()
+                && profesorRepository.existsByTelefono(request.getTelefono())) {
+            throw new ApiException(ErrorCode.PROFESOR_TELEFONO_DUPLICADO, "telefono");
+        }
+    }
+
+    private void validarUnicidadEnActualizacion(ProfesorRequest request, String profesorId) {
+        if (profesorRepository.existsByRutAndIdNot(request.getRut(), profesorId)) {
+            throw new ApiException(ErrorCode.PROFESOR_RUT_DUPLICADO, "rut");
+        }
+        if (profesorRepository.existsByEmailAndIdNot(request.getEmail(), profesorId)) {
+            throw new ApiException(ErrorCode.PROFESOR_EMAIL_DUPLICADO, "email");
+        }
+        if (request.getTelefono() != null && !request.getTelefono().isBlank()
+                && profesorRepository.existsByTelefonoAndIdNot(request.getTelefono(), profesorId)) {
+            throw new ApiException(ErrorCode.PROFESOR_TELEFONO_DUPLICADO, "telefono");
+        }
+    }
+
+    private List<Materia> resolverMaterias(List<String> materiaIds) {
+        List<Materia> materias = materiaRepository.findAllById(materiaIds);
+        Set<String> idsEncontrados = materias.stream().map(Materia::getId).collect(java.util.stream.Collectors.toSet());
+        Set<String> idsFaltantes = new HashSet<>(materiaIds);
+        idsFaltantes.removeAll(idsEncontrados);
+        if (!idsFaltantes.isEmpty()) {
+            throw new ApiException(ErrorCode.MATERIAS_NOT_FOUND, null, new Object[]{idsFaltantes});
+        }
+        return materias;
     }
 }
