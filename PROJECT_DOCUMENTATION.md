@@ -1,16 +1,16 @@
 # SchoolMate Hub API - Documentación Técnica Completa
 
-> **Versión**: 0.3.0  
+> **Versión**: 0.4.0  
 > **Última Actualización**: Febrero 2026  
-> **Estado**: ✅ FASE 3 COMPLETADA - Profesores y Cursos operativos  
-> **Nota**: CRUD completo para Profesores y Cursos con relaciones ManyToMany y ManyToOne  
+> **Estado**: ✅ FASE 4 COMPLETADA - Módulo de Alumnos operativo  
+> **Nota**: CRUD completo de Alumnos con filtros dinámicos, paginación y búsqueda inteligente para alto volumen  
 
 ---
 
 ## 1. VISIÓN GENERAL DEL PROYECTO
 
 ### 1.1 Descripción
-**SchoolMate Hub API** es el backend REST API del Sistema de Gestión Escolar SchoolMate Hub. Proporciona autenticación JWT, persistencia de datos, y una arquitectura escalable basada en Spring Boot. El backend implementa el patrón **Use Case** en lugar de Services tradicionales para mantener el código modular y mantenible.
+**SchoolMate Hub API** es el backend REST API del Sistema de Gestión Escolar SchoolMate Hub. Proporciona autenticación JWT, persistencia de datos, y una arquitectura escalable basada en Spring Boot. El backend usa **Use Cases para lógica de negocio compleja** y **CRUD directo controller -> repository** para módulos administrativos simples.
 
 ### 1.2 Características Principales
 - **Autenticación JWT**: Tokens seguros con claims personalizados (rol, profesorId, alumnoId)
@@ -270,7 +270,8 @@ schoolmate-hub-api/
 │  │  │  │   ├── 📄 Grado.java                  # Tabla grado
 │  │  │  │   ├── 📄 Materia.java                # Tabla materia
 │  │  │  │   ├── 📄 Profesor.java               # Tabla profesor
-│  │  │  │   └── 📄 Curso.java                  # Tabla curso
+│  │  │  │   ├── 📄 Curso.java                  # Tabla curso
+│  │  │  │   └── 📄 Alumno.java                 # Tabla alumno
 │  │  │  │
 │  │  │  ├── 📁 enums/                          # Enumeraciones
 │  │  │  │   ├── 📄 Rol.java                    # ADMIN, PROFESOR, APODERADO
@@ -282,7 +283,11 @@ schoolmate-hub-api/
 │  │  │  │   ├── 📄 GradoRepository.java        # Acceso a tabla grado
 │  │  │  │   ├── 📄 MateriaRepository.java      # Acceso a tabla materia
 │  │  │  │   ├── 📄 ProfesorRepository.java     # Acceso a tabla profesor
-│  │  │  │   └── 📄 CursoRepository.java        # Acceso a tabla curso
+│  │  │  │   ├── 📄 CursoRepository.java        # Acceso a tabla curso
+│  │  │  │   └── 📄 AlumnoRepository.java       # Acceso a tabla alumno (paginado + filtros)
+│  │  │  │
+│  │  │  ├── 📁 specification/                  # Filtros dinámicos JPA
+│  │  │  │   └── 📄 AlumnoSpecifications.java   # Filtros por curso, grado y búsqueda
 │  │  │  │
 │  │  │  ├── 📁 usecase/                        # Casos de uso
 │  │  │  │   └── 📁 auth/
@@ -294,19 +299,23 @@ schoolmate-hub-api/
 │   │   │   │   ├── 📄 GradoController.java        # Endpoints de grados
 │   │   │   │   ├── 📄 MateriaController.java      # Endpoints de materias
 │   │   │   │   ├── 📄 ProfesorController.java     # Endpoints de profesores
-│   │   │   │   └── 📄 CursoController.java        # Endpoints de cursos
+│   │   │   │   ├── 📄 CursoController.java        # Endpoints de cursos
+│   │   │   │   └── 📄 AlumnoController.java       # Endpoints de alumnos
 │   │   │   │
 │   │   │   ├── 📁 dto/                            # Data Transfer Objects
 │   │   │   │   ├── 📁 request/
 │   │   │   │   │   ├── 📄 LoginRequest.java       # Request de login
 │   │   │   │   │   ├── 📄 AnoEscolarRequest.java  # Request de año escolar
 │   │   │   │   │   ├── 📄 ProfesorRequest.java    # Request de profesor
-│   │   │   │   │   └── 📄 CursoRequest.java       # Request de curso
+│   │   │   │   │   ├── 📄 CursoRequest.java       # Request de curso
+│   │   │   │   │   └── 📄 AlumnoRequest.java      # Request de alumno
 │   │   │   │   └── 📁 response/
 │   │   │   │       ├── 📄 AuthResponse.java       # Response de auth
 │   │   │   │       ├── 📄 AnoEscolarResponse.java # Response de año escolar
 │   │   │   │       ├── 📄 ProfesorResponse.java   # Response de profesor
-│   │   │   │       └── 📄 CursoResponse.java      # Response de curso
+│   │   │   │       ├── 📄 CursoResponse.java      # Response de curso
+│   │   │   │       ├── 📄 AlumnoResponse.java     # Response de alumno
+│   │   │   │       └── 📄 AlumnoPageResponse.java # Response paginada de alumnos
 │   │   │   │
 │   │   │   └── 📁 exception/                      # Manejo de excepciones
 │   │   │       ├── 📄 GlobalExceptionHandler.java # Handler global
@@ -324,7 +333,9 @@ schoolmate-hub-api/
 │   │           ├── 📄 V3__create_catalogo_base.sql
 │   │           ├── 📄 V4__seed_catalogo_base.sql
 │   │           ├── 📄 V5__create_profesores_cursos.sql
-│   │           └── 📄 V6__seed_profesores_cursos.sql
+│   │           ├── 📄 V6__seed_profesores_cursos.sql
+│   │           ├── 📄 V7__create_alumnos.sql
+│   │           └── 📄 V8__seed_alumnos.sql
 │   │
 │   └── 📁 test/                                   # Tests
 │       └── 📁 java/com/schoolmate/api/
@@ -569,7 +580,7 @@ public class CursoController {
 
 ## 5. MODELO DE DATOS
 
-### 5.1 Entidades Actuales (Fase 3)
+### 5.1 Entidades Actuales (Fase 4)
 
 #### Usuario
 | Campo | Tipo | Constraints | Descripción |
@@ -700,6 +711,34 @@ El estado se calcula automáticamente comparando `LocalDate.now()` con las fecha
 - idx_curso_grado (grado_id)
 - idx_curso_ano_escolar (ano_escolar_id)
 - idx_curso_activo (activo)
+
+#### Alumno
+| Campo | Tipo | Constraints | Descripción |
+|-------|------|-------------|-------------|
+| id | VARCHAR(36) | PK | Identificador único |
+| rut | VARCHAR(20) | NOT NULL, UNIQUE | RUT del alumno |
+| nombre | VARCHAR(100) | NOT NULL | Nombre |
+| apellido | VARCHAR(100) | NOT NULL | Apellido |
+| fecha_nacimiento | DATE | NOT NULL | Fecha de nacimiento |
+| fecha_inscripcion | DATE | NOT NULL | Fecha de inscripción |
+| curso_id | VARCHAR(36) | NOT NULL, FK | Referencia a curso |
+| apoderado_nombre | VARCHAR(100) | NOT NULL | Nombre apoderado |
+| apoderado_apellido | VARCHAR(100) | NOT NULL | Apellido apoderado |
+| apoderado_email | VARCHAR(255) | NOT NULL | Email apoderado |
+| apoderado_telefono | VARCHAR(30) | NOT NULL | Teléfono apoderado |
+| apoderado_vinculo | VARCHAR(20) | NOT NULL | Vínculo apoderado |
+| activo | BOOLEAN | NOT NULL, DEFAULT TRUE | Estado |
+| created_at | TIMESTAMP | NOT NULL | Fecha de creación |
+| updated_at | TIMESTAMP | NOT NULL | Fecha de actualización |
+
+**Relaciones:**
+- ManyToOne con Curso
+- Acceso a Grado vía Curso (curso.grado)
+
+**Índices:**
+- idx_alumno_curso (curso_id)
+- idx_alumno_rut (rut)
+- idx_alumno_activo (activo)
 
 ### 5.2 Entidades Futuras (Fases 4-9)
 
@@ -1235,6 +1274,74 @@ Los años escolares retornan un campo `estado` calculado automáticamente:
 }
 ```
 
+#### Alumnos
+
+| Método | Endpoint | Descripción | Acceso |
+|--------|----------|-------------|--------|
+| GET | `/api/alumnos` | Listar alumnos activos con paginación, filtros y búsqueda | ADMIN |
+| GET | `/api/alumnos/{id}` | Obtener alumno por ID | ADMIN |
+| POST | `/api/alumnos` | Crear nuevo alumno | ADMIN |
+| PUT | `/api/alumnos/{id}` | Actualizar alumno (desactivación vía `activo=false`) | ADMIN |
+
+**Notas:**
+- Endpoints protegidos con `@PreAuthorize("hasRole('ADMIN')")`
+- No existe DELETE físico para alumnos
+- El listado aplica siempre `activo = true`
+- Carga de relaciones optimizada con `@EntityGraph("curso", "curso.grado")`
+
+**Query params de `GET /api/alumnos`:**
+- `page` (default `0`)
+- `size` (default `20`, min `1`, max `100`)
+- `sortBy` (default `rut`, permitidos: `rut`, `apellido`, `nombre`, `fechaInscripcion`, `createdAt`)
+- `sortDir` (default `asc`)
+- `cursoId` (opcional)
+- `gradoId` (opcional)
+- `q` (opcional, input único de búsqueda)
+
+**Detección automática de búsqueda en `q`:**
+- Si `q` cumple `^[0-9]+$` y longitud >= 5, se interpreta como búsqueda por RUT
+- Si no cumple lo anterior y longitud >= 3, se interpreta como búsqueda por nombre/apellido
+- Si no cumple mínimos, se ignora `q` y se aplica solo paginación + filtros
+
+**Combinación de filtros:**
+- `cursoId` y/o `gradoId` se pueden combinar
+- Si `cursoId` o `gradoId` no existen, el backend retorna `content: []` con `200 OK`
+
+**Response paginada de ejemplo (`GET /api/alumnos`):**
+```json
+{
+  "content": [
+    {
+      "id": "al1",
+      "rut": "21.100.001-1",
+      "nombre": "Benjamín",
+      "apellido": "Soto Pérez",
+      "fechaNacimiento": "2019-03-15",
+      "fechaInscripcion": "2025-12-20",
+      "cursoId": "c1",
+      "cursoNombre": "1° Básico A",
+      "gradoNombre": "1° Básico",
+      "apoderadoNombre": "Carlos",
+      "apoderadoApellido": "Soto",
+      "apoderadoEmail": "carlos.soto@mail.com",
+      "apoderadoTelefono": "+56 9 9999 9999",
+      "apoderadoVinculo": "Padre",
+      "activo": true,
+      "createdAt": "2026-02-12T15:22:31.000",
+      "updatedAt": "2026-02-12T15:22:31.000"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 72,
+  "totalPages": 4,
+  "sortBy": "rut",
+  "sortDir": "asc",
+  "hasNext": true,
+  "hasPrevious": false
+}
+```
+
 **POST /api/auth/login**
 ```bash
 # Request
@@ -1697,14 +1804,32 @@ El sistema de estados de Año Escolar fue refactorizado. Anteriormente existía 
 
 ---
 
-### FASE 4 - Alumnos ⏳ PENDIENTE
+### FASE 4 - Alumnos ✅ COMPLETADA
+
+**Objetivo**: Implementar CRUD de alumnos y listado escalable para alto volumen de registros.
 
 **Backend:**
-- Tabla: `alumno`
-- Vinculación apoderado-alumno
+- ✅ Entidad `Alumno` con mapeo completo a tabla `alumno`
+- ✅ Repository con `JpaSpecificationExecutor` y `@EntityGraph` para `curso` y `curso.grado`
+- ✅ DTOs: `AlumnoRequest`, `AlumnoResponse`, `AlumnoPageResponse`
+- ✅ Controller con CRUD simple (sin services/use cases)
+- ✅ Listado profesional con paginación, orden configurable y filtros dinámicos
+- ✅ Búsqueda automática por input único (`q`) detectando RUT o nombre
+- ✅ Flyway tracking actualizado con placeholders:
+  - `V7__create_alumnos.sql`
+  - `V8__seed_alumnos.sql`
 
-**Use Cases:**
-- ObtenerDetalleAlumno
+**Endpoints implementados:**
+- ✅ GET `/api/alumnos` (paginado + filtros `cursoId`/`gradoId` + búsqueda dinámica)
+- ✅ GET `/api/alumnos/{id}`
+- ✅ POST `/api/alumnos`
+- ✅ PUT `/api/alumnos/{id}`
+
+**Reglas de negocio clave:**
+- Solo alumnos activos en listados (`activo = true`)
+- Orden por defecto `rut asc`
+- Sin `DELETE` físico (desactivación lógica por campo `activo`)
+- Si filtros no encuentran coincidencias, retorna `content: []` con `200 OK`
 
 ---
 
@@ -1845,6 +1970,7 @@ docs: actualizar README con instrucciones de instalación
 | `http://localhost:8080/api/materias` | Materias |
 | `http://localhost:8080/api/profesores` | Profesores |
 | `http://localhost:8080/api/cursos` | Cursos |
+| `http://localhost:8080/api/alumnos` | Alumnos (paginado + filtros + búsqueda) |
 | `http://localhost:8080/h2-console` | Consola H2 (dev) |
 | `https://github.com/fmandres92/schoolmate-backend` | Repositorio GitHub |
 

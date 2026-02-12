@@ -1,0 +1,2 @@
+-- Tabla alumno creada directamente en Supabase
+-- Este archivo existe para mantener el tracking de Flyway

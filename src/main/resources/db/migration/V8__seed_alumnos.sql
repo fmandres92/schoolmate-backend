@@ -1,0 +1,2 @@
+-- Seed de alumnos ejecutado directamente en Supabase
+-- Este archivo existe para mantener el tracking de Flyway
