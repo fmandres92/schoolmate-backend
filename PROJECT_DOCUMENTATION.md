@@ -1280,8 +1280,17 @@ Los años escolares retornan un campo `estado` calculado automáticamente:
 
 **Notas:**
 - Los cursos tienen relación ManyToOne con Grado y AnoEscolar
-- 2-3 cursos por grado (letras A, B, C)
+- La letra se asigna automáticamente por backend (catálogo `A..F`)
+- El nombre del curso lo genera backend con nomenclatura `{gradoNombre} {letra}`
 - Response incluye datos del grado y año escolar
+
+**Request de ejemplo (`POST /api/cursos`):**
+```json
+{
+  "gradoId": "1",
+  "anoEscolarId": "2"
+}
+```
 
 **Response de ejemplo:**
 ```json
@@ -1469,6 +1478,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 - `PROFESOR_RUT_INMUTABLE`
 - `PROFESOR_EMAIL_DUPLICADO`
 - `PROFESOR_TELEFONO_DUPLICADO`
+- `CURSO_SIN_SECCION_DISPONIBLE`
 - `DATA_INTEGRITY`
 - `INTERNAL_SERVER_ERROR`
 
@@ -2110,8 +2120,6 @@ curl -X POST http://localhost:8080/api/cursos \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "nombre": "1° Básico C",
-    "letra": "C",
     "gradoId": "1",
     "anoEscolarId": "2"
   }'
@@ -2166,3 +2174,13 @@ curl -X POST http://localhost:8080/api/cursos \
 - Regla de negocio en edición:
   - `PUT /api/profesores/{id}` no permite cambiar RUT (`PROFESOR_RUT_INMUTABLE`, status `400`, `field=rut`)
 - El backend retorna `409` con `field` cuando hay conflicto de unicidad, para mostrar errores por input en frontend.
+
+### 13.5 Creación automática de cursos (secciones A-F)
+
+- Se agregó soporte de secciones fijas mediante `seccion_catalogo` (`A..F`) y migración de tracking `V10`.
+- `POST /api/cursos` ahora recibe solo `gradoId` y `anoEscolarId`.
+- Backend asigna automáticamente:
+  - `letra`: primera disponible según `seccion_catalogo` (orden A..F)
+  - `nombre`: formato `{gradoNombre} {letra}`
+- Si no hay letras disponibles para ese grado+año, retorna:
+  - `409` con `code=CURSO_SIN_SECCION_DISPONIBLE` y `field=letra`.

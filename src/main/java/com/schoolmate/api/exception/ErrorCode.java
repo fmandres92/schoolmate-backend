@@ -19,6 +19,7 @@ public enum ErrorCode {
     PROFESOR_RUT_INMUTABLE(HttpStatus.BAD_REQUEST, "error.profesor.rut_inmutable"),
     PROFESOR_EMAIL_DUPLICADO(HttpStatus.CONFLICT, "error.profesor.email_duplicado"),
     PROFESOR_TELEFONO_DUPLICADO(HttpStatus.CONFLICT, "error.profesor.telefono_duplicado"),
+    CURSO_SIN_SECCION_DISPONIBLE(HttpStatus.CONFLICT, "error.curso.sin_seccion_disponible"),
 
     DATA_INTEGRITY(HttpStatus.CONFLICT, "error.data.integrity"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "error.internal");
