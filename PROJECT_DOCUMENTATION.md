@@ -2184,3 +2184,35 @@ curl -X POST http://localhost:8080/api/cursos \
   - `nombre`: formato `{gradoNombre} {letra}`
 - Si no hay letras disponibles para ese grado+año, retorna:
   - `409` con `code=CURSO_SIN_SECCION_DISPONIBLE` y `field=letra`.
+
+### 13.6 Guía Frontend para creación de alumnos
+
+- Endpoint: `POST /api/alumnos` (requiere rol `ADMIN`).
+- Payload requerido:
+```json
+{
+  "rut": "21.456.789-3",
+  "nombre": "Martina",
+  "apellido": "González",
+  "fechaNacimiento": "2014-08-21",
+  "fechaInscripcion": "2026-03-01",
+  "cursoId": "c1",
+  "apoderadoNombre": "Carla",
+  "apoderadoApellido": "Muñoz",
+  "apoderadoEmail": "carla.munoz@gmail.com",
+  "apoderadoTelefono": "+56991234567",
+  "apoderadoVinculo": "Madre"
+}
+```
+- Formato de fechas: `YYYY-MM-DD`.
+- Para cargar selector de cursos se recomienda:
+  - `GET /api/cursos?anoEscolarId={id}&gradoId={id}`.
+- Validaciones mínimas de frontend:
+  - Campos obligatorios no vacíos.
+  - Email válido en `apoderadoEmail`.
+  - Fechas válidas.
+  - Evitar doble submit (deshabilitar botón al enviar).
+- Manejo de errores recomendado:
+  - `400` validación (`code=VALIDATION_FAILED`, usar `details` por campo).
+  - `400` por negocio (`Curso no encontrado`, `Ya existe un alumno con ese RUT`).
+  - `404` si el recurso no existe.
