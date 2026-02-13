@@ -16,6 +16,8 @@ public interface MallaCurricularRepository extends JpaRepository<MallaCurricular
 
     List<MallaCurricular> findByGradoIdAndAnoEscolarId(String gradoId, String anoEscolarId);
 
+    List<MallaCurricular> findByGradoIdAndAnoEscolarIdAndActivoTrue(String gradoId, String anoEscolarId);
+
     Optional<MallaCurricular> findByMateriaIdAndGradoIdAndAnoEscolarId(
         String materiaId,
         String gradoId,

@@ -28,12 +28,6 @@ public class AlumnoRequest {
     @NotBlank(message = "La fecha de nacimiento es obligatoria")
     private String fechaNacimiento;
 
-    @NotBlank(message = "La fecha de inscripción es obligatoria")
-    private String fechaInscripcion;
-
-    @NotBlank(message = "El curso es obligatorio")
-    private String cursoId;
-
     @NotBlank(message = "El nombre del apoderado es obligatorio")
     @Size(max = 100)
     private String apoderadoNombre;

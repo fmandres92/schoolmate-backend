@@ -32,13 +32,6 @@ public class Alumno {
     @Column(name = "fecha_nacimiento", nullable = false)
     private LocalDate fechaNacimiento;
 
-    @Column(name = "fecha_inscripcion", nullable = false)
-    private LocalDate fechaInscripcion;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "curso_id", nullable = false)
-    private Curso curso;
-
     @Column(name = "apoderado_nombre", nullable = false, length = 100)
     private String apoderadoNombre;
 

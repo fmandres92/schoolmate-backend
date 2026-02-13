@@ -4,10 +4,11 @@ import com.schoolmate.api.dto.request.AlumnoRequest;
 import com.schoolmate.api.dto.response.AlumnoPageResponse;
 import com.schoolmate.api.dto.response.AlumnoResponse;
 import com.schoolmate.api.entity.Alumno;
-import com.schoolmate.api.entity.Curso;
+import com.schoolmate.api.entity.Matricula;
+import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AlumnoRepository;
-import com.schoolmate.api.repository.CursoRepository;
+import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.specification.AlumnoSpecifications;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,10 +23,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/alumnos")
@@ -34,58 +33,82 @@ import java.util.UUID;
 public class AlumnoController {
 
     private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            "rut", "apellido", "nombre", "fechaInscripcion", "createdAt"
+            "rut", "apellido", "nombre", "createdAt"
     );
 
     private final AlumnoRepository alumnoRepository;
-    private final CursoRepository cursoRepository;
+    private final MatriculaRepository matriculaRepository;
 
+    /**
+     * Listar alumnos con paginación.
+     * - Si se pasa anoEscolarId: enriquece con matrícula del año y permite filtrar por cursoId/gradoId
+     * - Si NO se pasa anoEscolarId: lista solo datos personales, ignora filtros cursoId/gradoId
+     */
     @GetMapping
     public ResponseEntity<AlumnoPageResponse> listar(
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(defaultValue = "20") Integer size,
-            @RequestParam(defaultValue = "rut") String sortBy,
+            @RequestParam(defaultValue = "apellido") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir,
+            @RequestParam(required = false) String anoEscolarId,
             @RequestParam(required = false) String cursoId,
             @RequestParam(required = false) String gradoId,
             @RequestParam(required = false) String q) {
 
-        if (page < 0) {
-            page = 0;
-        }
-        if (size < 1) {
-            size = 20;
-        } else if (size > 100) {
-            size = 100;
-        }
+        // Sanitizar paginación
+        page = Math.max(page, 0);
+        size = Math.min(Math.max(size, 1), 100);
 
-        String resolvedSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "rut";
+        String resolvedSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "apellido";
         Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
 
-        Specification<Alumno> specification = Specification.where(AlumnoSpecifications.activoTrue());
+        // Construir specification base
+        Specification<Alumno> spec = Specification.where(AlumnoSpecifications.activoTrue());
 
-        if (cursoId != null && !cursoId.isBlank()) {
-            specification = specification.and(AlumnoSpecifications.byCursoId(cursoId));
-        }
-        if (gradoId != null && !gradoId.isBlank()) {
-            specification = specification.and(AlumnoSpecifications.byGradoId(gradoId));
-        }
-
+        // Búsqueda por texto
         String trimmedQuery = q == null ? "" : q.trim();
         if (!trimmedQuery.isEmpty()) {
             if (isRutSearch(trimmedQuery)) {
-                specification = specification.and(AlumnoSpecifications.searchByRutDigits(trimmedQuery));
-            } else if (trimmedQuery.length() >= 3) {
-                specification = specification.and(AlumnoSpecifications.searchByNombre(trimmedQuery));
+                spec = spec.and(AlumnoSpecifications.searchByRutDigits(trimmedQuery));
+            } else if (trimmedQuery.length() >= 2) {
+                spec = spec.and(AlumnoSpecifications.searchByNombre(trimmedQuery));
             }
         }
 
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(direction, resolvedSortBy));
-        Page<Alumno> alumnosPage = alumnoRepository.findAll(specification, pageable);
+        // Si hay filtros de curso/grado, necesitamos filtrar por matrícula
+        if (anoEscolarId != null && !anoEscolarId.isBlank()) {
+            List<String> alumnoIdsFiltrados = getAlumnoIdsByMatriculaFilters(anoEscolarId, cursoId, gradoId);
+            if (alumnoIdsFiltrados != null) {
+                if (alumnoIdsFiltrados.isEmpty()) {
+                    // No hay alumnos que cumplan los filtros de matrícula
+                    return ResponseEntity.ok(buildEmptyPage(page, size, resolvedSortBy, direction));
+                }
+                spec = spec.and(AlumnoSpecifications.byIdIn(alumnoIdsFiltrados));
+            }
+        }
 
-        List<AlumnoResponse> content = alumnosPage.getContent().stream()
-                .map(AlumnoResponse::fromEntity)
-                .toList();
+        // Ejecutar query de alumnos
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(direction, resolvedSortBy));
+        Page<Alumno> alumnosPage = alumnoRepository.findAll(spec, pageable);
+
+        // Enriquecer con matrícula si hay anoEscolarId
+        List<AlumnoResponse> content;
+        if (anoEscolarId != null && !anoEscolarId.isBlank()) {
+            List<String> alumnoIds = alumnosPage.getContent().stream()
+                    .map(Alumno::getId)
+                    .toList();
+
+            Map<String, Matricula> matriculaMap = getMatriculaMap(alumnoIds, anoEscolarId);
+
+            content = alumnosPage.getContent().stream()
+                    .map(alumno -> AlumnoResponse.fromEntityWithMatricula(
+                            alumno, matriculaMap.get(alumno.getId())))
+                    .toList();
+        } else {
+            content = alumnosPage.getContent().stream()
+                    .map(AlumnoResponse::fromEntity)
+                    .toList();
+        }
 
         AlumnoPageResponse response = AlumnoPageResponse.builder()
                 .content(content)
@@ -103,19 +126,27 @@ public class AlumnoController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<AlumnoResponse> obtener(@PathVariable String id) {
+    public ResponseEntity<AlumnoResponse> obtener(
+            @PathVariable String id,
+            @RequestParam(required = false) String anoEscolarId) {
+
         Alumno alumno = alumnoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
+
+        if (anoEscolarId != null && !anoEscolarId.isBlank()) {
+            Matricula matricula = matriculaRepository
+                    .findByAlumnoIdAndAnoEscolarIdAndEstado(id, anoEscolarId, EstadoMatricula.ACTIVA)
+                    .orElse(null);
+            return ResponseEntity.ok(AlumnoResponse.fromEntityWithMatricula(alumno, matricula));
+        }
+
         return ResponseEntity.ok(AlumnoResponse.fromEntity(alumno));
     }
 
     @PostMapping
     public ResponseEntity<AlumnoResponse> crear(@Valid @RequestBody AlumnoRequest request) {
-        Curso curso = cursoRepository.findById(request.getCursoId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Curso no encontrado"));
-
         if (alumnoRepository.existsByRut(request.getRut())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ya existe un alumno con ese RUT");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un alumno con ese RUT");
         }
 
         Alumno alumno = Alumno.builder()
@@ -124,8 +155,6 @@ public class AlumnoController {
                 .nombre(request.getNombre())
                 .apellido(request.getApellido())
                 .fechaNacimiento(LocalDate.parse(request.getFechaNacimiento()))
-                .fechaInscripcion(LocalDate.parse(request.getFechaInscripcion()))
-                .curso(curso)
                 .apoderadoNombre(request.getApoderadoNombre())
                 .apoderadoApellido(request.getApoderadoApellido())
                 .apoderadoEmail(request.getApoderadoEmail())
@@ -146,19 +175,14 @@ public class AlumnoController {
         Alumno alumno = alumnoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
 
-        Curso curso = cursoRepository.findById(request.getCursoId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Curso no encontrado"));
-
         if (alumnoRepository.existsByRutAndIdNot(request.getRut(), id)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ya existe un alumno con ese RUT");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un alumno con ese RUT");
         }
 
         alumno.setRut(request.getRut());
         alumno.setNombre(request.getNombre());
         alumno.setApellido(request.getApellido());
         alumno.setFechaNacimiento(LocalDate.parse(request.getFechaNacimiento()));
-        alumno.setFechaInscripcion(LocalDate.parse(request.getFechaInscripcion()));
-        alumno.setCurso(curso);
         alumno.setApoderadoNombre(request.getApoderadoNombre());
         alumno.setApoderadoApellido(request.getApoderadoApellido());
         alumno.setApoderadoEmail(request.getApoderadoEmail());
@@ -167,6 +191,70 @@ public class AlumnoController {
 
         Alumno saved = alumnoRepository.save(alumno);
         return ResponseEntity.ok(AlumnoResponse.fromEntity(saved));
+    }
+
+    // ── Helpers privados ──────────────────────────────────────
+
+    /**
+     * Obtiene IDs de alumnos filtrados por matrícula.
+     * Retorna null si no hay filtros de curso/grado (no restringir).
+     * Retorna lista vacía si hay filtros pero ningún alumno cumple.
+     */
+    private List<String> getAlumnoIdsByMatriculaFilters(String anoEscolarId, String cursoId, String gradoId) {
+        boolean hasCursoFilter = cursoId != null && !cursoId.isBlank();
+        boolean hasGradoFilter = gradoId != null && !gradoId.isBlank();
+
+        if (!hasCursoFilter && !hasGradoFilter) {
+            return null; // Sin filtros de matrícula, no restringir
+        }
+
+        List<Matricula> matriculas;
+        if (hasCursoFilter) {
+            matriculas = matriculaRepository.findByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA);
+        } else {
+            // Filtrar por grado: obtener matrículas activas del año, filtrar por grado del curso
+            matriculas = matriculaRepository.findByAnoEscolarIdAndEstado(anoEscolarId, EstadoMatricula.ACTIVA)
+                    .stream()
+                    .filter(m -> m.getCurso().getGrado().getId().equals(gradoId))
+                    .toList();
+        }
+
+        return matriculas.stream()
+                .map(m -> m.getAlumno().getId())
+                .distinct()
+                .toList();
+    }
+
+    /**
+     * Construye mapa alumnoId → Matricula para enriquecer responses en batch.
+     */
+    private Map<String, Matricula> getMatriculaMap(List<String> alumnoIds, String anoEscolarId) {
+        if (alumnoIds.isEmpty()) return Map.of();
+
+        List<Matricula> matriculas = matriculaRepository
+                .findByAnoEscolarIdAndEstado(anoEscolarId, EstadoMatricula.ACTIVA);
+
+        return matriculas.stream()
+                .filter(m -> alumnoIds.contains(m.getAlumno().getId()))
+                .collect(Collectors.toMap(
+                        m -> m.getAlumno().getId(),
+                        m -> m,
+                        (m1, m2) -> m1 // En caso de duplicado, tomar primero
+                ));
+    }
+
+    private AlumnoPageResponse buildEmptyPage(int page, int size, String sortBy, Sort.Direction direction) {
+        return AlumnoPageResponse.builder()
+                .content(List.of())
+                .page(page)
+                .size(size)
+                .totalElements(0L)
+                .totalPages(0)
+                .sortBy(sortBy)
+                .sortDir(direction.name().toLowerCase(Locale.ROOT))
+                .hasNext(false)
+                .hasPrevious(false)
+                .build();
     }
 
     private boolean isRutSearch(String q) {

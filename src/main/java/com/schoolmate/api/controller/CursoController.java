@@ -5,14 +5,19 @@ import com.schoolmate.api.dto.response.CursoResponse;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.Curso;
 import com.schoolmate.api.entity.Grado;
+import com.schoolmate.api.entity.MallaCurricular;
 import com.schoolmate.api.entity.SeccionCatalogo;
+import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.exception.ApiException;
 import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.CursoRepository;
 import com.schoolmate.api.repository.GradoRepository;
+import com.schoolmate.api.repository.MatriculaRepository;
+import com.schoolmate.api.repository.MallaCurricularRepository;
 import com.schoolmate.api.repository.SeccionCatalogoRepository;
+import com.schoolmate.api.enums.EstadoMatricula;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.Comparator;
 
 @RestController
 @RequestMapping("/api/cursos")
@@ -34,6 +42,8 @@ public class CursoController {
     private final GradoRepository gradoRepository;
     private final AnoEscolarRepository anoEscolarRepository;
     private final SeccionCatalogoRepository seccionCatalogoRepository;
+    private final MatriculaRepository matriculaRepository;
+    private final MallaCurricularRepository mallaCurricularRepository;
 
     @GetMapping
     public ResponseEntity<List<CursoResponse>> listar(
@@ -50,8 +60,12 @@ public class CursoController {
             cursos = cursoRepository.findAll();
         }
 
+        Map<String, Long> matriculadosPorCurso = obtenerMatriculadosPorCurso(cursos);
+
         List<CursoResponse> response = cursos.stream()
-                .map(CursoResponse::fromEntity)
+                .map(curso -> CursoResponse.fromEntity(
+                        curso,
+                        matriculadosPorCurso.getOrDefault(curso.getId(), 0L)))
                 .toList();
         return ResponseEntity.ok(response);
     }
@@ -60,7 +74,36 @@ public class CursoController {
     public ResponseEntity<CursoResponse> obtener(@PathVariable String id) {
         Curso curso = cursoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
-        return ResponseEntity.ok(CursoResponse.fromEntity(curso));
+
+        long matriculados = matriculaRepository.countByCursoIdAndEstado(curso.getId(), EstadoMatricula.ACTIVA);
+        List<MallaCurricular> malla = mallaCurricularRepository.findByGradoIdAndAnoEscolarIdAndActivoTrue(
+                curso.getGrado().getId(),
+                curso.getAnoEscolar().getId()
+        );
+
+        List<CursoResponse.MateriaCargaResponse> materias = malla.stream()
+                .sorted(Comparator.comparing(mc -> mc.getMateria().getNombre(), String.CASE_INSENSITIVE_ORDER))
+                .map(mc -> CursoResponse.MateriaCargaResponse.builder()
+                        .materiaId(mc.getMateria().getId())
+                        .materiaNombre(mc.getMateria().getNombre())
+                        .materiaIcono(mc.getMateria().getIcono())
+                        .horasSemanales(mc.getHorasSemanales())
+                        .build())
+                .toList();
+
+        int totalHorasSemanales = malla.stream()
+                .map(MallaCurricular::getHorasSemanales)
+                .filter(java.util.Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .sum();
+
+        return ResponseEntity.ok(CursoResponse.fromEntity(
+                curso,
+                matriculados,
+                materias.size(),
+                totalHorasSemanales,
+                materias
+        ));
     }
 
     @PostMapping
@@ -132,5 +175,21 @@ public class CursoController {
 
     private String formatearNombreCurso(String nombreGrado, String letra) {
         return nombreGrado + " " + letra;
+    }
+
+    private Map<String, Long> obtenerMatriculadosPorCurso(List<Curso> cursos) {
+        if (cursos.isEmpty()) {
+            return Map.of();
+        }
+
+        List<String> cursoIds = cursos.stream()
+                .map(Curso::getId)
+                .toList();
+
+        Map<String, Long> counts = new HashMap<>();
+        for (Object[] row : matriculaRepository.countActivasByCursoIds(cursoIds, EstadoMatricula.ACTIVA)) {
+            counts.put((String) row[0], (Long) row[1]);
+        }
+        return counts;
     }
 }
