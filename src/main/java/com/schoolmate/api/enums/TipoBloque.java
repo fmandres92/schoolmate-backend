@@ -1,6 +1,7 @@
 package com.schoolmate.api.enums;
 
-public enum TipoAsignacion {
+public enum TipoBloque {
     CLASE,
+    RECREO,
     ALMUERZO
 }

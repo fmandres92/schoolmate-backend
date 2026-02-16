@@ -1,6 +1,6 @@
 package com.schoolmate.api.entity;
 
-import com.schoolmate.api.enums.TipoAsignacion;
+import com.schoolmate.api.enums.TipoBloque;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -14,43 +14,36 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "asignacion")
-@Data
+@Table(name = "bloque_horario")
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Asignacion {
+public class BloqueHorario {
 
     @Id
+    @Column(length = 36)
     private String id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "curso_id", nullable = false)
     private Curso curso;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "profesor_id")
-    private Profesor profesor;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "materia_id")
-    private Materia materia;
-
-    @Builder.Default
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private TipoAsignacion tipo = TipoAsignacion.CLASE;
-
     @Column(name = "dia_semana", nullable = false)
     private Integer diaSemana;
+
+    @Column(name = "numero_bloque", nullable = false)
+    private Integer numeroBloque;
 
     @Column(name = "hora_inicio", nullable = false)
     private LocalTime horaInicio;
@@ -58,9 +51,20 @@ public class Asignacion {
     @Column(name = "hora_fin", nullable = false)
     private LocalTime horaFin;
 
-    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo", nullable = false, length = 20)
+    private TipoBloque tipo;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "materia_id")
+    private Materia materia;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "profesor_id")
+    private Profesor profesor;
+
     @Column(nullable = false)
-    private Boolean activo = true;
+    private Boolean activo;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -70,22 +74,18 @@ public class Asignacion {
 
     @PrePersist
     protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
-        if (id == null) {
-            id = UUID.randomUUID().toString();
+        if (this.id == null) {
+            this.id = UUID.randomUUID().toString();
         }
-        if (tipo == null) {
-            tipo = TipoAsignacion.CLASE;
+        if (this.activo == null) {
+            this.activo = true;
         }
-        if (activo == null) {
-            activo = true;
-        }
-        createdAt = now;
-        updatedAt = now;
+        this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
     }
 }

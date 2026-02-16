@@ -2,7 +2,7 @@
 
 ## SECCIÓN 1: RESUMEN EJECUTIVO
 
-`schoolmate-hub-api` es un backend REST para gestión escolar (catálogos académicos, cursos, profesores, alumnos, matrícula y asignaciones horarias). La API está construida en Spring Boot con seguridad JWT stateless y acceso a PostgreSQL en Supabase usando JPA + Flyway. La implementación actual está fuertemente orientada a operación administrativa (`ADMIN`), con endpoints CRUD y algunos casos de uso explícitos para reglas de negocio críticas (login, matrícula, asignaciones). El diseño separa catálogos estables (`materia`, `grado`, `año`) de vínculos temporales (`malla_curricular`, `matricula`).
+`schoolmate-hub-api` es un backend REST para gestión escolar (catálogos académicos, cursos, profesores, alumnos, matrícula y jornada escolar por curso). La API está construida en Spring Boot con seguridad JWT stateless y acceso a PostgreSQL en Supabase usando JPA + Flyway. La implementación actual está fuertemente orientada a operación administrativa (`ADMIN`), con endpoints CRUD y casos de uso explícitos para reglas de negocio críticas (login, matrícula, jornada). El diseño separa catálogos estables (`materia`, `grado`, `año`) de vínculos temporales (`malla_curricular`, `matricula`) y bloques de jornada (`bloque_horario`).
 
 ### Stack tecnológico (versiones exactas verificadas)
 
@@ -44,7 +44,7 @@ Fuente: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-a
 | Profesores | ✅ operativo |
 | Alumnos | ✅ operativo |
 | Matrículas | ✅ operativo |
-| Asignaciones (horario base) | ✅ operativo |
+| Jornada escolar por curso | ✅ operativo |
 | Ownership por profesor/apoderado | ❌ no implementado |
 | Asistencia, reportes, dashboards | ❌ no implementado |
 
@@ -87,14 +87,14 @@ Ejemplos reales:
 - Use case explícito:
   - `LoginUsuario` para autenticación JWT.
   - `MatricularAlumno` y `CambiarEstadoMatricula` para reglas de matrícula.
-  - `CrearAsignacion` y `EliminarAsignacion` para horario/colisiones.
+  - `GuardarJornadaDia`, `CopiarJornadaDia`, `EliminarJornadaDia` y `ObtenerJornadaCurso` para reglas de jornada.
 
 ### Principios de diseño observados
 
 - No existe capa `Service` genérica transversal.
 - No hay interfaces de caso de uso innecesarias (use cases concretos como clases).
 - IDs en entidades: `String` (normalmente UUID generado en `@PrePersist`, aunque también hay IDs semánticos seed como `p1`, `c1`, `mc-...`).
-- Borrado lógico en algunos dominios (`activo=false`): malla curricular y asignaciones.
+- Borrado lógico en algunos dominios (`activo=false`): malla curricular y bloques de jornada.
 
 ### Manejo centralizado de excepciones (`GlobalExceptionHandler`)
 
@@ -146,8 +146,8 @@ Clase: `ApiErrorResponse`
 │   ├── security              # JWT + principal + filter
 │   ├── specification         # filtros dinámicos JPA
 │   ├── usecase/auth          # caso de uso login
-│   ├── usecase/matricula     # casos de uso matrícula
-│   └── usecase/asignacion    # casos de uso asignaciones
+│   ├── usecase/jornada       # casos de uso jornada escolar
+│   └── usecase/matricula     # casos de uso matrícula
 └── src/main/resources
     ├── application.yml
     ├── application-dev.yml
@@ -166,10 +166,10 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.controller`
   - `AlumnoController`
   - `AnoEscolarController`
-  - `AsignacionController`
   - `AuthController`
   - `CursoController`
   - `GradoController`
+  - `JornadaController`
   - `MallaCurricularController`
   - `MateriaController`
   - `MatriculaController`
@@ -177,8 +177,10 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.dto.request`
   - `AlumnoRequest`
   - `AnoEscolarRequest`
-  - `CrearAsignacionRequest`
+  - `BloqueRequest`
+  - `CopiarJornadaRequest`
   - `CursoRequest`
+  - `JornadaDiaRequest`
   - `LoginRequest`
   - `MallaCurricularBulkRequest`
   - `MallaCurricularRequest`
@@ -190,9 +192,12 @@ Clase: `ApiErrorResponse`
   - `AlumnoResponse`
   - `AnoEscolarResponse`
   - `ApiErrorResponse`
-  - `AsignacionResponse`
+  - `BloqueHorarioResponse`
   - `AuthResponse`
   - `CursoResponse`
+  - `JornadaCursoResponse`
+  - `JornadaDiaResponse`
+  - `JornadaResumenResponse`
   - `MallaCurricularResponse`
   - `MateriaPageResponse`
   - `MateriaResponse`
@@ -201,7 +206,7 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.entity`
   - `Alumno`
   - `AnoEscolar`
-  - `Asignacion`
+  - `BloqueHorario`
   - `Curso`
   - `Grado`
   - `MallaCurricular`
@@ -214,7 +219,7 @@ Clase: `ApiErrorResponse`
   - `EstadoAnoEscolar`
   - `EstadoMatricula`
   - `Rol`
-  - `TipoAsignacion`
+  - `TipoBloque`
 - `com.schoolmate.api.exception`
   - `ApiException`
   - `BusinessException`
@@ -225,7 +230,7 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.repository`
   - `AlumnoRepository`
   - `AnoEscolarRepository`
-  - `AsignacionRepository`
+  - `BloqueHorarioRepository`
   - `CursoRepository`
   - `GradoRepository`
   - `MallaCurricularRepository`
@@ -244,9 +249,11 @@ Clase: `ApiErrorResponse`
   - `AlumnoSpecifications`
 - `com.schoolmate.api.usecase.auth`
   - `LoginUsuario`
-- `com.schoolmate.api.usecase.asignacion`
-  - `CrearAsignacion`
-  - `EliminarAsignacion`
+- `com.schoolmate.api.usecase.jornada`
+  - `CopiarJornadaDia`
+  - `EliminarJornadaDia`
+  - `GuardarJornadaDia`
+  - `ObtenerJornadaCurso`
 - `com.schoolmate.api.usecase.matricula`
   - `CambiarEstadoMatricula`
   - `MatricularAlumno`
@@ -427,18 +434,19 @@ Relaciones:
 
 Constraint: `uq_malla_materia_grado_ano`.
 
-### `Asignacion` (`asignacion`)
+### `BloqueHorario` (`bloque_horario`)
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
 |---|---|---|---|---|
 | `id` | `String` | `id` | `VARCHAR(36)` | PK |
 | `curso` | `Curso` | `curso_id` | `VARCHAR(36)` | FK NOT NULL |
-| `profesor` | `Profesor` | `profesor_id` | `VARCHAR(36)` | FK nullable |
-| `materia` | `Materia` | `materia_id` | `VARCHAR(36)` | FK nullable |
-| `tipo` | `TipoAsignacion` | `tipo` | `VARCHAR(20)` | NOT NULL DEFAULT CLASE |
 | `diaSemana` | `Integer` | `dia_semana` | `INTEGER` | CHECK 1..5 |
+| `numeroBloque` | `Integer` | `numero_bloque` | `INTEGER` | NOT NULL |
 | `horaInicio` | `LocalTime` | `hora_inicio` | `TIME` | NOT NULL |
 | `horaFin` | `LocalTime` | `hora_fin` | `TIME` | NOT NULL, > inicio |
+| `tipo` | `TipoBloque` | `tipo` | `VARCHAR(20)` | NOT NULL (`CLASE`,`RECREO`,`ALMUERZO`) |
+| `profesor` | `Profesor` | `profesor_id` | `VARCHAR(36)` | FK nullable |
+| `materia` | `Materia` | `materia_id` | `VARCHAR(36)` | FK nullable |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
@@ -451,14 +459,14 @@ Relaciones:
 
 Constraints DB adicionales:
 
-- `ck_asignacion_tipo_campos`: `CLASE` exige profesor+materia; `ALMUERZO` exige null/null.
-- únicos parciales por horario activo de curso y profesor.
+- jornada modelada por día (`dia_semana`) y secuencia (`numero_bloque`).
+- `materia_id` y `profesor_id` se mantienen null al configurar estructura base.
 
 ### Campos de auditoría
 
 Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 
-- `created_at` + `updated_at`: `Usuario`, `AnoEscolar`, `Grado`, `Materia`, `Profesor`, `Curso`, `Alumno`, `Matricula`, `MallaCurricular`, `Asignacion`.
+- `created_at` + `updated_at`: `Usuario`, `AnoEscolar`, `Grado`, `Materia`, `Profesor`, `Curso`, `Alumno`, `Matricula`, `MallaCurricular`, `BloqueHorario`.
 - Solo `created_at`: `SeccionCatalogo`.
 
 ### Enums usados y valores
@@ -466,7 +474,7 @@ Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 - `Rol`: `ADMIN`, `PROFESOR`, `APODERADO`
 - `EstadoAnoEscolar`: `FUTURO`, `PLANIFICACION`, `ACTIVO`, `CERRADO`
 - `EstadoMatricula`: `ACTIVA`, `RETIRADO`, `TRASLADADO`
-- `TipoAsignacion`: `CLASE`, `ALMUERZO`
+- `TipoBloque`: `CLASE`, `RECREO`, `ALMUERZO`
 
 ### Diagrama ER ASCII (modelo lógico actual)
 
@@ -488,10 +496,10 @@ materia 1---* malla_curricular *---1 grado
                       |
                       *---1 ano_escolar
 
-curso 1---* asignacion *---0..1 profesor
-                    |
-                    0..1
-                  materia
+curso 1---* bloque_horario *---0..1 profesor
+                        |
+                        0..1
+                      materia
 
 seccion_catalogo 1---* curso (por letra)
 ```
@@ -530,14 +538,15 @@ seccion_catalogo 1---* curso (por letra)
 | `V9` | Elimina `materia_grado`, crea `malla_curricular` + índices + seed malla |
 | `V10` | Crea `seccion_catalogo`, seed A..F, unique de curso por grado/año/letra, FK `curso.letra`, check formato letra |
 | `V11` | Crea `matricula`, migra datos desde `alumno.curso_id`, elimina `curso_id` y `fecha_inscripcion` en `alumno` |
-| `V12` | Crea `asignacion`, checks de día/hora/tipo y únicos parciales por horario |
+| `V12` | (Histórico) creaba `asignacion`; hoy esa tabla fue eliminada del entorno Supabase actual |
 
 ### Estado resultante del esquema (según migraciones + código)
 
-- Modelo oficial en código y queries usa: `usuario`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `asignacion`.
+- Modelo oficial en código y queries usa: `usuario`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`.
 - Riesgo de drift:
   - `ano_escolar.fecha_inicio_planificacion` requerido por código pero no aparece en `V3`.
   - `alumno` no está versionado explícitamente en repo (V7/V8 placeholders).
+  - `bloque_horario` existe en Supabase pero no está creada por migración Flyway versionada en el repo.
 
 ### Convenciones para nuevas migraciones
 
@@ -619,7 +628,7 @@ Estado actual de autorización por código:
 
 Sí existe en controllers de:
 
-- Alumnos, Años, Asignaciones, Cursos, Grados, Malla, Materias, Matrículas, Profesores.
+- Alumnos, Años, Cursos, Grados, Jornada, Malla, Materias, Matrículas, Profesores.
 
 ### Regla de ownership (profesor solo sus datos)
 
@@ -716,13 +725,15 @@ No está implementada en el estado actual.
 | `GET /api/matriculas/alumno/{alumnoId}` | Historial de matrículas por alumno | `ADMIN` | Path `alumnoId` | - | `List<MatriculaResponse>` | directo | - |
 | `PATCH /api/matriculas/{id}/estado` | Cambia estado (`ACTIVA/RETIRADO/TRASLADADO`) | `ADMIN` | Path + body map `{estado}` | `Map<String,String>` | `MatriculaResponse` | `CambiarEstadoMatricula` | `400` por body inválido, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 
-### Dominio: Asignaciones
+### Dominio: Jornada
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/asignaciones` | Lista asignaciones por `cursoId` o `profesorId` | `ADMIN` | Query: `cursoId?`, `profesorId?` | - | `List<AsignacionResponse>` | directo | `BUSINESS_RULE` si no se envía ninguno |
-| `POST /api/asignaciones` | Crea bloque horario | `ADMIN` | Body | `CrearAsignacionRequest` | `AsignacionResponse` | `CrearAsignacion` | `BUSINESS_RULE`, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
-| `DELETE /api/asignaciones/{id}` | Elimina lógicamente (`activo=false`) | `ADMIN` | Path | - | `204` | `EliminarAsignacion` | `RESOURCE_NOT_FOUND` |
+| `PUT /api/cursos/{cursoId}/jornada/{diaSemana}` | Guarda/reemplaza la jornada de un día | `ADMIN` | Path `cursoId`,`diaSemana`; Body | `JornadaDiaRequest` | `JornadaDiaResponse` | `GuardarJornadaDia` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `GET /api/cursos/{cursoId}/jornada` | Obtiene jornada completa; opcionalmente filtra por día | `ADMIN` | Path `cursoId`; Query opcional `diaSemana` | - | `JornadaCursoResponse` | `ObtenerJornadaCurso` | `RESOURCE_NOT_FOUND` |
+| `GET /api/cursos/{cursoId}/jornada/resumen` | Obtiene solo resumen semanal | `ADMIN` | Path `cursoId` | - | `JornadaResumenResponse` | `ObtenerJornadaCurso` (wrapper) | `RESOURCE_NOT_FOUND` |
+| `POST /api/cursos/{cursoId}/jornada/{diaSemanaOrigen}/copiar` | Copia estructura de un día a días destino | `ADMIN` | Path `cursoId`,`diaSemanaOrigen`; Body | `CopiarJornadaRequest` | `JornadaCursoResponse` | `CopiarJornadaDia` | `BUSINESS_RULE`, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
+| `DELETE /api/cursos/{cursoId}/jornada/{diaSemana}` | Elimina lógicamente jornada de un día | `ADMIN` | Path `cursoId`,`diaSemana` | - | `204` | `EliminarJornadaDia` | `BUSINESS_RULE`, `RESOURCE_NOT_FOUND` |
 
 ---
 
@@ -791,44 +802,77 @@ No está implementada en el estado actual.
   - `BusinessException`
 - `@Transactional`: sí.
 
-### `com.schoolmate.api.usecase.asignacion.CrearAsignacion`
+### `com.schoolmate.api.usecase.jornada.GuardarJornadaDia`
 
-- Función: crear bloque de horario de curso.
+- Función: guardar/reemplazar la estructura diaria de jornada de un curso.
 - Repositorios:
-  - `AsignacionRepository`, `CursoRepository`, `ProfesorRepository`, `MateriaRepository`, `MallaCurricularRepository`
+  - `BloqueHorarioRepository`, `CursoRepository`
 - Validaciones:
-  - bloque exactamente 1 hora
-  - rango horario `08:00` a `17:00`
-  - curso existe
-  - no conflicto de curso por día/hora
-  - `ALMUERZO`: profesor y materia nulos
-  - `CLASE`: profesor+materia obligatorios
-  - profesor habilitado para materia (`profesor.materias`)
-  - materia presente en malla del grado/año del curso
-  - no conflicto de profesor en mismo horario/año
-  - no exceder horas semanales de malla
+  - curso existe y su año no está `CERRADO`
+  - `diaSemana` entre 1 y 5
+  - bloques secuenciales desde `numeroBloque=1`
+  - horas válidas y continuas (sin gaps)
+  - `horaFin > horaInicio`
+  - rango permitido `07:00` a `18:00`
+  - máximo 1 `ALMUERZO`
+  - al menos un bloque `CLASE`
+  - primer y último bloque deben ser `CLASE`
 - Flujo:
-  1. parsea horas y tipo
-  2. valida reglas de tiempo
-  3. carga curso
-  4. valida conflicto de curso
-  5. rama `ALMUERZO` o `CLASE`
-  6. para `CLASE`: carga profesor/materia, valida habilitación y malla, valida conflictos, valida cupo de horas
-  7. persiste asignación
+  1. valida curso y estado de año
+  2. valida día y bloques
+  3. desactiva bloques activos previos del día
+  4. crea nuevos bloques
+  5. arma `JornadaDiaResponse`
 - Errores:
   - `BusinessException`
   - `ResourceNotFoundException`
 - `@Transactional`: sí.
 
-### `com.schoolmate.api.usecase.asignacion.EliminarAsignacion`
+### `com.schoolmate.api.usecase.jornada.ObtenerJornadaCurso`
 
-- Función: baja lógica de asignación (`activo=false`).
-- Repositorio: `AsignacionRepository`.
+- Función: obtener jornada activa de un curso (completa o filtrada por día) y su resumen.
+- Repositorios:
+  - `BloqueHorarioRepository`, `CursoRepository`
 - Flujo:
-  1. carga por id
-  2. setea `activo=false`
-  3. guarda
+  1. valida existencia de curso
+  2. carga bloques activos (todos o por día)
+  3. agrupa por `diaSemana`
+  4. construye `JornadaCursoResponse` + `JornadaResumenResponse`
 - Errores:
+  - `ResourceNotFoundException`
+- `@Transactional`: no.
+
+### `com.schoolmate.api.usecase.jornada.CopiarJornadaDia`
+
+- Función: copiar estructura (horas + tipo) de un día origen a varios días destino.
+- Repositorios/dependencias:
+  - `BloqueHorarioRepository`, `GuardarJornadaDia`, `ObtenerJornadaCurso`
+- Reglas:
+  - día origen debe tener bloques configurados
+  - destino entre 1 y 5
+  - origen no puede estar en destino
+  - no copia `materia` ni `profesor`
+- Flujo:
+  1. carga bloques origen
+  2. arma `JornadaDiaRequest` con estructura origen
+  3. aplica `GuardarJornadaDia` por cada destino
+  4. retorna jornada completa actualizada
+- Errores:
+  - `BusinessException`
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.jornada.EliminarJornadaDia`
+
+- Función: baja lógica de jornada diaria (`activo=false` por curso+día).
+- Repositorios:
+  - `BloqueHorarioRepository`, `CursoRepository`
+- Flujo:
+  1. valida curso y año no cerrado
+  2. valida día (1..5)
+  3. desactiva bloques activos del día
+  4. si no hubo cambios, retorna error de negocio
+- Errores:
+  - `BusinessException`
   - `ResourceNotFoundException`
 - `@Transactional`: sí.
 
@@ -840,7 +884,7 @@ No está implementada en el estado actual.
 |---|---|---|---|---|
 | `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | no | sí, vía `JpaSpecificationExecutor` |
 | `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual` | no | no |
-| `AsignacionRepository` | `Asignacion` | `findByCursoIdAndActivoTrue`, `findByProfesorIdAndActivoTrue`, `existsByCursoIdAndDiaSemanaAndHoraInicioAndActivoTrue` | `existsConflictoProfesor`, `countHorasAsignadasByMateriaAndCurso` | no |
+| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc` | `desactivarBloquesDia`, `findDiasConfigurados` | no |
 | `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc` | `findLetrasUsadasByGradoIdAndAnoEscolarId` | no |
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
 | `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | no | no |
@@ -877,7 +921,9 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `MallaCurricularRequest` | `materiaId,gradoId,anoEscolarId,horasSemanales` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(10)` | `@Data` |
 | `MallaCurricularBulkRequest` | `materiaId,anoEscolarId,grados[]` | `@NotBlank`, `@NotEmpty`, `@Valid` | `@Data` |
 | `MallaCurricularBulkRequest.GradoHoras` | `gradoId,horasSemanales` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(10)` | `@Data` |
-| `CrearAsignacionRequest` | `cursoId,profesorId,materiaId,tipo,diaSemana,horaInicio,horaFin` | `@NotNull` en cursoId,tipo,diaSemana,horaInicio,horaFin | `@Getter/@Setter @Builder` |
+| `BloqueRequest` | `numeroBloque,horaInicio,horaFin,tipo` | `@NotNull`, `@Min(1)`, `@Pattern` para hora `HH:mm` y tipo | `@Getter/@Setter` |
+| `JornadaDiaRequest` | `bloques[]` | `@NotNull`, `@Size(min=1)`, `@Valid` | `@Getter/@Setter` |
+| `CopiarJornadaRequest` | `diasDestino[]` | `@NotNull`, `@Size(min=1)`, elementos `@Min(1) @Max(5)` | `@Getter/@Setter` |
 
 ### Response DTOs
 
@@ -896,7 +942,10 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `AlumnoPageResponse` | contrato paginado equivalente a materias | `@Data @Builder` |
 | `MallaCurricularResponse` | `id,materiaId,materiaNombre,materiaIcono,gradoId,gradoNombre,gradoNivel,anoEscolarId,anoEscolar,horasSemanales,activo,createdAt,updatedAt` | `@Data @Builder` |
 | `MatriculaResponse` | `id,alumno*,curso*,gradoNombre,anoEscolar*,fechaMatricula,estado,createdAt,updatedAt` | `@Data @Builder` |
-| `AsignacionResponse` | `id,curso*,profesor*,materia*,tipo,diaSemana,horaInicio,horaFin,activo` | `@Getter/@Setter @Builder` |
+| `BloqueHorarioResponse` | `id,numeroBloque,horaInicio,horaFin,tipo,materia*,profesor*` | `@Getter/@Setter @Builder` |
+| `JornadaDiaResponse` | `diaSemana,nombreDia,bloques,totalBloquesClase,horaInicio,horaFin` | `@Getter/@Setter @Builder` |
+| `JornadaCursoResponse` | `cursoId,cursoNombre,dias,resumen` | `@Getter/@Setter @Builder` |
+| `JornadaResumenResponse` | `cursoId,diasConfigurados,bloquesClasePorDia,totalBloquesClaseSemana` | `@Getter/@Setter @Builder` |
 
 ---
 
@@ -956,14 +1005,15 @@ Para alumnos:
 
 ### Otras reglas relevantes
 
-- Asignación horaria:
-  - bloques de 1 hora
-  - horario entre 08:00 y 17:00
-  - colisión por curso/día/hora
-  - colisión por profesor/día/hora (mismo año)
-  - profesor debe enseñar esa materia
-  - materia debe existir en malla del grado/año del curso
-  - no exceder horas semanales de malla
+- Jornada escolar por día:
+  - `diaSemana` entre 1 y 5
+  - bloques secuenciales desde 1
+  - sin gaps (`horaInicio[n] == horaFin[n-1]`)
+  - rango horario permitido `07:00 - 18:00`
+  - máximo 1 bloque `ALMUERZO`
+  - primer y último bloque deben ser `CLASE`
+  - al menos 1 bloque `CLASE`
+  - no se modifica jornada si el año escolar del curso está `CERRADO`
 - Transiciones de matrícula restringidas (`ACTIVA<->RETIRADO/TRASLADADO`).
 
 ---
@@ -1009,8 +1059,8 @@ Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`):
   - `anoEscolarId`
 - `GET /api/malla-curricular/grado/{gradoId}`:
   - `anoEscolarId`
-- `GET /api/asignaciones`:
-  - `cursoId` o `profesorId` (uno requerido)
+- `GET /api/cursos/{cursoId}/jornada`:
+  - filtro opcional `diaSemana`
 
 ### Uso de `anoEscolarId` para enriquecer respuestas
 
@@ -1075,7 +1125,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - `curso`: `idx_curso_grado`, `idx_curso_ano_escolar`, `idx_curso_activo`, `uq_curso_grado_ano_letra`
 - `malla_curricular`: `idx_malla_curricular_ano_escolar`, `idx_malla_curricular_materia_ano`, `idx_malla_curricular_grado_ano`, `idx_malla_curricular_activo`
 - `matricula`: `idx_matricula_alumno`, `idx_matricula_curso`, `idx_matricula_ano_escolar`, `idx_matricula_estado`, `uq_matricula_alumno_ano_activa`
-- `asignacion`: `uq_asignacion_curso_dia_hora_activa`, `uq_asignacion_profesor_dia_hora_activa`
+- `bloque_horario`: tabla existente en Supabase; índices/constraints no versionados en migraciones del repo
 
 ### Índices recomendados pendientes
 
@@ -1108,7 +1158,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 | Profesores | ✅ | list/get/create/update |
 | Alumnos | ✅ | list/get/create/update |
 | Matrículas | ✅ | create, list por curso, historial por alumno, cambio estado |
-| Asignaciones/Horario base | ✅ | list, create, delete lógico |
+| Jornada escolar por curso | ✅ | guardar día, obtener jornada/resumen, copiar día, eliminar día |
 | Ownership por rol no-admin | ❌ | sin endpoints efectivos |
 | Asistencia | ❌ | no existe |
 | Reportes | ❌ | no existe |
@@ -1123,7 +1173,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 ### Próximos módulos lógicos
 
-1. Asignaciones/Horarios (ya iniciado con `asignacion`, falta completar lectura por semana/curso completo, edición, validación avanzada).
+1. Asignación de materia/profesor sobre bloques de jornada (pendiente; hoy la estructura se guarda sin `materia_id` ni `profesor_id`).
 2. Asistencia (registro por bloque/alumno, consolidado diario/mensual).
 3. Reportes (académico, matrícula, carga docente).
 4. Dashboards (KPIs por año/curso/docente).
@@ -1137,7 +1187,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - Entidades: singular en español (`Alumno`, `Profesor`, `AnoEscolar`).
 - Tablas: snake_case singular (`alumno`, `malla_curricular`).
 - Repositorios: `{Entidad}Repository`.
-- Use cases: verbo + sustantivo (`MatricularAlumno`, `CrearAsignacion`).
+- Use cases: verbo + sustantivo (`MatricularAlumno`, `GuardarJornadaDia`).
 - Controllers: `{Dominio}Controller`.
 - DTOs: `{Dominio}Request` / `{Dominio}Response`.
 
@@ -1217,4 +1267,3 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - Riesgo de errores 500 evitables en `/api/auth/me`.
 - Riesgo de fallas de arranque en entornos nuevos por desalineación de esquema.
 - Riesgo de seguridad por exposición de secretos en repositorio.
-
