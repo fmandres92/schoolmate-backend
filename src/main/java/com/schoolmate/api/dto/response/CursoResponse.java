@@ -21,7 +21,7 @@ public class CursoResponse {
     private Boolean activo;
     private Long alumnosMatriculados;
     private Integer cantidadMaterias;
-    private Integer totalHorasSemanales;
+    private Integer totalHorasPedagogicas;
     private List<MateriaCargaResponse> materias;
     private String createdAt;
     private String updatedAt;
@@ -38,7 +38,7 @@ public class CursoResponse {
             Curso curso,
             Long alumnosMatriculados,
             Integer cantidadMaterias,
-            Integer totalHorasSemanales,
+            Integer totalHorasPedagogicas,
             List<MateriaCargaResponse> materias
     ) {
         return CursoResponse.builder()
@@ -52,7 +52,7 @@ public class CursoResponse {
                 .activo(curso.getActivo())
                 .alumnosMatriculados(alumnosMatriculados == null ? 0L : alumnosMatriculados)
                 .cantidadMaterias(cantidadMaterias == null ? 0 : cantidadMaterias)
-                .totalHorasSemanales(totalHorasSemanales == null ? 0 : totalHorasSemanales)
+                .totalHorasPedagogicas(totalHorasPedagogicas == null ? 0 : totalHorasPedagogicas)
                 .materias(materias == null ? List.of() : materias)
                 .createdAt(curso.getCreatedAt().toString())
                 .updatedAt(curso.getUpdatedAt().toString())
@@ -67,6 +67,6 @@ public class CursoResponse {
         private String materiaId;
         private String materiaNombre;
         private String materiaIcono;
-        private Integer horasSemanales;
+        private Integer horasPedagogicas;
     }
 }

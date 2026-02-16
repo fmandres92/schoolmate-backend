@@ -37,7 +37,7 @@ public class MallaCurricularBulkRequest {
 
         @NotNull
         @Min(1)
-        @Max(10)
-        private Integer horasSemanales;
+        @Max(15)
+        private Integer horasPedagogicas;
     }
 }

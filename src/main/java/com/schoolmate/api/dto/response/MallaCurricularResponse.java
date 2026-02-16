@@ -22,7 +22,7 @@ public class MallaCurricularResponse {
     private Integer gradoNivel;
     private String anoEscolarId;
     private Integer anoEscolar;
-    private Integer horasSemanales;
+    private Integer horasPedagogicas;
     private Boolean activo;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

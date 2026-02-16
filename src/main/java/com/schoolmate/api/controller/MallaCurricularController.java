@@ -116,7 +116,7 @@ public class MallaCurricularController {
             .materia(materia)
             .grado(grado)
             .anoEscolar(anoEscolar)
-            .horasSemanales(request.getHorasSemanales())
+            .horasPedagogicas(request.getHorasPedagogicas())
             .activo(true)
             .build();
 
@@ -130,7 +130,7 @@ public class MallaCurricularController {
         MallaCurricular existente = mallaCurricularRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Registro de malla curricular no encontrado"));
 
-        existente.setHorasSemanales(request.getHorasSemanales());
+        existente.setHorasPedagogicas(request.getHorasPedagogicas());
         existente.setActivo(request.getActivo());
 
         MallaCurricular guardada = mallaCurricularRepository.save(existente);
@@ -172,7 +172,7 @@ public class MallaCurricularController {
         for (MallaCurricularBulkRequest.GradoHoras gradoHoras : request.getGrados()) {
             MallaCurricular existente = existentesPorGrado.get(gradoHoras.getGradoId());
             if (existente != null) {
-                existente.setHorasSemanales(gradoHoras.getHorasSemanales());
+                existente.setHorasPedagogicas(gradoHoras.getHorasPedagogicas());
                 existente.setActivo(true);
                 mallaCurricularRepository.save(existente);
                 continue;
@@ -183,7 +183,7 @@ public class MallaCurricularController {
                 .materia(materia)
                 .grado(grados.get(gradoHoras.getGradoId()))
                 .anoEscolar(anoEscolar)
-                .horasSemanales(gradoHoras.getHorasSemanales())
+                .horasPedagogicas(gradoHoras.getHorasPedagogicas())
                 .activo(true)
                 .build();
             mallaCurricularRepository.save(nuevo);
@@ -235,7 +235,7 @@ public class MallaCurricularController {
             .gradoNivel(entity.getGrado().getNivel())
             .anoEscolarId(entity.getAnoEscolar().getId())
             .anoEscolar(entity.getAnoEscolar().getAno())
-            .horasSemanales(entity.getHorasSemanales())
+            .horasPedagogicas(entity.getHorasPedagogicas())
             .activo(entity.getActivo())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
@@ -249,8 +249,8 @@ public class MallaCurricularController {
 
         @NotNull
         @Min(1)
-        @Max(10)
-        private Integer horasSemanales;
+        @Max(15)
+        private Integer horasPedagogicas;
 
         @NotNull
         private Boolean activo;

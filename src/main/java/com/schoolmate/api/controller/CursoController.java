@@ -87,12 +87,12 @@ public class CursoController {
                         .materiaId(mc.getMateria().getId())
                         .materiaNombre(mc.getMateria().getNombre())
                         .materiaIcono(mc.getMateria().getIcono())
-                        .horasSemanales(mc.getHorasSemanales())
+                        .horasPedagogicas(mc.getHorasPedagogicas())
                         .build())
                 .toList();
 
-        int totalHorasSemanales = malla.stream()
-                .map(MallaCurricular::getHorasSemanales)
+        int totalHorasPedagogicas = malla.stream()
+                .map(MallaCurricular::getHorasPedagogicas)
                 .filter(java.util.Objects::nonNull)
                 .mapToInt(Integer::intValue)
                 .sum();
@@ -101,7 +101,7 @@ public class CursoController {
                 curso,
                 matriculados,
                 materias.size(),
-                totalHorasSemanales,
+                totalHorasPedagogicas,
                 materias
         ));
     }

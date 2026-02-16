@@ -39,8 +39,8 @@ public class MallaCurricular {
     @JoinColumn(name = "ano_escolar_id", nullable = false)
     private AnoEscolar anoEscolar;
 
-    @Column(name = "horas_semanales", nullable = false)
-    private Integer horasSemanales;
+    @Column(name = "horas_pedagogicas", nullable = false)
+    private Integer horasPedagogicas;
 
     @Builder.Default
     @Column(nullable = false)

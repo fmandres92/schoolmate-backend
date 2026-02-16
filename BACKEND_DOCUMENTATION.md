@@ -421,7 +421,7 @@ Relaciones:
 | `materia` | `Materia` | `materia_id` | `VARCHAR(36)` | FK NOT NULL |
 | `grado` | `Grado` | `grado_id` | `VARCHAR(36)` | FK NOT NULL |
 | `anoEscolar` | `AnoEscolar` | `ano_escolar_id` | `VARCHAR(36)` | FK NOT NULL |
-| `horasSemanales` | `Integer` | `horas_semanales` | `INTEGER` | NOT NULL DEFAULT 2 |
+| `horasPedagogicas` | `Integer` | `horas_pedagogicas` | `INTEGER` | NOT NULL DEFAULT 2 |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
@@ -522,6 +522,7 @@ seccion_catalogo 1---* curso (por letra)
 10. `V10__create_seccion_catalogo.sql`
 11. `V11__create_matricula_refactor_alumno.sql`
 12. `V12__create_asignacion.sql`
+13. `V13__rename_horas_semanales_to_horas_pedagogicas.sql`
 
 ### Qué hace cada migración
 
@@ -539,6 +540,7 @@ seccion_catalogo 1---* curso (por letra)
 | `V10` | Crea `seccion_catalogo`, seed A..F, unique de curso por grado/año/letra, FK `curso.letra`, check formato letra |
 | `V11` | Crea `matricula`, migra datos desde `alumno.curso_id`, elimina `curso_id` y `fecha_inscripcion` en `alumno` |
 | `V12` | (Histórico) creaba `asignacion`; hoy esa tabla fue eliminada del entorno Supabase actual |
+| `V13` | Renombra columna `malla_curricular.horas_semanales` a `horas_pedagogicas` (sin alterar valores) |
 
 ### Estado resultante del esquema (según migraciones + código)
 
@@ -684,8 +686,8 @@ No está implementada en el estado actual.
 | `GET /api/malla-curricular` | Lista malla activa por año | `ADMIN` | Query: `anoEscolarId` | - | `List<MallaCurricularResponse>` | directo | `ACCESS_DENIED` |
 | `GET /api/malla-curricular/materia/{materiaId}` | Lista malla por materia y año | `ADMIN` | Path + Query `anoEscolarId` | - | `List<MallaCurricularResponse>` | directo | - |
 | `GET /api/malla-curricular/grado/{gradoId}` | Lista malla por grado y año | `ADMIN` | Path + Query `anoEscolarId` | - | `List<MallaCurricularResponse>` | directo | - |
-| `POST /api/malla-curricular` | Crea registro malla | `ADMIN` | Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId,horasSemanales}` | `MallaCurricularResponse` | directo transaccional | `409` conflict (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
-| `PUT /api/malla-curricular/{id}` | Actualiza horas/activo | `ADMIN` | Path + Body | `MallaCurricularUpdateRequest {horasSemanales,activo}` (inner class) | `MallaCurricularResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
+| `POST /api/malla-curricular` | Crea registro malla | `ADMIN` | Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId,horasPedagogicas}` | `MallaCurricularResponse` | directo transaccional | `409` conflict (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
+| `PUT /api/malla-curricular/{id}` | Actualiza horas/activo | `ADMIN` | Path + Body | `MallaCurricularUpdateRequest {horasPedagogicas,activo}` (inner class) | `MallaCurricularResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 | `POST /api/malla-curricular/bulk` | Upsert masivo por materia-año | `ADMIN` | Body | `MallaCurricularBulkRequest` | `List<MallaCurricularResponse>` | directo transaccional | `BAD_REQUEST` grados duplicados, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 | `DELETE /api/malla-curricular/{id}` | Baja lógica (`activo=false`) | `ADMIN` | Path | - | `204` | directo transaccional | `RESOURCE_NOT_FOUND` |
 
@@ -694,7 +696,7 @@ No está implementada en el estado actual.
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `GET /api/cursos` | Lista cursos (filtro opcional por año/grado) + matriculados | `ADMIN` | Query opcional: `anoEscolarId`, `gradoId` | - | `List<CursoResponse>` | directo | - |
-| `GET /api/cursos/{id}` | Detalle enriquecido (malla + conteos) | `ADMIN` | Path `id` | - | `CursoResponse` con `materias`, `cantidadMaterias`, `totalHorasSemanales`, `alumnosMatriculados` | directo | `RESOURCE_NOT_FOUND` |
+| `GET /api/cursos/{id}` | Detalle enriquecido (malla + conteos) | `ADMIN` | Path `id` | - | `CursoResponse` con `materias`, `cantidadMaterias`, `totalHorasPedagogicas`, `alumnosMatriculados` | directo | `RESOURCE_NOT_FOUND` |
 | `POST /api/cursos` | Crea curso con letra automática | `ADMIN` | Body | `CursoRequest {gradoId,anoEscolarId}` | `CursoResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE` |
 | `PUT /api/cursos/{id}` | Reasigna curso (recalcula letra si cambia grado/año) | `ADMIN` | Path + Body | `CursoRequest` | `CursoResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE` |
 
@@ -918,9 +920,9 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `CursoRequest` | `gradoId`, `anoEscolarId` | `@NotBlank` | `@Data` |
 | `AlumnoRequest` | `rut,nombre,apellido,fechaNacimiento,apoderadoNombre,apoderadoApellido,apoderadoEmail,apoderadoTelefono,apoderadoVinculo` | `@NotBlank`, `@Size`, `@Email` | `@Data @Builder` |
 | `MatriculaRequest` | `alumnoId,cursoId,anoEscolarId,fechaMatricula?` | `@NotBlank` (except fecha) | `@Data @Builder` |
-| `MallaCurricularRequest` | `materiaId,gradoId,anoEscolarId,horasSemanales` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(10)` | `@Data` |
+| `MallaCurricularRequest` | `materiaId,gradoId,anoEscolarId,horasPedagogicas` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(15)` | `@Data` |
 | `MallaCurricularBulkRequest` | `materiaId,anoEscolarId,grados[]` | `@NotBlank`, `@NotEmpty`, `@Valid` | `@Data` |
-| `MallaCurricularBulkRequest.GradoHoras` | `gradoId,horasSemanales` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(10)` | `@Data` |
+| `MallaCurricularBulkRequest.GradoHoras` | `gradoId,horasPedagogicas` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(15)` | `@Data` |
 | `BloqueRequest` | `numeroBloque,horaInicio,horaFin,tipo` | `@NotNull`, `@Min(1)`, `@Pattern` para hora `HH:mm` y tipo | `@Getter/@Setter` |
 | `JornadaDiaRequest` | `bloques[]` | `@NotNull`, `@Size(min=1)`, `@Valid` | `@Getter/@Setter` |
 | `CopiarJornadaRequest` | `diasDestino[]` | `@NotNull`, `@Size(min=1)`, elementos `@Min(1) @Max(5)` | `@Getter/@Setter` |
@@ -936,11 +938,11 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `MateriaPageResponse` | `content,page,size,totalElements,totalPages,sortBy,sortDir,hasNext,hasPrevious` | `@Data @Builder` |
 | `ProfesorResponse` | `id,rut,nombre,apellido,email,telefono,fechaContratacion,activo,materias,createdAt,updatedAt` | `@Data @Builder` |
 | `ProfesorResponse.MateriaInfo` | `id,nombre,icono` | `@Data @Builder` |
-| `CursoResponse` | `id,nombre,letra,gradoId,gradoNombre,anoEscolarId,anoEscolar,activo,alumnosMatriculados,cantidadMaterias,totalHorasSemanales,materias,createdAt,updatedAt` | `@Data @Builder` |
-| `CursoResponse.MateriaCargaResponse` | `materiaId,materiaNombre,materiaIcono,horasSemanales` | `@Data @Builder` |
+| `CursoResponse` | `id,nombre,letra,gradoId,gradoNombre,anoEscolarId,anoEscolar,activo,alumnosMatriculados,cantidadMaterias,totalHorasPedagogicas,materias,createdAt,updatedAt` | `@Data @Builder` |
+| `CursoResponse.MateriaCargaResponse` | `materiaId,materiaNombre,materiaIcono,horasPedagogicas` | `@Data @Builder` |
 | `AlumnoResponse` | datos personales + apoderado + auditoría + matrícula opcional (`matriculaId,cursoId,cursoNombre,gradoNombre,estadoMatricula,fechaMatricula`) | `@Data @Builder` |
 | `AlumnoPageResponse` | contrato paginado equivalente a materias | `@Data @Builder` |
-| `MallaCurricularResponse` | `id,materiaId,materiaNombre,materiaIcono,gradoId,gradoNombre,gradoNivel,anoEscolarId,anoEscolar,horasSemanales,activo,createdAt,updatedAt` | `@Data @Builder` |
+| `MallaCurricularResponse` | `id,materiaId,materiaNombre,materiaIcono,gradoId,gradoNombre,gradoNivel,anoEscolarId,anoEscolar,horasPedagogicas,activo,createdAt,updatedAt` | `@Data @Builder` |
 | `MatriculaResponse` | `id,alumno*,curso*,gradoNombre,anoEscolar*,fechaMatricula,estado,createdAt,updatedAt` | `@Data @Builder` |
 | `BloqueHorarioResponse` | `id,numeroBloque,horaInicio,horaFin,tipo,materia*,profesor*` | `@Getter/@Setter @Builder` |
 | `JornadaDiaResponse` | `diaSemana,nombreDia,bloques,totalBloquesClase,horaInicio,horaFin` | `@Getter/@Setter @Builder` |
@@ -987,6 +989,9 @@ Reglas adicionales en controller:
 ### Malla curricular (materia-grado-año)
 
 - `malla_curricular` define oferta académica por año.
+- Campo horario oficial: `horasPedagogicas` (`horas_pedagogicas` en BD).
+- Referencia de negocio: 1 hora pedagógica = 45 minutos.
+- Validación actual en API: mínimo 1, máximo 15.
 - Unicidad por combinación `(materia, grado, año)`.
 - `bulk` hace upsert y desactiva los grados omitidos para esa materia-año.
 
@@ -1026,7 +1031,7 @@ Para alumnos:
   - datos del curso
   - `alumnosMatriculados`
   - `cantidadMaterias`
-  - `totalHorasSemanales`
+  - `totalHorasPedagogicas`
   - `materias[]` con carga horaria por materia
 
 - `GET /api/alumnos` y `GET /api/alumnos/{id}`:
