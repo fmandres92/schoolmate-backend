@@ -101,7 +101,7 @@ curl http://localhost:8080/api/auth/me \
 
 ## Documentación
 
-Ver [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md) para documentación técnica completa.
+Ver [BACKEND_DOCUMENTATION.md](BACKEND_DOCUMENTATION.md) para documentación técnica completa.
 
 ## Compilación
 
