@@ -18,4 +18,8 @@ public interface AnoEscolarRepository extends JpaRepository<AnoEscolar, String> 
     Optional<AnoEscolar> findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(
         LocalDate fechaInicio, LocalDate fechaFin
     );
+
+    default Optional<AnoEscolar> findActivoByFecha(LocalDate fecha) {
+        return findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(fecha, fecha);
+    }
 }

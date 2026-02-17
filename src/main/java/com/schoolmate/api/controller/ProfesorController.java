@@ -15,6 +15,7 @@ import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
 import com.schoolmate.api.repository.MateriaRepository;
 import com.schoolmate.api.repository.ProfesorRepository;
+import com.schoolmate.api.usecase.profesor.CrearProfesorConUsuario;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +39,7 @@ public class ProfesorController {
     private final AnoEscolarRepository anoEscolarRepository;
     private final BloqueHorarioRepository bloqueHorarioRepository;
     private final ClockProvider clockProvider;
+    private final CrearProfesorConUsuario crearProfesorConUsuario;
 
     @GetMapping
     public ResponseEntity<List<ProfesorResponse>> listar() {
@@ -69,22 +71,7 @@ public class ProfesorController {
 
     @PostMapping
     public ResponseEntity<ProfesorResponse> crear(@Valid @RequestBody ProfesorRequest request) {
-        validarUnicidadEnCreacion(request);
-        List<Materia> materias = resolverMaterias(request.getMateriaIds());
-
-        Profesor profesor = Profesor.builder()
-                .rut(request.getRut())
-                .nombre(request.getNombre())
-                .apellido(request.getApellido())
-                .email(request.getEmail())
-                .telefono(request.getTelefono())
-                .fechaContratacion(LocalDate.parse(request.getFechaContratacion()))
-                .horasPedagogicasContrato(request.getHorasPedagogicasContrato())
-                .materias(materias)
-                .activo(true)
-                .build();
-
-        Profesor saved = profesorRepository.save(profesor);
+        Profesor saved = crearProfesorConUsuario.execute(request);
         return ResponseEntity.ok(ProfesorResponse.fromEntity(saved));
     }
 
@@ -114,19 +101,6 @@ public class ProfesorController {
 
         Profesor saved = profesorRepository.save(profesor);
         return ResponseEntity.ok(ProfesorResponse.fromEntity(saved));
-    }
-
-    private void validarUnicidadEnCreacion(ProfesorRequest request) {
-        if (profesorRepository.existsByRut(request.getRut())) {
-            throw new ApiException(ErrorCode.PROFESOR_RUT_DUPLICADO, "rut");
-        }
-        if (profesorRepository.existsByEmail(request.getEmail())) {
-            throw new ApiException(ErrorCode.PROFESOR_EMAIL_DUPLICADO, "email");
-        }
-        if (request.getTelefono() != null && !request.getTelefono().isBlank()
-                && profesorRepository.existsByTelefono(request.getTelefono())) {
-            throw new ApiException(ErrorCode.PROFESOR_TELEFONO_DUPLICADO, "telefono");
-        }
     }
 
     private void validarUnicidadEnActualizacion(ProfesorRequest request, String profesorId) {

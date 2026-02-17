@@ -138,6 +138,7 @@ Clase: `ApiErrorResponse`
 ├── pom.xml
 ├── src/main/java/com/schoolmate/api
 │   ├── config                # seguridad HTTP y CORS
+│   ├── common/rut            # utilidades de normalización de RUT
 │   ├── common/time           # proveedor centralizado de fecha/hora
 │   ├── controller            # endpoints REST
 │   ├── dto/request           # contratos de entrada
@@ -150,13 +151,14 @@ Clase: `ApiErrorResponse`
 │   ├── specification         # filtros dinámicos JPA
 │   ├── usecase/auth          # caso de uso login
 │   ├── usecase/jornada       # casos de uso jornada escolar
-│   └── usecase/matricula     # casos de uso matrícula
+│   ├── usecase/matricula     # casos de uso matrícula
+│   └── usecase/profesor      # casos de uso de profesor
 └── src/main/resources
     ├── application.yml
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway V1..V14
+    └── db/migration          # migraciones Flyway V1..V15
 ```
 
 ### TODAS las clases por paquete
@@ -169,6 +171,8 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.common.time`
   - `ClockProvider`
   - `TimeContext`
+- `com.schoolmate.api.common.rut`
+  - `RutNormalizer`
 - `com.schoolmate.api.controller`
   - `AlumnoController`
   - `AnoEscolarController`
@@ -182,6 +186,7 @@ Clase: `ApiErrorResponse`
   - `MatriculaController`
   - `ProfesorController`
   - `ProfesorHorarioController`
+  - `ProfesorMeController`
 - `com.schoolmate.api.dto.request`
   - `AlumnoRequest`
   - `AsignarMateriaRequest`
@@ -207,7 +212,10 @@ Clase: `ApiErrorResponse`
   - `BloqueHorarioResponse`
   - `BloquePendienteProfesorResponse`
   - `BloqueProfesorResumenResponse`
+  - `ClaseHoyResponse`
+  - `ClasesHoyResponse`
   - `ConflictoHorarioResponse`
+  - `EstadoClaseHoy`
   - `AuthResponse`
   - `CursoResponse`
   - `JornadaCursoResponse`
@@ -285,6 +293,10 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.usecase.matricula`
   - `CambiarEstadoMatricula`
   - `MatricularAlumno`
+  - `ValidarAccesoMatriculasCursoProfesor`
+- `com.schoolmate.api.usecase.profesor`
+  - `CrearProfesorConUsuario`
+  - `ObtenerClasesHoyProfesor`
 
 ---
 
@@ -298,6 +310,7 @@ Clase: `ApiErrorResponse`
 |---|---|---|---|---|
 | `id` | `String` | `id` | `VARCHAR(36)` | PK |
 | `email` | `String` | `email` | `VARCHAR(255)` | NOT NULL, UNIQUE |
+| `rut` | `String` | `rut` | `VARCHAR(20)` | nullable, UNIQUE parcial (`rut IS NOT NULL`) |
 | `passwordHash` | `String` | `password_hash` | `VARCHAR(255)` | NOT NULL |
 | `nombre` | `String` | `nombre` | `VARCHAR(100)` | NOT NULL |
 | `apellido` | `String` | `apellido` | `VARCHAR(100)` | NOT NULL |
@@ -315,7 +328,7 @@ Nota de integridad:
 - En migraciones (`V1`/`V2`) `usuario.profesor_id` y `usuario.alumno_id` se usan como referencias lógicas.
 - No existe `FOREIGN KEY` declarada desde `usuario` hacia `profesor`/`alumno` en el esquema versionado.
 
-Índices: `idx_usuario_email`, `idx_usuario_rol`.
+Índices: `idx_usuario_email`, `idx_usuario_rol`, `ux_usuario_rut_not_null`.
 
 ### `AnoEscolar` (`ano_escolar`)
 
@@ -562,6 +575,7 @@ seccion_catalogo 1---* curso (por letra)
 12. `V12__create_asignacion.sql`
 13. `V13__rename_horas_semanales_to_horas_pedagogicas.sql`
 14. `V14__profesor_horas_pedagogicas_contrato.sql`
+15. `V15__usuario_rut_y_backfill_profesores.sql`
 
 ### Qué hace cada migración
 
@@ -581,6 +595,7 @@ seccion_catalogo 1---* curso (por letra)
 | `V12` | (Histórico) creaba `asignacion`; hoy esa tabla fue eliminada del entorno Supabase actual |
 | `V13` | Renombra columna `malla_curricular.horas_semanales` a `horas_pedagogicas` (sin alterar valores) |
 | `V14` | Agrega columna nullable `profesor.horas_pedagogicas_contrato` |
+| `V15` | Agrega `usuario.rut` (nullable + índice único parcial), completa RUT en usuarios existentes vinculados a profesor y crea usuarios faltantes para profesores activos (password inicial: RUT normalizado en BCrypt) |
 
 ### Estado resultante del esquema (según migraciones + código)
 
@@ -602,7 +617,7 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V14+` para cualquier ajuste de esquema.
+2. Crear nueva `V15+` para cualquier ajuste de esquema.
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
@@ -611,9 +626,10 @@ Recomendación alineada al proyecto:
 
 ### Flujo JWT completo
 
-1. `POST /api/auth/login` recibe `LoginRequest(email,password)`.
+1. `POST /api/auth/login` recibe `LoginRequest(identificador,password)`.
 2. `LoginUsuario`:
-   - busca usuario por email (`UsuarioRepository`).
+   - si `identificador` contiene `@`, busca por email (`UsuarioRepository.findByEmail`).
+   - si no contiene `@`, normaliza RUT y busca por `UsuarioRepository.findByRut`.
    - valida `activo=true`.
    - valida password con `PasswordEncoder` BCrypt.
    - construye `UserPrincipal` y genera JWT (`JwtTokenProvider`).
@@ -665,6 +681,8 @@ Estado actual de autorización por código:
 - Casi todos los controllers de dominio: `@PreAuthorize("hasRole('ADMIN')")` a nivel clase o método.
 - `AnoEscolarController.obtenerActivo`: `isAuthenticated()`.
 - Endpoint específico `PROFESOR`: `GET /api/profesores/{profesorId}/horario` (también accesible para `ADMIN`).
+- Endpoint específico `PROFESOR`: `GET /api/profesor/mis-clases-hoy` (solo `PROFESOR`).
+- `GET /api/matriculas/curso/{cursoId}` está disponible para `ADMIN` y `PROFESOR` con ownership por bloques activos del curso en el año escolar activo.
 
 ### Uso de `@PreAuthorize`
 
@@ -690,7 +708,7 @@ Implementación parcial:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/auth/login` | Login y emisión JWT | Público | Body JSON | `LoginRequest {email,password}` | `AuthResponse {token,tipo,id,email,nombre,apellido,rol,profesorId,alumnoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
+| `POST /api/auth/login` | Login y emisión JWT (email o RUT) | Público | Body JSON | `LoginRequest {identificador,password}` | `AuthResponse {token,tipo,id,email,nombre,apellido,rol,profesorId,alumnoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
 | `GET /api/auth/me` | Datos del usuario actual | Público por `permitAll` (intención: autenticado) | Header `Authorization` esperado | - | `Map{id,email,nombre,apellido,rol,profesorId,alumnoId}` | directo | sin token puede terminar en `INTERNAL_SERVER_ERROR` (NPE) |
 
 ### Dominio: DevTools (solo perfil `dev`)
@@ -755,9 +773,10 @@ Implementación parcial:
 |---|---|---|---|---|---|---|---|
 | `GET /api/profesores` | Lista profesores ordenados por apellido | `ADMIN` | - | - | `List<ProfesorResponse>` | directo | - |
 | `GET /api/profesores/{id}` | Obtiene profesor con contrato y horas asignadas del año ACTIVO (si existe) | `ADMIN` | Path | - | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `POST /api/profesores` | Crea profesor con materias y horas de contrato opcionales | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | directo | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `VALIDATION_FAILED` |
+| `POST /api/profesores` | Crea profesor con materias, horas de contrato y usuario asociado (`ROL=PROFESOR`) | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | `CrearProfesorConUsuario` | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `PUT /api/profesores/{id}` | Actualiza profesor; RUT inmutable; permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `VALIDATION_FAILED` |
 | `GET /api/profesores/{profesorId}/horario?anoEscolarId=...` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Query `anoEscolarId` | - | `ProfesorHorarioResponse` | directo | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
+| `GET /api/profesor/mis-clases-hoy` | Clases del día para el profesor autenticado (`estado` por ventana de 15 min, `asistenciaTomada=false`) | `PROFESOR` | `Authorization` (usa `profesorId` del JWT) | - | `ClasesHoyResponse` | `ObtenerClasesHoyProfesor` | `ACCESS_DENIED` |
 
 ### Dominio: Alumnos
 
@@ -774,7 +793,7 @@ Implementación parcial:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `POST /api/matriculas` | Matricula alumno en curso/año | `ADMIN` | Body | `MatriculaRequest {alumnoId,cursoId,anoEscolarId,fechaMatricula?}` | `MatriculaResponse` | `MatricularAlumno` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `GET /api/matriculas/curso/{cursoId}` | Matrículas activas por curso | `ADMIN` | Path `cursoId` | - | `List<MatriculaResponse>` | directo | - |
+| `GET /api/matriculas/curso/{cursoId}` | Matrículas activas por curso | `ADMIN`,`PROFESOR` (ownership por curso en año activo) | Path `cursoId` | - | `List<MatriculaResponse>` | directo + `ValidarAccesoMatriculasCursoProfesor` | `ACCESS_DENIED` |
 | `GET /api/matriculas/alumno/{alumnoId}` | Historial de matrículas por alumno | `ADMIN` | Path `alumnoId` | - | `List<MatriculaResponse>` | directo | - |
 | `PATCH /api/matriculas/{id}/estado` | Cambia estado (`ACTIVA/RETIRADO/TRASLADADO`) | `ADMIN` | Path + body map `{estado}` | `Map<String,String>` | `MatriculaResponse` | `CambiarEstadoMatricula` | `400` por body inválido, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 
@@ -809,11 +828,13 @@ Implementación parcial:
   - `PasswordEncoder`
   - `JwtTokenProvider`
 - Validaciones:
-  - email existe
+  - usuario existe por `identificador` (email o RUT normalizado)
   - usuario activo
   - password BCrypt coincide
 - Flujo `execute()`:
-  1. `findByEmail`
+  1. resuelve usuario por `identificador`:
+     - email (`findByEmail`) o
+     - RUT (`RutNormalizer.normalize` + `findByRut`)
   2. valida `activo`
   3. valida password
   4. construye `UserPrincipal`
@@ -822,6 +843,17 @@ Implementación parcial:
 - Errores:
   - `BadCredentialsException` (credenciales inválidas / usuario desactivado)
 - `@Transactional`: no.
+
+### `com.schoolmate.api.usecase.profesor.CrearProfesorConUsuario`
+
+- Función: creación transaccional de profesor + usuario (`ROL=PROFESOR`) con password inicial igual al RUT normalizado.
+- Repositorios/dependencias:
+  - `ProfesorRepository`, `MateriaRepository`, `UsuarioRepository`, `PasswordEncoder`
+- Reglas:
+  - mantiene validaciones de duplicados de `Profesor` (rut/email/teléfono)
+  - valida duplicados en `Usuario` por email y RUT normalizado
+  - si falla creación de usuario, rollback completo de profesor
+- `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.matricula.MatricularAlumno`
 
@@ -862,6 +894,33 @@ Implementación parcial:
   - `ResourceNotFoundException`
   - `BusinessException`
 - `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.matricula.ValidarAccesoMatriculasCursoProfesor`
+
+- Función: validar ownership del endpoint `GET /api/matriculas/curso/{cursoId}` para rol `PROFESOR`.
+- Repositorios/dependencias:
+  - `ClockProvider`, `AnoEscolarRepository`, `BloqueHorarioRepository`
+- Reglas:
+  - `ADMIN` pasa directo
+  - `PROFESOR` requiere `profesorId` en JWT
+  - debe existir año escolar activo en `clockProvider.today()`
+  - debe existir al menos un bloque activo del profesor en el curso y año activo
+- Error:
+  - `AccessDeniedException` (mapea a `ACCESS_DENIED`).
+
+### `com.schoolmate.api.usecase.profesor.ObtenerClasesHoyProfesor`
+
+- Función: obtener clases del día del profesor autenticado.
+- Repositorios/dependencias:
+  - `ClockProvider`, `AnoEscolarRepository`, `BloqueHorarioRepository`, `MatriculaRepository`
+- Reglas:
+  - usa `profesorId` del JWT (`UserPrincipal`)
+  - si hoy es sábado/domingo o no hay año activo: retorna lista vacía
+  - consulta bloques `CLASE` activos del día y año activo
+  - calcula estado temporal `PENDIENTE|DISPONIBLE|EXPIRADA` con ventana ±15 minutos
+  - calcula `cantidadAlumnos` con matrículas `ACTIVA`
+  - `asistenciaTomada` se retorna siempre `false` en esta capa
+- `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.jornada.GuardarJornadaDia`
 
@@ -1053,16 +1112,16 @@ Implementación parcial:
 | Repositorio | Entidad | Métodos derivados destacados | `@Query` custom | Specifications |
 |---|---|---|---|---|
 | `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | `findActivoByRutNormalizado` (native SQL con `regexp_replace`) | sí, vía `JpaSpecificationExecutor` |
-| `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual` | no | no |
-| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolar` | no |
+| `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual`, `findActivoByFecha` (default) | no | no |
+| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolar`, `findClasesProfesorEnDia`, `existsBloqueActivoProfesorEnCurso` | no |
 | `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc` | `findLetrasUsadasByGradoIdAndAnoEscolarId` | no |
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
 | `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | no | no |
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
-| `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, etc. | `countActivasByCursoIds` | no |
+| `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
 | `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
 | `SeccionCatalogoRepository` | `SeccionCatalogo` | `findByActivoTrueOrderByOrdenAsc` | no | no |
-| `UsuarioRepository` | `Usuario` | `findByEmail`, `existsByEmail` | no | no |
+| `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
 
 ### Specifications existentes
 
@@ -1081,7 +1140,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 
 | DTO | Campos | Validaciones | Lombok |
 |---|---|---|---|
-| `LoginRequest` | `email`, `password` | `@NotBlank`, `@Email` | `@Data` |
+| `LoginRequest` | `identificador`, `password` | `@NotBlank` en ambos (sin `@Email` para soportar RUT) | `@Data` |
 | `AnoEscolarRequest` | `ano`, `fechaInicioPlanificacion`, `fechaInicio`, `fechaFin` | `@NotNull` | `@Data` |
 | `MateriaRequest` | `nombre`, `icono` | `@NotBlank(nombre)` | `@Data` |
 | `ProfesorRequest` | `rut,nombre,apellido,email,telefono,fechaContratacion,horasPedagogicasContrato?,materiaIds` | `@NotBlank`, `@Size`, `@Email`, `@NotNull`, `@NotEmpty`, `@Min(1)`, `@Max(50)` (opcional) | `@Data` |
@@ -1122,6 +1181,9 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `MateriasDisponiblesResponse` | `bloqueId,bloqueDuracionMinutos,materias[]` | `@Data @Builder` |
 | `AsignacionMateriaResumenResponse` | resumen curso + `materias[]` + bloques asignados por materia | `@Data @Builder` |
 | `ConflictoHorarioResponse` | `cursoNombre,materiaNombre,horaInicio,horaFin,bloqueId` | `@Data @Builder` |
+| `EstadoClaseHoy` | `PENDIENTE,DISPONIBLE,EXPIRADA` | `enum` |
+| `ClaseHoyResponse` | `bloqueId,numeroBloque,horaInicio,horaFin,cursoId,cursoNombre,materiaId,materiaNombre,materiaIcono,cantidadAlumnos,estado,asistenciaTomada` | `@Data @Builder` |
+| `ClasesHoyResponse` | `fecha,diaSemana,nombreDia,clases[]` | `@Data @Builder` |
 | `ProfesorDisponibleResponse` | `profesorId,profesorNombre,profesorApellido,horasPedagogicasContrato,horasAsignadas,excedido,disponible,asignadoEnEsteBloque,conflicto` | `@Data @Builder` |
 | `ProfesoresDisponiblesResponse` | bloque + materia + `profesores[]` | `@Data @Builder` |
 | `ProfesorHorarioResponse` | horario consolidado por año (`resumenSemanal`, `dias[]`, bloques con curso/materia) | `@Data @Builder` |

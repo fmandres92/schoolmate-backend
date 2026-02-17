@@ -1,5 +1,6 @@
 package com.schoolmate.api.usecase.auth;
 
+import com.schoolmate.api.common.rut.RutNormalizer;
 import com.schoolmate.api.dto.request.LoginRequest;
 import com.schoolmate.api.dto.response.AuthResponse;
 import com.schoolmate.api.entity.Usuario;
@@ -20,15 +21,16 @@ public class LoginUsuario {
     private final JwtTokenProvider tokenProvider;
 
     public AuthResponse execute(LoginRequest request) {
-        Usuario usuario = usuarioRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new BadCredentialsException("Credenciales inválidas"));
+        String identificador = request.getIdentificador() != null ? request.getIdentificador().trim() : "";
+        Usuario usuario = resolverUsuarioPorIdentificador(identificador)
+            .orElseThrow(() -> new BadCredentialsException("Bad credentials"));
 
         if (!usuario.getActivo()) {
-            throw new BadCredentialsException("Usuario desactivado");
+            throw new BadCredentialsException("Bad credentials");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), usuario.getPasswordHash())) {
-            throw new BadCredentialsException("Credenciales inválidas");
+            throw new BadCredentialsException("Bad credentials");
         }
 
         UserPrincipal principal = UserPrincipal.fromUsuario(usuario);
@@ -45,5 +47,17 @@ public class LoginUsuario {
                 .profesorId(usuario.getProfesorId())
                 .alumnoId(usuario.getAlumnoId())
                 .build();
+    }
+
+    private java.util.Optional<Usuario> resolverUsuarioPorIdentificador(String identificador) {
+        if (identificador.contains("@")) {
+            return usuarioRepository.findByEmail(identificador.toLowerCase());
+        }
+        try {
+            String rutNormalizado = RutNormalizer.normalize(identificador);
+            return usuarioRepository.findByRut(rutNormalizado);
+        } catch (IllegalArgumentException ex) {
+            return java.util.Optional.empty();
+        }
     }
 }
