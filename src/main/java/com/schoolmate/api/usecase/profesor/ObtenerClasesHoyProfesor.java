@@ -7,6 +7,7 @@ import com.schoolmate.api.dto.response.EstadoClaseHoy;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.repository.AsistenciaClaseRepository;
 import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
@@ -34,6 +35,7 @@ public class ObtenerClasesHoyProfesor {
     private final AnoEscolarRepository anoEscolarRepository;
     private final BloqueHorarioRepository bloqueHorarioRepository;
     private final MatriculaRepository matriculaRepository;
+    private final AsistenciaClaseRepository asistenciaClaseRepository;
 
     @Transactional(readOnly = true)
     public ClasesHoyResponse execute(UserPrincipal principal) {
@@ -63,6 +65,8 @@ public class ObtenerClasesHoyProfesor {
             .map(b -> {
                 long cantidadActivos = matriculaRepository.countByCursoIdAndEstado(
                     b.getCurso().getId(), EstadoMatricula.ACTIVA);
+                boolean asistenciaTomada = asistenciaClaseRepository
+                    .existsByBloqueHorarioIdAndFecha(b.getId(), today);
                 return ClaseHoyResponse.builder()
                     .bloqueId(b.getId())
                     .numeroBloque(b.getNumeroBloque())
@@ -75,7 +79,7 @@ public class ObtenerClasesHoyProfesor {
                     .materiaIcono(b.getMateria().getIcono())
                     .cantidadAlumnos((int) cantidadActivos)
                     .estado(calcularEstadoTemporal(now, b.getHoraInicio(), b.getHoraFin()))
-                    .asistenciaTomada(false)
+                    .asistenciaTomada(asistenciaTomada)
                     .build();
             })
             .toList();

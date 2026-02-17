@@ -40,7 +40,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiErrorResponse> handleBusiness(BusinessException ex, HttpServletRequest request) {
-        return buildErrorResponse(ErrorCode.BUSINESS_RULE, ex.getMessage(), null, null, request);
+        return buildErrorResponse(ErrorCode.BUSINESS_RULE, ex.getMessage(), null, null, request, ex.getDetails());
     }
 
     @ExceptionHandler(ApiException.class)
