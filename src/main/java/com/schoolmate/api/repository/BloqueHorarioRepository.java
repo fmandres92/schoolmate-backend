@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Set;
 
 public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, String> {
 
@@ -21,6 +22,36 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, St
         String cursoId, TipoBloque tipo, String materiaId);
 
     List<BloqueHorario> findByCursoIdAndActivoTrueAndTipo(String cursoId, TipoBloque tipo);
+
+    @Query("""
+        SELECT b
+        FROM BloqueHorario b
+        JOIN FETCH b.curso c
+        JOIN FETCH b.materia m
+        WHERE b.tipo = com.schoolmate.api.enums.TipoBloque.CLASE
+          AND b.profesor.id = :profesorId
+          AND c.anoEscolar.id = :anoEscolarId
+          AND b.activo = true
+        ORDER BY b.diaSemana ASC, b.horaInicio ASC
+        """)
+    List<BloqueHorario> findHorarioProfesorEnAnoEscolar(
+        @Param("profesorId") String profesorId,
+        @Param("anoEscolarId") String anoEscolarId
+    );
+
+    @Query("""
+        SELECT b
+        FROM BloqueHorario b
+        JOIN FETCH b.curso c
+        WHERE b.tipo = com.schoolmate.api.enums.TipoBloque.CLASE
+          AND b.profesor.id IN :profesorIds
+          AND c.anoEscolar.id = :anoEscolarId
+          AND b.activo = true
+        """)
+    List<BloqueHorario> findBloquesClaseProfesoresEnAnoEscolar(
+        @Param("profesorIds") Set<String> profesorIds,
+        @Param("anoEscolarId") String anoEscolarId
+    );
 
     @Query("SELECT b FROM BloqueHorario b " +
         "JOIN b.curso c " +

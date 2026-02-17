@@ -45,7 +45,7 @@ Fuente: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-a
 | Alumnos | ✅ operativo |
 | Matrículas | ✅ operativo |
 | Jornada escolar por curso | ✅ operativo |
-| Ownership por profesor/apoderado | ❌ no implementado |
+| Ownership por profesor/apoderado | ⚠️ parcial (solo horario de profesor) |
 | Asistencia, reportes, dashboards | ❌ no implementado |
 
 ---
@@ -154,7 +154,7 @@ Clase: `ApiErrorResponse`
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway V1..V12
+    └── db/migration          # migraciones Flyway V1..V14
 ```
 
 ### TODAS las clases por paquete
@@ -175,6 +175,7 @@ Clase: `ApiErrorResponse`
   - `MateriaController`
   - `MatriculaController`
   - `ProfesorController`
+  - `ProfesorHorarioController`
 - `com.schoolmate.api.dto.request`
   - `AlumnoRequest`
   - `AsignarMateriaRequest`
@@ -212,6 +213,7 @@ Clase: `ApiErrorResponse`
   - `MateriaResponse`
   - `MatriculaResponse`
   - `ProfesorDisponibleResponse`
+  - `ProfesorHorarioResponse`
   - `ProfesorResumenAsignacionResponse`
   - `ProfesoresDisponiblesResponse`
   - `ProfesorResponse`
@@ -353,6 +355,7 @@ Divergencia: `V3` crea `ano_escolar` con columna `activo` y **sin** `fecha_inici
 | `email` | `String` | `email` | `VARCHAR(255)` | NOT NULL, UNIQUE |
 | `telefono` | `String` | `telefono` | `VARCHAR(30)` | nullable |
 | `fechaContratacion` | `LocalDate` | `fecha_contratacion` | `DATE` | NOT NULL |
+| `horasPedagogicasContrato` | `Integer` | `horas_pedagogicas_contrato` | `INTEGER` | nullable |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
@@ -543,6 +546,7 @@ seccion_catalogo 1---* curso (por letra)
 11. `V11__create_matricula_refactor_alumno.sql`
 12. `V12__create_asignacion.sql`
 13. `V13__rename_horas_semanales_to_horas_pedagogicas.sql`
+14. `V14__profesor_horas_pedagogicas_contrato.sql`
 
 ### Qué hace cada migración
 
@@ -561,6 +565,7 @@ seccion_catalogo 1---* curso (por letra)
 | `V11` | Crea `matricula`, migra datos desde `alumno.curso_id`, elimina `curso_id` y `fecha_inscripcion` en `alumno` |
 | `V12` | (Histórico) creaba `asignacion`; hoy esa tabla fue eliminada del entorno Supabase actual |
 | `V13` | Renombra columna `malla_curricular.horas_semanales` a `horas_pedagogicas` (sin alterar valores) |
+| `V14` | Agrega columna nullable `profesor.horas_pedagogicas_contrato` |
 
 ### Estado resultante del esquema (según migraciones + código)
 
@@ -582,7 +587,7 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V13+` para cualquier ajuste de esquema.
+2. Crear nueva `V14+` para cualquier ajuste de esquema.
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
@@ -644,7 +649,7 @@ Estado actual de autorización por código:
 
 - Casi todos los controllers de dominio: `@PreAuthorize("hasRole('ADMIN')")` a nivel clase o método.
 - `AnoEscolarController.obtenerActivo`: `isAuthenticated()`.
-- No hay endpoints funcionales específicos de `PROFESOR` o `APODERADO`.
+- Endpoint específico `PROFESOR`: `GET /api/profesores/{profesorId}/horario` (también accesible para `ADMIN`).
 
 ### Uso de `@PreAuthorize`
 
@@ -654,10 +659,10 @@ Sí existe en controllers de:
 
 ### Regla de ownership (profesor solo sus datos)
 
-No está implementada en el estado actual.
+Implementación parcial:
 
-- No hay validación por `principal.profesorId` en controllers/use cases.
-- No hay endpoints con `hasRole('PROFESOR')` que apliquen ownership.
+- En `ProfesorHorarioController`, si el rol autenticado es `PROFESOR`, solo puede consultar su propio `profesorId`.
+- Si intenta consultar otro `profesorId`, responde `403` (`AccessDeniedException` -> `ACCESS_DENIED`).
 
 ---
 
@@ -725,9 +730,10 @@ No está implementada en el estado actual.
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `GET /api/profesores` | Lista profesores ordenados por apellido | `ADMIN` | - | - | `List<ProfesorResponse>` | directo | - |
-| `GET /api/profesores/{id}` | Obtiene profesor | `ADMIN` | Path | - | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `POST /api/profesores` | Crea profesor con materias | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | directo | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `VALIDATION_FAILED` |
-| `PUT /api/profesores/{id}` | Actualiza profesor; RUT inmutable | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `VALIDATION_FAILED` |
+| `GET /api/profesores/{id}` | Obtiene profesor con contrato y horas asignadas del año ACTIVO (si existe) | `ADMIN` | Path | - | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND` |
+| `POST /api/profesores` | Crea profesor con materias y horas de contrato opcionales | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | directo | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `VALIDATION_FAILED` |
+| `PUT /api/profesores/{id}` | Actualiza profesor; RUT inmutable; permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `VALIDATION_FAILED` |
+| `GET /api/profesores/{profesorId}/horario?anoEscolarId=...` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Query `anoEscolarId` | - | `ProfesorHorarioResponse` | directo | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
 
 ### Dominio: Alumnos
 
@@ -1023,7 +1029,7 @@ No está implementada en el estado actual.
 |---|---|---|---|---|
 | `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | no | sí, vía `JpaSpecificationExecutor` |
 | `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual` | no | no |
-| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor` | no |
+| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolar` | no |
 | `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc` | `findLetrasUsadasByGradoIdAndAnoEscolarId` | no |
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
 | `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | no | no |
@@ -1053,7 +1059,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `LoginRequest` | `email`, `password` | `@NotBlank`, `@Email` | `@Data` |
 | `AnoEscolarRequest` | `ano`, `fechaInicioPlanificacion`, `fechaInicio`, `fechaFin` | `@NotNull` | `@Data` |
 | `MateriaRequest` | `nombre`, `icono` | `@NotBlank(nombre)` | `@Data` |
-| `ProfesorRequest` | `rut,nombre,apellido,email,telefono,fechaContratacion,materiaIds` | `@NotBlank`, `@Size`, `@Email`, `@NotNull`, `@NotEmpty` | `@Data` |
+| `ProfesorRequest` | `rut,nombre,apellido,email,telefono,fechaContratacion,horasPedagogicasContrato?,materiaIds` | `@NotBlank`, `@Size`, `@Email`, `@NotNull`, `@NotEmpty`, `@Min(1)`, `@Max(50)` (opcional) | `@Data` |
 | `CursoRequest` | `gradoId`, `anoEscolarId` | `@NotBlank` | `@Data` |
 | `AlumnoRequest` | `rut,nombre,apellido,fechaNacimiento,apoderadoNombre,apoderadoApellido,apoderadoEmail,apoderadoTelefono,apoderadoVinculo` | `@NotBlank`, `@Size`, `@Email` | `@Data @Builder` |
 | `MatriculaRequest` | `alumnoId,cursoId,anoEscolarId,fechaMatricula?` | `@NotBlank` (except fecha) | `@Data @Builder` |
@@ -1075,7 +1081,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `AnoEscolarResponse` | `id,ano,fechaInicioPlanificacion,fechaInicio,fechaFin,estado,createdAt,updatedAt` | `@Data @Builder` |
 | `MateriaResponse` | `id,nombre,icono,createdAt,updatedAt` | `@Data @Builder` |
 | `MateriaPageResponse` | `content,page,size,totalElements,totalPages,sortBy,sortDir,hasNext,hasPrevious` | `@Data @Builder` |
-| `ProfesorResponse` | `id,rut,nombre,apellido,email,telefono,fechaContratacion,activo,materias,createdAt,updatedAt` | `@Data @Builder` |
+| `ProfesorResponse` | `id,rut,nombre,apellido,email,telefono,fechaContratacion,horasPedagogicasContrato,horasAsignadas,activo,materias,createdAt,updatedAt` | `@Data @Builder` |
 | `ProfesorResponse.MateriaInfo` | `id,nombre,icono` | `@Data @Builder` |
 | `CursoResponse` | `id,nombre,letra,gradoId,gradoNombre,anoEscolarId,anoEscolar,activo,alumnosMatriculados,cantidadMaterias,totalHorasPedagogicas,materias,createdAt,updatedAt` | `@Data @Builder` |
 | `CursoResponse.MateriaCargaResponse` | `materiaId,materiaNombre,materiaIcono,horasPedagogicas` | `@Data @Builder` |
@@ -1091,8 +1097,9 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `MateriasDisponiblesResponse` | `bloqueId,bloqueDuracionMinutos,materias[]` | `@Data @Builder` |
 | `AsignacionMateriaResumenResponse` | resumen curso + `materias[]` + bloques asignados por materia | `@Data @Builder` |
 | `ConflictoHorarioResponse` | `cursoNombre,materiaNombre,horaInicio,horaFin,bloqueId` | `@Data @Builder` |
-| `ProfesorDisponibleResponse` | `profesorId,profesorNombre,profesorApellido,disponible,asignadoEnEsteBloque,conflicto` | `@Data @Builder` |
+| `ProfesorDisponibleResponse` | `profesorId,profesorNombre,profesorApellido,horasPedagogicasContrato,horasAsignadas,excedido,disponible,asignadoEnEsteBloque,conflicto` | `@Data @Builder` |
 | `ProfesoresDisponiblesResponse` | bloque + materia + `profesores[]` | `@Data @Builder` |
+| `ProfesorHorarioResponse` | horario consolidado por año (`resumenSemanal`, `dias[]`, bloques con curso/materia) | `@Data @Builder` |
 | `BloqueProfesorResumenResponse` | `bloqueId,diaSemana,numeroBloque,horaInicio,horaFin,materiaNombre` | `@Data @Builder` |
 | `ProfesorResumenAsignacionResponse` | profesor + materias + minutos + bloques | `@Data @Builder` |
 | `BloquePendienteProfesorResponse` | bloque con materia pendiente de profesor | `@Data @Builder` |
@@ -1152,6 +1159,13 @@ Implementadas explícitamente en `ProfesorController`:
 - Email duplicado en create/update
 - Teléfono duplicado (si informado) en create/update
 - RUT inmutable en update (`PROFESOR_RUT_INMUTABLE`)
+- `horasPedagogicasContrato` opcional en profesor:
+  - si viene valor, rango válido `1..50`
+  - en update puede enviarse `null` para limpiar
+- `GET /api/profesores/{id}` calcula `horasAsignadas` en año escolar `ACTIVO`:
+  - suma minutos de bloques `CLASE` asignados al profesor
+  - convierte a horas pedagógicas con `ceil(minutos / 45.0)`
+  - si no existe año `ACTIVO`, retorna `horasAsignadas=null`
 
 Para alumnos:
 
@@ -1195,6 +1209,11 @@ Para alumnos:
 - `GET /api/cursos/{cursoId}/jornada/bloques/{bloqueId}/profesores-disponibles` retorna:
   - disponibilidad por profesor
   - detalle de conflicto horario cuando existe
+  - enriquecimiento de carga docente: `horasPedagogicasContrato`, `horasAsignadas`, `excedido` (informativo, no bloqueante)
+- `GET /api/profesores/{profesorId}/horario?anoEscolarId=...` retorna:
+  - horario consolidado agrupado por día y ordenado por hora
+  - resumen semanal (`totalBloques`, `diasConClase`)
+  - `horasAsignadas` calculadas sobre el año consultado
 
 - `GET /api/alumnos` y `GET /api/alumnos/{id}`:
   - si se envía `anoEscolarId`, agrega datos de matrícula activa (`curso`, `grado`, `estado`, `fechaMatricula`).
@@ -1326,7 +1345,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 | Alumnos | ✅ | list/get/create/update |
 | Matrículas | ✅ | create, list por curso, historial por alumno, cambio estado |
 | Jornada escolar por curso | ✅ | guardar día, obtener jornada/resumen, copiar día, eliminar día, asignar/quitar materia y profesor por bloque, resúmenes de asignación |
-| Ownership por rol no-admin | ❌ | sin endpoints efectivos |
+| Ownership por rol no-admin | ⚠️ parcial | horario de profesor con validación por `principal.profesorId` |
 | Asistencia | ❌ | no existe |
 | Reportes | ❌ | no existe |
 | Dashboards | ❌ | no existe |
@@ -1334,7 +1353,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 ### Qué falta para que frontend deje DataContext completamente
 
 - Endpoints orientados a rol `PROFESOR`/`APODERADO` (actualmente casi todo es `ADMIN`).
-- Ownership en backend (filtro por `principal.profesorId/alumnoId`).
+- Completar ownership en backend para más dominios (`principal.profesorId/alumnoId`).
 - Endpoints de agregación operacional (dashboard, indicadores) si frontend hoy los calcula localmente.
 - Cobertura de módulos pendientes (asistencia/reportes) que normalmente DataContext simula.
 

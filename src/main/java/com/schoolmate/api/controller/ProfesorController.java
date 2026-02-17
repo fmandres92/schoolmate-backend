@@ -2,11 +2,16 @@ package com.schoolmate.api.controller;
 
 import com.schoolmate.api.dto.request.ProfesorRequest;
 import com.schoolmate.api.dto.response.ProfesorResponse;
+import com.schoolmate.api.entity.AnoEscolar;
+import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.entity.Materia;
 import com.schoolmate.api.entity.Profesor;
+import com.schoolmate.api.enums.EstadoAnoEscolar;
 import com.schoolmate.api.exception.ApiException;
 import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
+import com.schoolmate.api.repository.AnoEscolarRepository;
+import com.schoolmate.api.repository.BloqueHorarioRepository;
 import com.schoolmate.api.repository.MateriaRepository;
 import com.schoolmate.api.repository.ProfesorRepository;
 import jakarta.validation.Valid;
@@ -16,6 +21,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -28,6 +34,8 @@ public class ProfesorController {
 
     private final ProfesorRepository profesorRepository;
     private final MateriaRepository materiaRepository;
+    private final AnoEscolarRepository anoEscolarRepository;
+    private final BloqueHorarioRepository bloqueHorarioRepository;
 
     @GetMapping
     public ResponseEntity<List<ProfesorResponse>> listar() {
@@ -42,7 +50,19 @@ public class ProfesorController {
     public ResponseEntity<ProfesorResponse> obtener(@PathVariable String id) {
         Profesor profesor = profesorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
-        return ResponseEntity.ok(ProfesorResponse.fromEntity(profesor));
+
+        AnoEscolar anoActivo = anoEscolarRepository.findAll().stream()
+            .filter(ano -> ano.getEstado() == EstadoAnoEscolar.ACTIVO)
+            .findFirst()
+            .orElse(null);
+
+        Integer horasAsignadas = null;
+        if (anoActivo != null) {
+            List<BloqueHorario> bloques = bloqueHorarioRepository.findHorarioProfesorEnAnoEscolar(id, anoActivo.getId());
+            horasAsignadas = calcularHorasAsignadasDesdeBloques(bloques);
+        }
+
+        return ResponseEntity.ok(ProfesorResponse.fromEntity(profesor, horasAsignadas));
     }
 
     @PostMapping
@@ -57,6 +77,7 @@ public class ProfesorController {
                 .email(request.getEmail())
                 .telefono(request.getTelefono())
                 .fechaContratacion(LocalDate.parse(request.getFechaContratacion()))
+                .horasPedagogicasContrato(request.getHorasPedagogicasContrato())
                 .materias(materias)
                 .activo(true)
                 .build();
@@ -86,6 +107,7 @@ public class ProfesorController {
         profesor.setEmail(request.getEmail());
         profesor.setTelefono(request.getTelefono());
         profesor.setFechaContratacion(LocalDate.parse(request.getFechaContratacion()));
+        profesor.setHorasPedagogicasContrato(request.getHorasPedagogicasContrato());
         profesor.setMaterias(materias);
 
         Profesor saved = profesorRepository.save(profesor);
@@ -127,5 +149,12 @@ public class ProfesorController {
             throw new ApiException(ErrorCode.MATERIAS_NOT_FOUND, null, new Object[]{idsFaltantes});
         }
         return materias;
+    }
+
+    private int calcularHorasAsignadasDesdeBloques(List<BloqueHorario> bloques) {
+        long totalMinutos = bloques.stream()
+            .mapToLong(b -> Duration.between(b.getHoraInicio(), b.getHoraFin()).toMinutes())
+            .sum();
+        return (int) Math.ceil(totalMinutos / 45.0);
     }
 }

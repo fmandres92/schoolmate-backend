@@ -10,6 +10,9 @@ public class ProfesorDisponibleResponse {
     private String profesorId;
     private String profesorNombre;
     private String profesorApellido;
+    private Integer horasPedagogicasContrato;
+    private Integer horasAsignadas;
+    private Boolean excedido;
     private boolean disponible;
     private boolean asignadoEnEsteBloque;
     private ConflictoHorarioResponse conflicto;

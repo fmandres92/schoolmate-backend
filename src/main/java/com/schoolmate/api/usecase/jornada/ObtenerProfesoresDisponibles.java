@@ -16,8 +16,12 @@ import com.schoolmate.api.repository.ProfesorRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -54,6 +58,16 @@ public class ObtenerProfesoresDisponibles {
         String anoEscolarId = curso.getAnoEscolar().getId();
 
         List<Profesor> profesores = profesorRepository.findByActivoTrueAndMaterias_Id(materiaId);
+        Set<String> profesorIds = profesores.stream().map(Profesor::getId).collect(Collectors.toSet());
+        List<BloqueHorario> bloquesProfesores = profesorIds.isEmpty()
+            ? Collections.emptyList()
+            : bloqueHorarioRepository.findBloquesClaseProfesoresEnAnoEscolar(profesorIds, anoEscolarId);
+
+        Map<String, Long> minutosPorProfesor = bloquesProfesores.stream()
+            .collect(Collectors.groupingBy(
+                b -> b.getProfesor().getId(),
+                Collectors.summingLong(b -> Duration.between(b.getHoraInicio(), b.getHoraFin()).toMinutes())
+            ));
 
         List<ProfesorDisponibleResponse> profesorResponses = profesores.stream()
             .map(profesor -> {
@@ -85,10 +99,17 @@ public class ObtenerProfesoresDisponibles {
                     disponible = false;
                 }
 
+                int horasAsignadas = (int) Math.ceil(minutosPorProfesor.getOrDefault(profesor.getId(), 0L) / 45.0);
+                Integer horasContrato = profesor.getHorasPedagogicasContrato();
+                boolean excedido = horasContrato != null && horasAsignadas >= horasContrato;
+
                 return ProfesorDisponibleResponse.builder()
                     .profesorId(profesor.getId())
                     .profesorNombre(profesor.getNombre())
                     .profesorApellido(profesor.getApellido())
+                    .horasPedagogicasContrato(horasContrato)
+                    .horasAsignadas(horasAsignadas)
+                    .excedido(excedido)
                     .disponible(disponible)
                     .asignadoEnEsteBloque(esProfesorActualDelBloque)
                     .conflicto(conflicto)

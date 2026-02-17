@@ -27,6 +27,10 @@ public class ProfesorRequest {
     @NotNull(message = "La fecha de contratación es obligatoria")
     private String fechaContratacion;  // "2020-03-01"
 
+    @Min(value = 1, message = "Las horas pedagógicas de contrato deben ser al menos 1")
+    @Max(value = 50, message = "Las horas pedagógicas de contrato no pueden superar 50")
+    private Integer horasPedagogicasContrato;
+
     @NotEmpty(message = "Debe asignar al menos una materia")
     private List<String> materiaIds;
 }

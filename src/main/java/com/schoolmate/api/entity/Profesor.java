@@ -35,6 +35,9 @@ public class Profesor {
     @Column(name = "fecha_contratacion", nullable = false)
     private LocalDate fechaContratacion;
 
+    @Column(name = "horas_pedagogicas_contrato")
+    private Integer horasPedagogicasContrato;
+
     @Column(nullable = false)
     private Boolean activo = true;
 
