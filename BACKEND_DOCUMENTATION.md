@@ -741,6 +741,7 @@ Implementación parcial:
 |---|---|---|---|---|---|---|---|
 | `GET /api/alumnos` | Lista paginada con búsqueda y enriquecimiento opcional por matrícula | `ADMIN` | Query: `page,size,sortBy,sortDir,anoEscolarId,cursoId,gradoId,q` | - | `AlumnoPageResponse` | directo + `AlumnoSpecifications` | - |
 | `GET /api/alumnos/{id}` | Obtiene alumno; opcional matrícula activa por año | `ADMIN` | Path + Query opcional `anoEscolarId` | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
+| `GET /api/alumnos/buscar-por-rut` | Búsqueda exacta por RUT (normaliza con/sin puntos y guion) + matrícula opcional por año | `ADMIN` | Query: `rut` (obligatorio), `anoEscolarId` (opcional) | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
 | `POST /api/alumnos` | Crea alumno | `ADMIN` | Body | `AlumnoRequest` | `AlumnoResponse` | directo | `409` (RUT duplicado vía `ResponseStatusException`), `VALIDATION_FAILED` |
 | `PUT /api/alumnos/{id}` | Actualiza alumno | `ADMIN` | Path + Body | `AlumnoRequest` | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND`, `409` (RUT duplicado), `VALIDATION_FAILED` |
 
@@ -1027,7 +1028,7 @@ Implementación parcial:
 
 | Repositorio | Entidad | Métodos derivados destacados | `@Query` custom | Specifications |
 |---|---|---|---|---|
-| `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | no | sí, vía `JpaSpecificationExecutor` |
+| `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | `findActivoByRutNormalizado` (native SQL con `regexp_replace`) | sí, vía `JpaSpecificationExecutor` |
 | `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual` | no | no |
 | `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolar` | no |
 | `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc` | `findLetrasUsadasByGradoIdAndAnoEscolarId` | no |
@@ -1217,6 +1218,10 @@ Para alumnos:
 
 - `GET /api/alumnos` y `GET /api/alumnos/{id}`:
   - si se envía `anoEscolarId`, agrega datos de matrícula activa (`curso`, `grado`, `estado`, `fechaMatricula`).
+- `GET /api/alumnos/buscar-por-rut?rut=...`:
+  - endpoint dedicado para búsqueda exacta por RUT en frontend
+  - acepta RUT con o sin formato (`9.057.419-9`, `9057419-9`, `90574199`)
+  - puede enriquecer con matrícula si se envía `anoEscolarId`.
 
 ### Paginación
 

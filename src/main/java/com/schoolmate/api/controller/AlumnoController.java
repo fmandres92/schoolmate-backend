@@ -143,6 +143,28 @@ public class AlumnoController {
         return ResponseEntity.ok(AlumnoResponse.fromEntity(alumno));
     }
 
+    /**
+     * Endpoint dedicado para búsqueda exacta por RUT (admite formato con/sin puntos y guion).
+     * Ejemplo: /api/alumnos/buscar-por-rut?rut=9.057.419-9&anoEscolarId=2
+     */
+    @GetMapping("/buscar-por-rut")
+    public ResponseEntity<AlumnoResponse> buscarPorRut(
+            @RequestParam String rut,
+            @RequestParam(required = false) String anoEscolarId) {
+
+        Alumno alumno = alumnoRepository.findActivoByRutNormalizado(rut)
+                .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado para RUT: " + rut));
+
+        if (anoEscolarId != null && !anoEscolarId.isBlank()) {
+            Matricula matricula = matriculaRepository
+                    .findByAlumnoIdAndAnoEscolarIdAndEstado(alumno.getId(), anoEscolarId, EstadoMatricula.ACTIVA)
+                    .orElse(null);
+            return ResponseEntity.ok(AlumnoResponse.fromEntityWithMatricula(alumno, matricula));
+        }
+
+        return ResponseEntity.ok(AlumnoResponse.fromEntity(alumno));
+    }
+
     @PostMapping
     public ResponseEntity<AlumnoResponse> crear(@Valid @RequestBody AlumnoRequest request) {
         if (alumnoRepository.existsByRut(request.getRut())) {
