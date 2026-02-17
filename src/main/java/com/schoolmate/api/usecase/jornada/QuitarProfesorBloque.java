@@ -1,5 +1,6 @@
 package com.schoolmate.api.usecase.jornada;
 
+import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.response.BloqueHorarioResponse;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.entity.Curso;
@@ -23,13 +24,14 @@ public class QuitarProfesorBloque {
 
     private final BloqueHorarioRepository bloqueHorarioRepository;
     private final CursoRepository cursoRepository;
+    private final ClockProvider clockProvider;
 
     @Transactional
     public BloqueHorarioResponse execute(String cursoId, String bloqueId) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
-        if (curso.getAnoEscolar().getEstado() == EstadoAnoEscolar.CERRADO) {
+        if (curso.getAnoEscolar().calcularEstado(clockProvider.today()) == EstadoAnoEscolar.CERRADO) {
             throw new BusinessException("No se puede modificar un curso de un ano escolar cerrado");
         }
 

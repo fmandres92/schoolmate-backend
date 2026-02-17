@@ -1,5 +1,6 @@
 package com.schoolmate.api.usecase.matricula;
 
+import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.MatriculaRequest;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.entity.AnoEscolar;
@@ -26,6 +27,7 @@ public class MatricularAlumno {
     private final CursoRepository cursoRepository;
     private final AnoEscolarRepository anoEscolarRepository;
     private final MatriculaRepository matriculaRepository;
+    private final ClockProvider clockProvider;
 
     @Transactional
     public Matricula execute(MatriculaRequest request) {
@@ -53,7 +55,7 @@ public class MatricularAlumno {
         // 4. Crear matrícula
         LocalDate fechaMatricula = request.getFechaMatricula() != null && !request.getFechaMatricula().isBlank()
                 ? LocalDate.parse(request.getFechaMatricula())
-                : LocalDate.now();
+                : clockProvider.today();
 
         Matricula matricula = Matricula.builder()
                 .alumno(alumno)

@@ -1,5 +1,6 @@
 package com.schoolmate.api.entity;
 
+import com.schoolmate.api.common.time.TimeContext;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -54,7 +55,7 @@ public class MallaCurricular {
 
     @PrePersist
     protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = TimeContext.now();
         if (this.activo == null) {
             this.activo = true;
         }
@@ -64,6 +65,6 @@ public class MallaCurricular {
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = TimeContext.now();
     }
 }

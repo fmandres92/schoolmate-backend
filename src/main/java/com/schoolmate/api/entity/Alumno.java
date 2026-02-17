@@ -1,5 +1,6 @@
 package com.schoolmate.api.entity;
 
+import com.schoolmate.api.common.time.TimeContext;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -58,12 +59,12 @@ public class Alumno {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        createdAt = TimeContext.now();
+        updatedAt = TimeContext.now();
     }
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = TimeContext.now();
     }
 }

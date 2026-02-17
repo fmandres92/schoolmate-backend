@@ -1,5 +1,6 @@
 package com.schoolmate.api.entity;
 
+import com.schoolmate.api.common.time.TimeContext;
 import com.schoolmate.api.enums.EstadoMatricula;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -49,8 +50,8 @@ public class Matricula {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        createdAt = TimeContext.now();
+        updatedAt = TimeContext.now();
         if (id == null) {
             id = java.util.UUID.randomUUID().toString();
         }
@@ -61,6 +62,6 @@ public class Matricula {
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = TimeContext.now();
     }
 }

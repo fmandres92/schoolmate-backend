@@ -1,5 +1,6 @@
 package com.schoolmate.api.controller;
 
+import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.ProfesorRequest;
 import com.schoolmate.api.dto.response.ProfesorResponse;
 import com.schoolmate.api.entity.AnoEscolar;
@@ -36,6 +37,7 @@ public class ProfesorController {
     private final MateriaRepository materiaRepository;
     private final AnoEscolarRepository anoEscolarRepository;
     private final BloqueHorarioRepository bloqueHorarioRepository;
+    private final ClockProvider clockProvider;
 
     @GetMapping
     public ResponseEntity<List<ProfesorResponse>> listar() {
@@ -52,7 +54,7 @@ public class ProfesorController {
                 .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
 
         AnoEscolar anoActivo = anoEscolarRepository.findAll().stream()
-            .filter(ano -> ano.getEstado() == EstadoAnoEscolar.ACTIVO)
+            .filter(ano -> ano.calcularEstado(clockProvider.today()) == EstadoAnoEscolar.ACTIVO)
             .findFirst()
             .orElse(null);
 

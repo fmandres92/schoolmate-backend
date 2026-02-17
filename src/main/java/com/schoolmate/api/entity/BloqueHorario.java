@@ -1,5 +1,6 @@
 package com.schoolmate.api.entity;
 
+import com.schoolmate.api.common.time.TimeContext;
 import com.schoolmate.api.enums.TipoBloque;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -80,12 +81,12 @@ public class BloqueHorario {
         if (this.activo == null) {
             this.activo = true;
         }
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        this.createdAt = TimeContext.now();
+        this.updatedAt = TimeContext.now();
     }
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = TimeContext.now();
     }
 }

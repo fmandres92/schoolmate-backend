@@ -1,6 +1,7 @@
 package com.schoolmate.api.dto.response;
 
 import com.schoolmate.api.entity.AnoEscolar;
+import com.schoolmate.api.enums.EstadoAnoEscolar;
 import lombok.Builder;
 import lombok.Data;
 
@@ -16,14 +17,14 @@ public class AnoEscolarResponse {
     private String createdAt;
     private String updatedAt;
 
-    public static AnoEscolarResponse fromEntity(AnoEscolar entity) {
+    public static AnoEscolarResponse fromEntity(AnoEscolar entity, EstadoAnoEscolar estado) {
         return AnoEscolarResponse.builder()
             .id(entity.getId())
             .ano(entity.getAno())
             .fechaInicioPlanificacion(entity.getFechaInicioPlanificacion().toString())
             .fechaInicio(entity.getFechaInicio().toString())
             .fechaFin(entity.getFechaFin().toString())
-            .estado(entity.getEstado().name())
+            .estado(estado.name())
             .createdAt(entity.getCreatedAt().toString())
             .updatedAt(entity.getUpdatedAt().toString())
             .build();

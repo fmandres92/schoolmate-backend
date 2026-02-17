@@ -1,5 +1,6 @@
 package com.schoolmate.api.controller;
 
+import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.AnoEscolarRequest;
 import com.schoolmate.api.dto.response.AnoEscolarResponse;
 import com.schoolmate.api.entity.AnoEscolar;
@@ -23,14 +24,16 @@ import java.util.List;
 public class AnoEscolarController {
 
     private final AnoEscolarRepository repository;
+    private final ClockProvider clockProvider;
 
     // GET /api/anos-escolares — Listar todos con estado calculado
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<AnoEscolarResponse>> listar() {
         List<AnoEscolar> anos = repository.findAllByOrderByAnoDesc();
+        LocalDate hoy = clockProvider.today();
         List<AnoEscolarResponse> response = anos.stream()
-            .map(AnoEscolarResponse::fromEntity)
+            .map(ano -> AnoEscolarResponse.fromEntity(ano, ano.calcularEstado(hoy)))
             .toList();
         return ResponseEntity.ok(response);
     }
@@ -41,17 +44,17 @@ public class AnoEscolarController {
     public ResponseEntity<AnoEscolarResponse> obtener(@PathVariable String id) {
         AnoEscolar ano = repository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
-        return ResponseEntity.ok(AnoEscolarResponse.fromEntity(ano));
+        return ResponseEntity.ok(AnoEscolarResponse.fromEntity(ano, ano.calcularEstado(clockProvider.today())));
     }
 
     // GET /api/anos-escolares/activo — Obtener el año escolar activo actual
     @GetMapping("/activo")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<AnoEscolarResponse> obtenerActivo() {
-        LocalDate hoy = LocalDate.now();
+        LocalDate hoy = clockProvider.today();
         AnoEscolar activo = repository.findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(hoy, hoy)
             .orElseThrow(() -> new ResourceNotFoundException("No hay año escolar activo para la fecha actual"));
-        return ResponseEntity.ok(AnoEscolarResponse.fromEntity(activo));
+        return ResponseEntity.ok(AnoEscolarResponse.fromEntity(activo, activo.calcularEstado(hoy)));
     }
 
     // POST /api/anos-escolares — Crear nuevo año escolar
@@ -84,7 +87,7 @@ public class AnoEscolarController {
         }
 
         // Validar que fecha_fin no esté en el pasado
-        if (request.getFechaFin().isBefore(LocalDate.now())) {
+        if (request.getFechaFin().isBefore(clockProvider.today())) {
             throw new BusinessException("No se puede crear un año escolar con fecha de fin en el pasado");
         }
 
@@ -96,7 +99,8 @@ public class AnoEscolarController {
             .build();
 
         AnoEscolar guardado = repository.save(anoEscolar);
-        return ResponseEntity.status(HttpStatus.CREATED).body(AnoEscolarResponse.fromEntity(guardado));
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(AnoEscolarResponse.fromEntity(guardado, guardado.calcularEstado(clockProvider.today())));
     }
 
     // PUT /api/anos-escolares/{id} — Actualizar fechas (solo si no está CERRADO)
@@ -109,7 +113,7 @@ public class AnoEscolarController {
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
 
         // Validación: no permitir editar años cerrados
-        if (ano.getEstado() == EstadoAnoEscolar.CERRADO) {
+        if (ano.calcularEstado(clockProvider.today()) == EstadoAnoEscolar.CERRADO) {
             throw new BusinessException("No se puede modificar un año escolar cerrado");
         }
 
@@ -140,7 +144,7 @@ public class AnoEscolarController {
         ano.setFechaFin(request.getFechaFin());
 
         AnoEscolar guardado = repository.save(ano);
-        return ResponseEntity.ok(AnoEscolarResponse.fromEntity(guardado));
+        return ResponseEntity.ok(AnoEscolarResponse.fromEntity(guardado, guardado.calcularEstado(clockProvider.today())));
     }
 
     // Método auxiliar para verificar solapamiento de fechas

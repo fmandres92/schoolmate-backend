@@ -95,6 +95,7 @@ Ejemplos reales:
 - No hay interfaces de caso de uso innecesarias (use cases concretos como clases).
 - IDs en entidades: `String` (normalmente UUID generado en `@PrePersist`, aunque también hay IDs semánticos seed como `p1`, `c1`, `mc-...`).
 - Borrado lógico en algunos dominios (`activo=false`): malla curricular y bloques de jornada.
+- Tiempo centralizado: `ClockProvider` + `TimeContext` permiten controlar `today/now` en entorno `dev` sin afectar `prod`.
 
 ### Manejo centralizado de excepciones (`GlobalExceptionHandler`)
 
@@ -137,6 +138,7 @@ Clase: `ApiErrorResponse`
 ├── pom.xml
 ├── src/main/java/com/schoolmate/api
 │   ├── config                # seguridad HTTP y CORS
+│   ├── common/time           # proveedor centralizado de fecha/hora
 │   ├── controller            # endpoints REST
 │   ├── dto/request           # contratos de entrada
 │   ├── dto/response          # contratos de salida
@@ -164,11 +166,15 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.config`
   - `CorsConfig`
   - `SecurityConfig`
+- `com.schoolmate.api.common.time`
+  - `ClockProvider`
+  - `TimeContext`
 - `com.schoolmate.api.controller`
   - `AlumnoController`
   - `AnoEscolarController`
   - `AuthController`
   - `CursoController`
+  - `DevToolsController` (solo perfil `dev`)
   - `GradoController`
   - `JornadaController`
   - `MallaCurricularController`
@@ -319,6 +325,10 @@ Relaciones JPA: no hay relaciones `@ManyToOne`; `profesorId/alumnoId` son campos
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` |
 
 Constraints en código: `ano` marcado como `unique=true`.
+
+Regla de estado:
+
+- `AnoEscolar` calcula su estado con `calcularEstado(LocalDate fechaReferencia)` (no depende de `LocalDate.now()` dentro de la entidad).
 
 Divergencia: `V3` crea `ano_escolar` con columna `activo` y **sin** `fecha_inicio_planificacion`; el código actual exige `fecha_inicio_planificacion` y no mapea `activo`.
 
@@ -656,6 +666,7 @@ Estado actual de autorización por código:
 Sí existe en controllers de:
 
 - Alumnos, Años, Cursos, Grados, Jornada, Malla, Materias, Matrículas, Profesores.
+- `DevToolsController` no usa `@PreAuthorize`; su exposición depende estrictamente de `@Profile("dev")`.
 
 ### Regla de ownership (profesor solo sus datos)
 
@@ -676,6 +687,14 @@ Implementación parcial:
 |---|---|---|---|---|---|---|---|
 | `POST /api/auth/login` | Login y emisión JWT | Público | Body JSON | `LoginRequest {email,password}` | `AuthResponse {token,tipo,id,email,nombre,apellido,rol,profesorId,alumnoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
 | `GET /api/auth/me` | Datos del usuario actual | Público por `permitAll` (intención: autenticado) | Header `Authorization` esperado | - | `Map{id,email,nombre,apellido,rol,profesorId,alumnoId}` | directo | sin token puede terminar en `INTERNAL_SERVER_ERROR` (NPE) |
+
+### Dominio: DevTools (solo perfil `dev`)
+
+| Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
+|---|---|---|---|---|---|---|---|
+| `GET /api/dev/clock` | Retorna fecha/hora actual del clock centralizado y si está overrideado | según config de seguridad vigente | - | - | `{currentDateTime,isOverridden}` | directo (`ClockProvider`) | - |
+| `POST /api/dev/clock` | Fija el clock a una fecha/hora ISO-8601 | según config de seguridad vigente | Body JSON | `{dateTime}` | `{currentDateTime,isOverridden}` | directo (`ClockProvider`) | `BUSINESS_RULE` por formato inválido, `INTERNAL_SERVER_ERROR`/`UnsupportedOperationException` fuera de `dev` |
+| `DELETE /api/dev/clock` | Resetea clock a tiempo del sistema | según config de seguridad vigente | - | - | `{currentDateTime,isOverridden}` | directo (`ClockProvider`) | `INTERNAL_SERVER_ERROR`/`UnsupportedOperationException` fuera de `dev` |
 
 ### Dominio: Años Escolares
 
@@ -812,7 +831,7 @@ Implementación parcial:
   1. carga entidades
   2. valida pertenencia curso-año
   3. valida unicidad de matrícula activa
-  4. define fecha (`request.fechaMatricula` o `LocalDate.now()`)
+  4. define fecha (`request.fechaMatricula` o `clockProvider.today()`)
   5. guarda `Matricula(estado=ACTIVA)`
 - Errores:
   - `ResourceNotFoundException`

@@ -1,5 +1,6 @@
 package com.schoolmate.api.exception;
 
+import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.response.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +21,11 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     private final MessageSource messageSource;
+    private final ClockProvider clockProvider;
 
-    public GlobalExceptionHandler(MessageSource messageSource) {
+    public GlobalExceptionHandler(MessageSource messageSource, ClockProvider clockProvider) {
         this.messageSource = messageSource;
+        this.clockProvider = clockProvider;
     }
 
     @ExceptionHandler(BadCredentialsException.class)
@@ -108,7 +111,7 @@ public class GlobalExceptionHandler {
                 .status(errorCode.getStatus().value())
                 .field(field)
                 .path(request.getRequestURI())
-                .timestamp(LocalDateTime.now())
+                .timestamp(clockProvider.now())
                 .details(details)
                 .build();
 

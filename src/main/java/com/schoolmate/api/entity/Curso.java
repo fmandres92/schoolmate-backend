@@ -1,5 +1,6 @@
 package com.schoolmate.api.entity;
 
+import com.schoolmate.api.common.time.TimeContext;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -40,8 +41,8 @@ public class Curso {
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        createdAt = TimeContext.now();
+        updatedAt = TimeContext.now();
         if (id == null) {
             id = java.util.UUID.randomUUID().toString();
         }
@@ -49,6 +50,6 @@ public class Curso {
 
     @PreUpdate
     protected void onUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = TimeContext.now();
     }
 }

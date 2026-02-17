@@ -1,5 +1,6 @@
 package com.schoolmate.api.usecase.jornada;
 
+import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.BloqueRequest;
 import com.schoolmate.api.dto.request.JornadaDiaRequest;
 import com.schoolmate.api.dto.response.BloqueHorarioResponse;
@@ -29,6 +30,7 @@ public class GuardarJornadaDia {
 
     private final BloqueHorarioRepository bloqueHorarioRepository;
     private final CursoRepository cursoRepository;
+    private final ClockProvider clockProvider;
 
     private static final LocalTime HORA_MINIMA = LocalTime.of(7, 0);
     private static final LocalTime HORA_MAXIMA = LocalTime.of(18, 0);
@@ -46,7 +48,7 @@ public class GuardarJornadaDia {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado: " + cursoId));
 
-        if (curso.getAnoEscolar().getEstado() == EstadoAnoEscolar.CERRADO) {
+        if (curso.getAnoEscolar().calcularEstado(clockProvider.today()) == EstadoAnoEscolar.CERRADO) {
             throw new BusinessException("No se puede modificar la jornada de un año escolar cerrado");
         }
 

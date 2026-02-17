@@ -1,6 +1,7 @@
 package com.schoolmate.api.entity;
 
 import com.schoolmate.api.enums.EstadoAnoEscolar;
+import com.schoolmate.api.common.time.TimeContext;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -42,24 +43,21 @@ public class AnoEscolar {
     @PrePersist
     protected void onCreate() {
         this.id = this.id != null ? this.id : java.util.UUID.randomUUID().toString();
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        this.createdAt = TimeContext.now();
+        this.updatedAt = TimeContext.now();
     }
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        this.updatedAt = TimeContext.now();
     }
 
-    // Método calculado — NO se persiste
-    @Transient
-    public EstadoAnoEscolar getEstado() {
-        LocalDate hoy = LocalDate.now();
-        if (hoy.isBefore(fechaInicioPlanificacion)) {
+    public EstadoAnoEscolar calcularEstado(LocalDate fechaReferencia) {
+        if (fechaReferencia.isBefore(fechaInicioPlanificacion)) {
             return EstadoAnoEscolar.FUTURO;
-        } else if (hoy.isBefore(fechaInicio)) {
+        } else if (fechaReferencia.isBefore(fechaInicio)) {
             return EstadoAnoEscolar.PLANIFICACION;
-        } else if (!hoy.isAfter(fechaFin)) {
+        } else if (!fechaReferencia.isAfter(fechaFin)) {
             return EstadoAnoEscolar.ACTIVO;
         } else {
             return EstadoAnoEscolar.CERRADO;
