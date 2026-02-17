@@ -310,6 +310,11 @@ Clase: `ApiErrorResponse`
 
 Relaciones JPA: no hay relaciones `@ManyToOne`; `profesorId/alumnoId` son campos planos.
 
+Nota de integridad:
+
+- En migraciones (`V1`/`V2`) `usuario.profesor_id` y `usuario.alumno_id` se usan como referencias lógicas.
+- No existe `FOREIGN KEY` declarada desde `usuario` hacia `profesor`/`alumno` en el esquema versionado.
+
 Índices: `idx_usuario_email`, `idx_usuario_rol`.
 
 ### `AnoEscolar` (`ano_escolar`)
@@ -563,7 +568,7 @@ seccion_catalogo 1---* curso (por letra)
 | Migración | Cambios |
 |---|---|
 | `V1` | Crea `usuario`, índices por email y rol |
-| `V2` | Seed usuarios (`ADMIN`, `PROFESOR`, `APODERADO`) |
+| `V2` | Seed usuarios (`ADMIN`, `PROFESOR`, `APODERADO`) con credenciales dev (`admin123`,`prof123`,`apod123`) y vínculo lógico `profesor_id='p2'` para usuario profesor |
 | `V3` | Crea `ano_escolar`, `grado`, `materia`, `materia_grado` |
 | `V4` | Seed de años, grados, materias y mapeo materia-grado |
 | `V5` | Crea `profesor`, `profesor_materia`, `curso` + índices |
