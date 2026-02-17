@@ -1,22 +1,29 @@
 package com.schoolmate.api.controller;
 
 import com.schoolmate.api.dto.request.AsignarMateriaRequest;
+import com.schoolmate.api.dto.request.AsignarProfesorRequest;
 import com.schoolmate.api.dto.request.CopiarJornadaRequest;
 import com.schoolmate.api.dto.request.JornadaDiaRequest;
 import com.schoolmate.api.dto.response.AsignacionMateriaResumenResponse;
+import com.schoolmate.api.dto.response.AsignacionProfesoresResumenResponse;
 import com.schoolmate.api.dto.response.BloqueHorarioResponse;
 import com.schoolmate.api.dto.response.JornadaCursoResponse;
 import com.schoolmate.api.dto.response.JornadaDiaResponse;
 import com.schoolmate.api.dto.response.JornadaResumenResponse;
 import com.schoolmate.api.dto.response.MateriasDisponiblesResponse;
+import com.schoolmate.api.dto.response.ProfesoresDisponiblesResponse;
 import com.schoolmate.api.usecase.jornada.AsignarMateriaBloque;
+import com.schoolmate.api.usecase.jornada.AsignarProfesorBloque;
 import com.schoolmate.api.usecase.jornada.CopiarJornadaDia;
 import com.schoolmate.api.usecase.jornada.EliminarJornadaDia;
 import com.schoolmate.api.usecase.jornada.GuardarJornadaDia;
 import com.schoolmate.api.usecase.jornada.ObtenerMateriasDisponibles;
 import com.schoolmate.api.usecase.jornada.ObtenerResumenAsignacionMaterias;
+import com.schoolmate.api.usecase.jornada.ObtenerResumenAsignacionProfesores;
+import com.schoolmate.api.usecase.jornada.ObtenerProfesoresDisponibles;
 import com.schoolmate.api.usecase.jornada.ObtenerJornadaCurso;
 import com.schoolmate.api.usecase.jornada.QuitarMateriaBloque;
+import com.schoolmate.api.usecase.jornada.QuitarProfesorBloque;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -45,6 +52,10 @@ public class JornadaController {
     private final AsignarMateriaBloque asignarMateriaBloque;
     private final QuitarMateriaBloque quitarMateriaBloque;
     private final ObtenerResumenAsignacionMaterias obtenerResumenAsignacionMaterias;
+    private final ObtenerProfesoresDisponibles obtenerProfesoresDisponibles;
+    private final AsignarProfesorBloque asignarProfesorBloque;
+    private final QuitarProfesorBloque quitarProfesorBloque;
+    private final ObtenerResumenAsignacionProfesores obtenerResumenAsignacionProfesores;
 
     @PutMapping("/{diaSemana}")
     @PreAuthorize("hasRole('ADMIN')")
@@ -126,5 +137,41 @@ public class JornadaController {
         @PathVariable String cursoId
     ) {
         return ResponseEntity.ok(obtenerResumenAsignacionMaterias.execute(cursoId));
+    }
+
+    @GetMapping("/bloques/{bloqueId}/profesores-disponibles")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ProfesoresDisponiblesResponse> getProfesoresDisponibles(
+        @PathVariable String cursoId,
+        @PathVariable String bloqueId
+    ) {
+        return ResponseEntity.ok(obtenerProfesoresDisponibles.execute(cursoId, bloqueId));
+    }
+
+    @PatchMapping("/bloques/{bloqueId}/profesor")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<BloqueHorarioResponse> asignarProfesor(
+        @PathVariable String cursoId,
+        @PathVariable String bloqueId,
+        @Valid @RequestBody AsignarProfesorRequest request
+    ) {
+        return ResponseEntity.ok(asignarProfesorBloque.execute(cursoId, bloqueId, request.getProfesorId()));
+    }
+
+    @DeleteMapping("/bloques/{bloqueId}/profesor")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<BloqueHorarioResponse> quitarProfesor(
+        @PathVariable String cursoId,
+        @PathVariable String bloqueId
+    ) {
+        return ResponseEntity.ok(quitarProfesorBloque.execute(cursoId, bloqueId));
+    }
+
+    @GetMapping("/asignacion-profesores")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<AsignacionProfesoresResumenResponse> getResumenAsignacionProfesores(
+        @PathVariable String cursoId
+    ) {
+        return ResponseEntity.ok(obtenerResumenAsignacionProfesores.execute(cursoId));
     }
 }

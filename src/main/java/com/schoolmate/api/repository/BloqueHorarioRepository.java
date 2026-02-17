@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalTime;
 import java.util.List;
 
 public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, String> {
@@ -20,6 +21,24 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, St
         String cursoId, TipoBloque tipo, String materiaId);
 
     List<BloqueHorario> findByCursoIdAndActivoTrueAndTipo(String cursoId, TipoBloque tipo);
+
+    @Query("SELECT b FROM BloqueHorario b " +
+        "JOIN b.curso c " +
+        "WHERE b.profesor.id = :profesorId " +
+        "AND b.activo = true " +
+        "AND b.diaSemana = :diaSemana " +
+        "AND b.horaInicio < :horaFin " +
+        "AND b.horaFin > :horaInicio " +
+        "AND c.anoEscolar.id = :anoEscolarId " +
+        "AND b.id <> :bloqueIdExcluir")
+    List<BloqueHorario> findColisionesProfesor(
+        @Param("profesorId") String profesorId,
+        @Param("diaSemana") Integer diaSemana,
+        @Param("horaInicio") LocalTime horaInicio,
+        @Param("horaFin") LocalTime horaFin,
+        @Param("anoEscolarId") String anoEscolarId,
+        @Param("bloqueIdExcluir") String bloqueIdExcluir
+    );
 
     @Modifying
     @Query("UPDATE BloqueHorario b SET b.activo = false, b.updatedAt = CURRENT_TIMESTAMP " +

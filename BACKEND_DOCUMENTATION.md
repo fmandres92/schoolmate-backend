@@ -177,6 +177,8 @@ Clase: `ApiErrorResponse`
   - `ProfesorController`
 - `com.schoolmate.api.dto.request`
   - `AlumnoRequest`
+  - `AsignarMateriaRequest`
+  - `AsignarProfesorRequest`
   - `AnoEscolarRequest`
   - `BloqueRequest`
   - `CopiarJornadaRequest`
@@ -191,18 +193,27 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.dto.response`
   - `AlumnoPageResponse`
   - `AlumnoResponse`
+  - `AsignacionMateriaResumenResponse`
+  - `AsignacionProfesoresResumenResponse`
   - `AnoEscolarResponse`
   - `ApiErrorResponse`
   - `BloqueHorarioResponse`
+  - `BloquePendienteProfesorResponse`
+  - `BloqueProfesorResumenResponse`
+  - `ConflictoHorarioResponse`
   - `AuthResponse`
   - `CursoResponse`
   - `JornadaCursoResponse`
   - `JornadaDiaResponse`
   - `JornadaResumenResponse`
+  - `MateriaDisponibleResponse`
   - `MallaCurricularResponse`
   - `MateriaPageResponse`
   - `MateriaResponse`
   - `MatriculaResponse`
+  - `ProfesorDisponibleResponse`
+  - `ProfesorResumenAsignacionResponse`
+  - `ProfesoresDisponiblesResponse`
   - `ProfesorResponse`
 - `com.schoolmate.api.entity`
   - `Alumno`
@@ -251,10 +262,18 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.usecase.auth`
   - `LoginUsuario`
 - `com.schoolmate.api.usecase.jornada`
+  - `AsignarMateriaBloque`
+  - `AsignarProfesorBloque`
   - `CopiarJornadaDia`
   - `EliminarJornadaDia`
   - `GuardarJornadaDia`
   - `ObtenerJornadaCurso`
+  - `ObtenerMateriasDisponibles`
+  - `ObtenerProfesoresDisponibles`
+  - `ObtenerResumenAsignacionMaterias`
+  - `ObtenerResumenAsignacionProfesores`
+  - `QuitarMateriaBloque`
+  - `QuitarProfesorBloque`
 - `com.schoolmate.api.usecase.matricula`
   - `CambiarEstadoMatricula`
   - `MatricularAlumno`
@@ -741,6 +760,10 @@ No está implementada en el estado actual.
 | `PATCH /api/cursos/{cursoId}/jornada/bloques/{bloqueId}/materia` | Asigna/reemplaza materia en bloque CLASE | `ADMIN` | Path `cursoId`,`bloqueId`; Body | `AsignarMateriaRequest` | `BloqueHorarioResponse` | `AsignarMateriaBloque` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `MATERIA_NO_EN_MALLA`, `MATERIA_EXCEDE_MINUTOS_MALLA` |
 | `DELETE /api/cursos/{cursoId}/jornada/bloques/{bloqueId}/materia` | Quita materia (y profesor) de bloque CLASE | `ADMIN` | Path `cursoId`,`bloqueId` | - | `BloqueHorarioResponse` | `QuitarMateriaBloque` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `BLOQUE_NO_ES_CLASE`, `BLOQUE_SIN_MATERIA` |
 | `GET /api/cursos/{cursoId}/jornada/asignacion-materias` | Resumen de cobertura de malla por minutos y bloques | `ADMIN` | Path `cursoId` | - | `AsignacionMateriaResumenResponse` | `ObtenerResumenAsignacionMaterias` | `RESOURCE_NOT_FOUND` |
+| `GET /api/cursos/{cursoId}/jornada/bloques/{bloqueId}/profesores-disponibles` | Lista profesores disponibles para el bloque según materia y colisiones | `ADMIN` | Path `cursoId`,`bloqueId` | - | `ProfesoresDisponiblesResponse` | `ObtenerProfesoresDisponibles` | `RESOURCE_NOT_FOUND`, `BLOQUE_NO_ES_CLASE`, `BLOQUE_SIN_MATERIA_PARA_PROFESOR` |
+| `PATCH /api/cursos/{cursoId}/jornada/bloques/{bloqueId}/profesor` | Asigna/reemplaza profesor en bloque CLASE | `ADMIN` | Path `cursoId`,`bloqueId`; Body | `AsignarProfesorRequest` | `BloqueHorarioResponse` | `AsignarProfesorBloque` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `PROFESOR_NO_ENSENA_MATERIA`, `PROFESOR_COLISION_HORARIO` |
+| `DELETE /api/cursos/{cursoId}/jornada/bloques/{bloqueId}/profesor` | Quita profesor manteniendo materia del bloque | `ADMIN` | Path `cursoId`,`bloqueId` | - | `BloqueHorarioResponse` | `QuitarProfesorBloque` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `BLOQUE_NO_ES_CLASE` |
+| `GET /api/cursos/{cursoId}/jornada/asignacion-profesores` | Resumen de asignación de docentes y bloques pendientes | `ADMIN` | Path `cursoId` | - | `AsignacionProfesoresResumenResponse` | `ObtenerResumenAsignacionProfesores` | `RESOURCE_NOT_FOUND` |
 
 ---
 
@@ -907,6 +930,7 @@ No está implementada en el estado actual.
   - materia debe existir y pertenecer a malla activa del grado/año del curso
   - `minutosAsignados + duracionBloque <= minutosPermitidos`
   - no-op si bloque ya tiene la misma materia
+  - al reemplazar materia, si el profesor asignado no enseña la nueva materia, se limpia `profesor`
 - Errores relevantes:
   - `MATERIA_NO_EN_MALLA`
   - `MATERIA_EXCEDE_MINUTOS_MALLA` (409 con `details`)
@@ -937,6 +961,60 @@ No está implementada en el estado actual.
   - compara contra `horasPedagogicas * 45`
 - `@Transactional`: no.
 
+### `com.schoolmate.api.usecase.jornada.ObtenerProfesoresDisponibles`
+
+- Función: listar profesores habilitados para la materia del bloque y marcar disponibilidad por colisión horaria.
+- Repositorios:
+  - `BloqueHorarioRepository`, `CursoRepository`, `ProfesorRepository`
+- Reglas:
+  - bloque activo, del curso y de tipo `CLASE`
+  - el bloque debe tener `materia` asignada
+  - profesores filtrados por materia (`profesor_materia`) y `activo=true`
+  - colisión evaluada cross-curso dentro del mismo año escolar
+- `@Transactional`: no.
+
+### `com.schoolmate.api.usecase.jornada.AsignarProfesorBloque`
+
+- Función: asignar/reemplazar profesor en bloque `CLASE`.
+- Repositorios:
+  - `BloqueHorarioRepository`, `CursoRepository`, `ProfesorRepository`
+- Reglas:
+  - curso no `CERRADO`
+  - bloque activo y del curso
+  - bloque tipo `CLASE`
+  - bloque con materia previa
+  - profesor activo y habilitado para la materia del bloque
+  - sin colisión de horario en el mismo `anoEscolar`
+  - no-op si ya tiene el mismo profesor
+- Errores relevantes:
+  - `BLOQUE_SIN_MATERIA_PARA_PROFESOR`
+  - `PROFESOR_NO_ENSENA_MATERIA` (409 con `details`)
+  - `PROFESOR_COLISION_HORARIO` (409 con `details`)
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.jornada.QuitarProfesorBloque`
+
+- Función: quitar profesor del bloque manteniendo la materia.
+- Repositorios:
+  - `BloqueHorarioRepository`, `CursoRepository`
+- Reglas:
+  - curso no `CERRADO`
+  - bloque activo y del curso
+  - bloque tipo `CLASE`
+  - bloque debe tener profesor asignado
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.jornada.ObtenerResumenAsignacionProfesores`
+
+- Función: resumir asignación de docentes en bloques `CLASE` del curso.
+- Repositorios:
+  - `BloqueHorarioRepository`, `CursoRepository`
+- Cálculo:
+  - total de bloques con/sin profesor
+  - bloques con materia sin profesor
+  - agrupación por profesor con minutos y bloques asignados
+- `@Transactional`: no.
+
 ---
 
 ## SECCIÓN 9: REPOSITORIOS
@@ -945,13 +1023,13 @@ No está implementada en el estado actual.
 |---|---|---|---|---|
 | `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | no | sí, vía `JpaSpecificationExecutor` |
 | `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual` | no | no |
-| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados` | no |
+| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor` | no |
 | `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc` | `findLetrasUsadasByGradoIdAndAnoEscolarId` | no |
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
 | `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | no | no |
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
 | `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, etc. | `countActivasByCursoIds` | no |
-| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas | no | no |
+| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
 | `SeccionCatalogoRepository` | `SeccionCatalogo` | `findByActivoTrueOrderByOrdenAsc` | no | no |
 | `UsuarioRepository` | `Usuario` | `findByEmail`, `existsByEmail` | no | no |
 
@@ -986,6 +1064,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `JornadaDiaRequest` | `bloques[]` | `@NotNull`, `@Size(min=1)`, `@Valid` | `@Getter/@Setter` |
 | `CopiarJornadaRequest` | `diasDestino[]` | `@NotNull`, `@Size(min=1)`, elementos `@Min(1) @Max(5)` | `@Getter/@Setter` |
 | `AsignarMateriaRequest` | `materiaId` | `@NotBlank` | `@Data` |
+| `AsignarProfesorRequest` | `profesorId` | `@NotBlank` | `@Data` |
 
 ### Response DTOs
 
@@ -1011,6 +1090,13 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `MateriaDisponibleResponse` | `materiaId,materiaNombre,materiaIcono,horasPedagogicas,minutosSemanalesPermitidos,minutosAsignados,minutosDisponibles,asignable,asignadaEnEsteBloque` | `@Data @Builder` |
 | `MateriasDisponiblesResponse` | `bloqueId,bloqueDuracionMinutos,materias[]` | `@Data @Builder` |
 | `AsignacionMateriaResumenResponse` | resumen curso + `materias[]` + bloques asignados por materia | `@Data @Builder` |
+| `ConflictoHorarioResponse` | `cursoNombre,materiaNombre,horaInicio,horaFin,bloqueId` | `@Data @Builder` |
+| `ProfesorDisponibleResponse` | `profesorId,profesorNombre,profesorApellido,disponible,asignadoEnEsteBloque,conflicto` | `@Data @Builder` |
+| `ProfesoresDisponiblesResponse` | bloque + materia + `profesores[]` | `@Data @Builder` |
+| `BloqueProfesorResumenResponse` | `bloqueId,diaSemana,numeroBloque,horaInicio,horaFin,materiaNombre` | `@Data @Builder` |
+| `ProfesorResumenAsignacionResponse` | profesor + materias + minutos + bloques | `@Data @Builder` |
+| `BloquePendienteProfesorResponse` | bloque con materia pendiente de profesor | `@Data @Builder` |
+| `AsignacionProfesoresResumenResponse` | resumen curso + profesores + bloques pendientes | `@Data @Builder` |
 
 ---
 
@@ -1086,6 +1172,9 @@ Para alumnos:
   - materia debe pertenecer a malla activa del grado/año
   - tope por materia: `horasPedagogicas * 45` minutos semanales
   - quitar materia limpia también `profesor_id`
+  - asignación de profesor solo en bloques `CLASE` con materia
+  - profesor debe enseñar la materia del bloque (`profesor_materia`)
+  - profesor no puede tener colisión de horario (cross-curso, mismo año escolar)
 - Transiciones de matrícula restringidas (`ACTIVA<->RETIRADO/TRASLADADO`).
 
 ---
@@ -1103,6 +1192,9 @@ Para alumnos:
 - `GET /api/cursos/{cursoId}/jornada/materias-disponibles` retorna por materia:
   - minutos permitidos/asignados/disponibles
   - flag `asignable` para el bloque consultado
+- `GET /api/cursos/{cursoId}/jornada/bloques/{bloqueId}/profesores-disponibles` retorna:
+  - disponibilidad por profesor
+  - detalle de conflicto horario cuando existe
 
 - `GET /api/alumnos` y `GET /api/alumnos/{id}`:
   - si se envía `anoEscolarId`, agrega datos de matrícula activa (`curso`, `grado`, `estado`, `fechaMatricula`).
@@ -1233,7 +1325,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 | Profesores | ✅ | list/get/create/update |
 | Alumnos | ✅ | list/get/create/update |
 | Matrículas | ✅ | create, list por curso, historial por alumno, cambio estado |
-| Jornada escolar por curso | ✅ | guardar día, obtener jornada/resumen, copiar día, eliminar día, asignar/quitar materia por bloque, resumen de asignación |
+| Jornada escolar por curso | ✅ | guardar día, obtener jornada/resumen, copiar día, eliminar día, asignar/quitar materia y profesor por bloque, resúmenes de asignación |
 | Ownership por rol no-admin | ❌ | sin endpoints efectivos |
 | Asistencia | ❌ | no existe |
 | Reportes | ❌ | no existe |
@@ -1248,10 +1340,9 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 ### Próximos módulos lógicos
 
-1. Asignación de profesor sobre bloques de jornada (pendiente; hoy se implementa asignación de materia, no la de docente).
-2. Asistencia (registro por bloque/alumno, consolidado diario/mensual).
-3. Reportes (académico, matrícula, carga docente).
-4. Dashboards (KPIs por año/curso/docente).
+1. Asistencia (registro por bloque/alumno, consolidado diario/mensual).
+2. Reportes (académico, matrícula, carga docente).
+3. Dashboards (KPIs por año/curso/docente).
 
 ---
 

@@ -6,6 +6,7 @@ import java.util.List;
 
 public interface ProfesorRepository extends JpaRepository<Profesor, String> {
     List<Profesor> findByActivoTrueOrderByApellidoAsc();
+    List<Profesor> findByActivoTrueAndMaterias_Id(String materiaId);
     List<Profesor> findAllByOrderByApellidoAsc();
     boolean existsByRut(String rut);
     boolean existsByEmail(String email);

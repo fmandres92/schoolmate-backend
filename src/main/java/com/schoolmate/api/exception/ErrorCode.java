@@ -24,6 +24,9 @@ public enum ErrorCode {
     BLOQUE_NO_ES_CLASE(HttpStatus.BAD_REQUEST, "error.jornada.bloque_no_es_clase"),
     BLOQUE_SIN_MATERIA(HttpStatus.BAD_REQUEST, "error.jornada.bloque_sin_materia"),
     MATERIA_NO_EN_MALLA(HttpStatus.BAD_REQUEST, "error.jornada.materia_no_en_malla"),
+    PROFESOR_COLISION_HORARIO(HttpStatus.CONFLICT, "error.jornada.profesor_colision_horario"),
+    PROFESOR_NO_ENSENA_MATERIA(HttpStatus.CONFLICT, "error.jornada.profesor_no_ensena_materia"),
+    BLOQUE_SIN_MATERIA_PARA_PROFESOR(HttpStatus.BAD_REQUEST, "error.jornada.bloque_sin_materia_para_profesor"),
 
     DATA_INTEGRITY(HttpStatus.CONFLICT, "error.data.integrity"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "error.internal");

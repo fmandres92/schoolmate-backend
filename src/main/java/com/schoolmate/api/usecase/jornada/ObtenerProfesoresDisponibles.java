@@ -1,0 +1,109 @@
+package com.schoolmate.api.usecase.jornada;
+
+import com.schoolmate.api.dto.response.ConflictoHorarioResponse;
+import com.schoolmate.api.dto.response.ProfesorDisponibleResponse;
+import com.schoolmate.api.dto.response.ProfesoresDisponiblesResponse;
+import com.schoolmate.api.entity.BloqueHorario;
+import com.schoolmate.api.entity.Curso;
+import com.schoolmate.api.entity.Profesor;
+import com.schoolmate.api.enums.TipoBloque;
+import com.schoolmate.api.exception.ApiException;
+import com.schoolmate.api.exception.ErrorCode;
+import com.schoolmate.api.exception.ResourceNotFoundException;
+import com.schoolmate.api.repository.BloqueHorarioRepository;
+import com.schoolmate.api.repository.CursoRepository;
+import com.schoolmate.api.repository.ProfesorRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
+
+@Component
+@RequiredArgsConstructor
+public class ObtenerProfesoresDisponibles {
+
+    private final BloqueHorarioRepository bloqueHorarioRepository;
+    private final CursoRepository cursoRepository;
+    private final ProfesorRepository profesorRepository;
+
+    public ProfesoresDisponiblesResponse execute(String cursoId, String bloqueId) {
+        Curso curso = cursoRepository.findById(cursoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
+
+        BloqueHorario bloque = bloqueHorarioRepository.findById(bloqueId)
+            .orElseThrow(() -> new ResourceNotFoundException("Bloque no encontrado"));
+
+        if (!bloque.getCurso().getId().equals(cursoId)) {
+            throw new ResourceNotFoundException("Bloque no pertenece al curso");
+        }
+        if (!Boolean.TRUE.equals(bloque.getActivo())) {
+            throw new ResourceNotFoundException("Bloque no esta activo");
+        }
+        if (bloque.getTipo() != TipoBloque.CLASE) {
+            throw new ApiException(ErrorCode.BLOQUE_NO_ES_CLASE,
+                "Solo se puede asignar profesor a bloques de tipo CLASE", Map.of());
+        }
+        if (bloque.getMateria() == null) {
+            throw new ApiException(ErrorCode.BLOQUE_SIN_MATERIA_PARA_PROFESOR,
+                "El bloque debe tener materia asignada antes de asignar profesor", Map.of());
+        }
+
+        String materiaId = bloque.getMateria().getId();
+        String materiaNombre = bloque.getMateria().getNombre();
+        String anoEscolarId = curso.getAnoEscolar().getId();
+
+        List<Profesor> profesores = profesorRepository.findByActivoTrueAndMaterias_Id(materiaId);
+
+        List<ProfesorDisponibleResponse> profesorResponses = profesores.stream()
+            .map(profesor -> {
+                List<BloqueHorario> colisiones = bloqueHorarioRepository.findColisionesProfesor(
+                    profesor.getId(),
+                    bloque.getDiaSemana(),
+                    bloque.getHoraInicio(),
+                    bloque.getHoraFin(),
+                    anoEscolarId,
+                    bloque.getId()
+                );
+
+                boolean esProfesorActualDelBloque = bloque.getProfesor() != null
+                    && bloque.getProfesor().getId().equals(profesor.getId());
+
+                ConflictoHorarioResponse conflicto = null;
+                boolean disponible = true;
+
+                if (!colisiones.isEmpty()) {
+                    BloqueHorario bloqueConflicto = colisiones.get(0);
+                    conflicto = ConflictoHorarioResponse.builder()
+                        .cursoNombre(bloqueConflicto.getCurso().getNombre())
+                        .materiaNombre(bloqueConflicto.getMateria() != null
+                            ? bloqueConflicto.getMateria().getNombre() : null)
+                        .horaInicio(bloqueConflicto.getHoraInicio().toString())
+                        .horaFin(bloqueConflicto.getHoraFin().toString())
+                        .bloqueId(bloqueConflicto.getId())
+                        .build();
+                    disponible = false;
+                }
+
+                return ProfesorDisponibleResponse.builder()
+                    .profesorId(profesor.getId())
+                    .profesorNombre(profesor.getNombre())
+                    .profesorApellido(profesor.getApellido())
+                    .disponible(disponible)
+                    .asignadoEnEsteBloque(esProfesorActualDelBloque)
+                    .conflicto(conflicto)
+                    .build();
+            })
+            .toList();
+
+        return ProfesoresDisponiblesResponse.builder()
+            .bloqueId(bloque.getId())
+            .bloqueDiaSemana(bloque.getDiaSemana())
+            .bloqueHoraInicio(bloque.getHoraInicio().toString())
+            .bloqueHoraFin(bloque.getHoraFin().toString())
+            .materiaId(materiaId)
+            .materiaNombre(materiaNombre)
+            .profesores(profesorResponses)
+            .build();
+    }
+}
