@@ -1,6 +1,7 @@
 package com.schoolmate.api.repository;
 
 import com.schoolmate.api.entity.BloqueHorario;
+import com.schoolmate.api.enums.TipoBloque;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +15,11 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, St
 
     List<BloqueHorario> findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc(
         String cursoId, Integer diaSemana);
+
+    List<BloqueHorario> findByCursoIdAndActivoTrueAndTipoAndMateriaId(
+        String cursoId, TipoBloque tipo, String materiaId);
+
+    List<BloqueHorario> findByCursoIdAndActivoTrueAndTipo(String cursoId, TipoBloque tipo);
 
     @Modifying
     @Query("UPDATE BloqueHorario b SET b.activo = false, b.updatedAt = CURRENT_TIMESTAMP " +

@@ -20,6 +20,10 @@ public enum ErrorCode {
     PROFESOR_EMAIL_DUPLICADO(HttpStatus.CONFLICT, "error.profesor.email_duplicado"),
     PROFESOR_TELEFONO_DUPLICADO(HttpStatus.CONFLICT, "error.profesor.telefono_duplicado"),
     CURSO_SIN_SECCION_DISPONIBLE(HttpStatus.CONFLICT, "error.curso.sin_seccion_disponible"),
+    MATERIA_EXCEDE_MINUTOS_MALLA(HttpStatus.CONFLICT, "error.jornada.materia_excede_minutos_malla"),
+    BLOQUE_NO_ES_CLASE(HttpStatus.BAD_REQUEST, "error.jornada.bloque_no_es_clase"),
+    BLOQUE_SIN_MATERIA(HttpStatus.BAD_REQUEST, "error.jornada.bloque_sin_materia"),
+    MATERIA_NO_EN_MALLA(HttpStatus.BAD_REQUEST, "error.jornada.materia_no_en_malla"),
 
     DATA_INTEGRITY(HttpStatus.CONFLICT, "error.data.integrity"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "error.internal");
