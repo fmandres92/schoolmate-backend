@@ -2,7 +2,7 @@
 
 ## SECCIÓN 1: RESUMEN EJECUTIVO
 
-`schoolmate-hub-api` es un backend REST para gestión escolar (catálogos académicos, cursos, profesores, alumnos, matrícula y jornada escolar por curso). La API está construida en Spring Boot con seguridad JWT stateless y acceso a PostgreSQL en Supabase usando JPA + Flyway. La implementación actual está fuertemente orientada a operación administrativa (`ADMIN`), con endpoints CRUD y casos de uso explícitos para reglas de negocio críticas (login, matrícula, jornada). El diseño separa catálogos estables (`materia`, `grado`, `año`) de vínculos temporales (`malla_curricular`, `matricula`) y bloques de jornada (`bloque_horario`).
+`schoolmate-hub-api` es un backend REST para gestión escolar (catálogos académicos, cursos, profesores, alumnos, matrícula, jornada escolar por curso y portal de apoderado). La API está construida en Spring Boot con seguridad JWT stateless y acceso a PostgreSQL en Supabase usando JPA + Flyway. La implementación actual mantiene foco administrativo (`ADMIN`), pero ya incorpora flujos de `APODERADO` para consultar hijos, asistencia y jornada con ownership. El diseño separa catálogos estables (`materia`, `grado`, `año`) de vínculos temporales (`malla_curricular`, `matricula`) y bloques de jornada (`bloque_horario`).
 
 ### Stack tecnológico (versiones exactas verificadas)
 
@@ -45,8 +45,8 @@ Fuente: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-a
 | Alumnos | ✅ operativo |
 | Matrículas | ✅ operativo |
 | Jornada escolar por curso | ✅ operativo |
-| Ownership por profesor/apoderado | ⚠️ parcial (solo horario de profesor) |
-| Asistencia, reportes, dashboards | ❌ no implementado |
+| Ownership por profesor/apoderado | ⚠️ parcial (profesor + apoderado en dominios acotados) |
+| Asistencia, reportes, dashboards | ⚠️ parcial (asistencia operativa + consulta apoderado; reportes/dashboards pendientes) |
 
 ---
 
@@ -106,6 +106,7 @@ Captura y normaliza:
 - `BadCredentialsException` -> `AUTH_BAD_CREDENTIALS` (401)
 - `ResourceNotFoundException` -> `RESOURCE_NOT_FOUND` (404)
 - `BusinessException` -> `BUSINESS_RULE` (400), con soporte opcional de `details` (`Map<String,String>`)
+- `ConflictException` -> `CONFLICT` (409), con mensaje de negocio explícito
 - `ApiException` -> `errorCode` específico (status según `ErrorCode`)
   - soporta mensaje personalizado y `details` (`Map<String,String>`) en errores de negocio avanzados
 - `MethodArgumentNotValidException` -> `VALIDATION_FAILED` (400) con `details`
@@ -141,6 +142,7 @@ Clase: `ApiErrorResponse`
 │   ├── common/rut            # utilidades de normalización de RUT
 │   ├── common/time           # proveedor centralizado de fecha/hora
 │   ├── controller            # endpoints REST
+│   ├── dto                   # DTOs de portal apoderado y proyecciones
 │   ├── dto/request           # contratos de entrada
 │   ├── dto/response          # contratos de salida
 │   ├── entity                # entidades JPA
@@ -150,6 +152,7 @@ Clase: `ApiErrorResponse`
 │   ├── security              # JWT + principal + filter
 │   ├── specification         # filtros dinámicos JPA
 │   ├── usecase/asistencia    # casos de uso de asistencia por bloque
+│   ├── usecase/apoderado     # casos de uso portal/gestión apoderado
 │   ├── usecase/auth          # caso de uso login
 │   ├── usecase/jornada       # casos de uso jornada escolar
 │   ├── usecase/matricula     # casos de uso matrícula
@@ -177,6 +180,8 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.controller`
   - `AlumnoController`
   - `AnoEscolarController`
+  - `ApoderadoController`
+  - `ApoderadoPortalController`
   - `AuthController`
   - `CursoController`
   - `DevToolsController` (solo perfil `dev`)
@@ -189,6 +194,15 @@ Clase: `ApiErrorResponse`
   - `ProfesorController`
   - `ProfesorHorarioController`
   - `ProfesorMeController`
+- `com.schoolmate.api.dto`
+  - `AlumnoApoderadoResponse`
+  - `ApoderadoBuscarResponse`
+  - `ApoderadoRequest`
+  - `ApoderadoResponse`
+  - `AsistenciaDiaResponse`
+  - `AsistenciaMensualResponse`
+  - `RegistroConFecha`
+  - `ResumenAsistenciaResponse`
 - `com.schoolmate.api.dto.request`
   - `AlumnoRequest`
   - `AsignarMateriaRequest`
@@ -263,6 +277,7 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.exception`
   - `ApiException`
   - `BusinessException`
+  - `ConflictException`
   - `ErrorCode`
   - `GlobalExceptionHandler`
   - `ResourceNotFoundException`
@@ -291,6 +306,11 @@ Clase: `ApiErrorResponse`
   - `UserPrincipal`
 - `com.schoolmate.api.specification`
   - `AlumnoSpecifications`
+- `com.schoolmate.api.usecase.apoderado`
+  - `CrearApoderadoConUsuario`
+  - `ObtenerAlumnosApoderado`
+  - `ObtenerAsistenciaMensualAlumno`
+  - `ObtenerResumenAsistenciaAlumno`
 - `com.schoolmate.api.usecase.auth`
   - `LoginUsuario`
 - `com.schoolmate.api.usecase.asistencia`
@@ -734,21 +754,26 @@ Estado actual de autorización por código:
 - Endpoint específico `PROFESOR`: `GET /api/profesores/{profesorId}/horario` (también accesible para `ADMIN`).
 - Endpoint específico `PROFESOR`: `GET /api/profesor/mis-clases-hoy` (solo `PROFESOR`).
 - `GET /api/matriculas/curso/{cursoId}` está disponible para `ADMIN` y `PROFESOR` con ownership por bloques activos del curso en el año escolar activo.
+- Endpoints admin de apoderado: `POST/GET /api/apoderados...` (solo `ADMIN`).
+- Endpoints portal apoderado: `GET /api/apoderado/...` (solo `APODERADO` con ownership por vínculo `apoderado_alumno`).
+- `GET /api/cursos/{cursoId}/jornada` está disponible para `ADMIN` y `APODERADO`, con ownership para apoderado.
 
 ### Uso de `@PreAuthorize`
 
 Sí existe en controllers de:
 
-- Alumnos, Años, Cursos, Grados, Jornada, Malla, Materias, Matrículas, Profesores.
+- Alumnos, Años, Apoderados, Cursos, Grados, Jornada, Malla, Materias, Matrículas, Profesores.
 - `DevToolsController` no usa `@PreAuthorize`; su exposición depende estrictamente de `@Profile("dev")`.
 
-### Regla de ownership (profesor solo sus datos)
+### Reglas de ownership (profesor y apoderado)
 
 Implementación actual:
 
 - En `ProfesorHorarioController`, si el rol autenticado es `PROFESOR`, solo puede consultar su propio `profesorId`.
 - Si intenta consultar otro `profesorId`, responde `403` (`AccessDeniedException` -> `ACCESS_DENIED`).
 - En `AsistenciaController`, el profesor autenticado solo puede registrar/consultar asistencia de bloques donde está asignado como docente.
+- En `ApoderadoPortalController`, cada consulta valida vínculo `apoderadoId`->`alumnoId` antes de exponer asistencia o resumen.
+- En `JornadaController` (`GET /api/cursos/{cursoId}/jornada`), si el rol es `APODERADO` valida que tenga al menos un alumno con matrícula `ACTIVA` en ese curso.
 
 ---
 
@@ -762,6 +787,22 @@ Implementación actual:
 |---|---|---|---|---|---|---|---|
 | `POST /api/auth/login` | Login y emisión JWT (email o RUT) | Público | Body JSON | `LoginRequest {identificador,password}` | `AuthResponse {token,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
 | `GET /api/auth/me` | Datos del usuario actual | Público por `permitAll` (intención: autenticado) | Header `Authorization` esperado | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}` | directo | sin token puede terminar en `INTERNAL_SERVER_ERROR` (NPE) |
+
+### Dominio: Apoderados (Admin)
+
+| Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
+|---|---|---|---|---|---|---|---|
+| `POST /api/apoderados` | Crea apoderado + usuario `ROL=APODERADO`, o vincula un apoderado existente por RUT | `ADMIN` | Body JSON | `ApoderadoRequest` | `ApoderadoResponse` (`201`) | `CrearApoderadoConUsuario` | `RESOURCE_NOT_FOUND`, `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `GET /api/apoderados/buscar-por-rut?rut=...` | Busca apoderado por RUT normalizado | `ADMIN` | Query `rut` | - | `ApoderadoBuscarResponse` | directo repository | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
+| `GET /api/apoderados/por-alumno/{alumnoId}` | Retorna apoderado vinculado al alumno (MVP: primer vínculo) | `ADMIN` | Path `alumnoId` | - | `ApoderadoResponse` o `204` | directo repository | `RESOURCE_NOT_FOUND` |
+
+### Dominio: Portal Apoderado
+
+| Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
+|---|---|---|---|---|---|---|---|
+| `GET /api/apoderado/mis-alumnos` | Lista hijos vinculados al apoderado autenticado, con matrícula activa del año activo si existe | `APODERADO` | `Authorization` | - | `List<AlumnoApoderadoResponse>` | `ObtenerAlumnosApoderado` | `ACCESS_DENIED` (si principal inválido) |
+| `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual?mes=...&anio=...` | Asistencia diaria agregada por bloques para un mes (`PRESENTE/AUSENTE/PARCIAL`) | `APODERADO` (ownership) | Path `alumnoId`, Query `mes,anio` | - | `AsistenciaMensualResponse` | `ObtenerAsistenciaMensualAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
+| `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen?anoEscolarId=...` | Resumen anual de asistencia por bloques con porcentaje | `APODERADO` (ownership) | Path `alumnoId`, Query `anoEscolarId` | - | `ResumenAsistenciaResponse` | `ObtenerResumenAsistenciaAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND` |
 
 ### Dominio: DevTools (solo perfil `dev`)
 
@@ -861,7 +902,7 @@ Implementación actual:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `PUT /api/cursos/{cursoId}/jornada/{diaSemana}` | Guarda/reemplaza la jornada de un día | `ADMIN` | Path `cursoId`,`diaSemana`; Body | `JornadaDiaRequest` | `JornadaDiaResponse` | `GuardarJornadaDia` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `GET /api/cursos/{cursoId}/jornada` | Obtiene jornada completa; opcionalmente filtra por día | `ADMIN` | Path `cursoId`; Query opcional `diaSemana` | - | `JornadaCursoResponse` | `ObtenerJornadaCurso` | `RESOURCE_NOT_FOUND` |
+| `GET /api/cursos/{cursoId}/jornada` | Obtiene jornada completa; opcionalmente filtra por día | `ADMIN`,`APODERADO` (ownership por matrícula activa en el curso) | Path `cursoId`; Query opcional `diaSemana` | - | `JornadaCursoResponse` | `ObtenerJornadaCurso` + validación en controller | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
 | `GET /api/cursos/{cursoId}/jornada/resumen` | Obtiene solo resumen semanal | `ADMIN` | Path `cursoId` | - | `JornadaResumenResponse` | `ObtenerJornadaCurso` (wrapper) | `RESOURCE_NOT_FOUND` |
 | `POST /api/cursos/{cursoId}/jornada/{diaSemanaOrigen}/copiar` | Copia estructura de un día a días destino | `ADMIN` | Path `cursoId`,`diaSemanaOrigen`; Body | `CopiarJornadaRequest` | `JornadaCursoResponse` | `CopiarJornadaDia` | `BUSINESS_RULE`, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 | `DELETE /api/cursos/{cursoId}/jornada/{diaSemana}` | Elimina lógicamente jornada de un día | `ADMIN` | Path `cursoId`,`diaSemana` | - | `204` | `EliminarJornadaDia` | `BUSINESS_RULE`, `RESOURCE_NOT_FOUND` |
@@ -932,6 +973,66 @@ Implementación actual:
   6. retorna `AuthResponse`
 - Errores:
   - `BadCredentialsException` (credenciales inválidas / usuario desactivado)
+- `@Transactional`: no.
+
+### `com.schoolmate.api.usecase.apoderado.CrearApoderadoConUsuario`
+
+- Función: crear apoderado + usuario `ROL=APODERADO` o vincular apoderado existente por RUT a un alumno.
+- Repositorios/dependencias:
+  - `ApoderadoRepository`, `ApoderadoAlumnoRepository`, `UsuarioRepository`, `AlumnoRepository`, `PasswordEncoder`
+- Reglas:
+  - alumno debe existir
+  - MVP: un alumno no puede tener más de un apoderado vinculado
+  - RUT se normaliza (`RutNormalizer`)
+  - si el apoderado no existe por RUT, valida unicidad de email en `usuario` y `apoderado`
+  - al crear usuario, password inicial = RUT normalizado con BCrypt
+  - crea vínculo `apoderado_alumno`
+- Errores:
+  - `ResourceNotFoundException`
+  - `ConflictException`
+  - `BusinessException`
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.apoderado.ObtenerAlumnosApoderado`
+
+- Función: listar alumnos vinculados al apoderado autenticado.
+- Repositorios/dependencias:
+  - `ApoderadoAlumnoRepository`, `AlumnoRepository`, `MatriculaRepository`, `AnoEscolarRepository`, `ClockProvider`
+- Reglas:
+  - retorna lista vacía si no hay vínculos
+  - solo incluye alumnos activos
+  - si existe año escolar activo, enriquece con matrícula `ACTIVA` (`cursoId`, `cursoNombre`, `anoEscolarId`)
+  - ordena por apellido/nombre
+- `@Transactional`: no.
+
+### `com.schoolmate.api.usecase.apoderado.ObtenerAsistenciaMensualAlumno`
+
+- Función: obtener asistencia mensual agregada por día para un alumno del apoderado.
+- Repositorios/dependencias:
+  - `ApoderadoAlumnoRepository`, `RegistroAsistenciaRepository`, `AlumnoRepository`
+- Reglas:
+  - ownership obligatorio (`apoderadoId` -> `alumnoId`)
+  - valida mes/año para construir rango de fechas
+  - agrupa registros por fecha y calcula `PRESENTE`, `AUSENTE` o `PARCIAL`
+  - mes sin registros retorna `dias=[]`
+- Errores:
+  - `AccessDeniedException`
+  - `ResourceNotFoundException`
+  - `BusinessException`
+- `@Transactional`: no.
+
+### `com.schoolmate.api.usecase.apoderado.ObtenerResumenAsistenciaAlumno`
+
+- Función: calcular resumen de asistencia anual por bloques (`presentes`, `ausentes`, `% asistencia`).
+- Repositorios/dependencias:
+  - `ApoderadoAlumnoRepository`, `RegistroAsistenciaRepository`, `AlumnoRepository`
+- Reglas:
+  - ownership obligatorio (`apoderadoId` -> `alumnoId`)
+  - conteo por estado (`PRESENTE`, `AUSENTE`) filtrado por `anoEscolarId`
+  - porcentaje con 1 decimal sobre el total de bloques registrados
+- Errores:
+  - `AccessDeniedException`
+  - `ResourceNotFoundException`
 - `@Transactional`: no.
 
 ### `com.schoolmate.api.usecase.profesor.CrearProfesorConUsuario`
@@ -1211,11 +1312,11 @@ Implementación actual:
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
 | `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
 | `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
-| `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut` | no | no |
-| `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId` | no | no |
-| `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId` | `DELETE` por `asistenciaClase.id` con `@Modifying @Query` | no |
+| `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |
+| `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | no | no |
+| `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId`, `findByAlumnoIdAndFechaEntre`, `countByAlumnoIdAndEstadoAndAnoEscolarId` | `DELETE` por `asistenciaClase.id`; JPQL para mensual por fecha y resumen por año escolar vía joins `asistencia_clase -> bloque_horario -> curso` | no |
 | `SeccionCatalogoRepository` | `SeccionCatalogo` | `findByActivoTrueOrderByOrdenAsc` | no | no |
-| `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
+| `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `findByApoderadoId`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
 
 ### Specifications existentes
 
@@ -1251,6 +1352,20 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `AsignarProfesorRequest` | `profesorId` | `@NotBlank` | `@Data` |
 | `GuardarAsistenciaRequest` | `bloqueHorarioId,fecha,registros[]` | `@NotBlank`, `@NotNull`, `@Size(min=1)`, `@Valid` | `@Data` |
 | `RegistroAlumnoRequest` | `alumnoId,estado` | `@NotBlank`, `@NotNull` | `@Data` |
+
+### DTOs de Portal/Apoderado (`com.schoolmate.api.dto`)
+
+| DTO | Campos principales | Builder/Lombok |
+|---|---|---|
+| `ApoderadoRequest` | `nombre,apellido,rut,email,telefono,alumnoId` | `@Getter/@Setter` + validaciones `@NotBlank/@Email` |
+| `ApoderadoBuscarResponse` | `id,nombre,apellido,rut,email,telefono,existe` | `@Getter/@Setter @Builder` |
+| `ApoderadoResponse` | `id,nombre,apellido,rut,email,telefono,usuarioId,cuentaActiva,alumnos[]` | `@Getter/@Setter @Builder` |
+| `ApoderadoResponse.AlumnoResumen` | `id,nombre,apellido` | `@Getter/@Setter @Builder` |
+| `AlumnoApoderadoResponse` | `id,nombre,apellido,cursoId,cursoNombre,anoEscolarId` | `@Getter/@Setter @Builder` |
+| `AsistenciaMensualResponse` | `alumnoId,alumnoNombre,mes,anio,dias[]` | `@Getter/@Setter @Builder` |
+| `AsistenciaDiaResponse` | `fecha,totalBloques,bloquesPresente,bloquesAusente,estado` | `@Getter/@Setter @Builder` |
+| `ResumenAsistenciaResponse` | `alumnoId,alumnoNombre,totalClases,totalPresente,totalAusente,porcentajeAsistencia` | `@Getter/@Setter @Builder` |
+| `RegistroConFecha` | `registroId,alumnoId,estado,fecha` (proyección interna para query) | `@Getter/@Setter` |
 
 ### Response DTOs
 
@@ -1375,6 +1490,17 @@ Para alumnos:
   - profesor debe enseñar la materia del bloque (`profesor_materia`)
   - profesor no puede tener colisión de horario (cross-curso, mismo año escolar)
 - Transiciones de matrícula restringidas (`ACTIVA<->RETIRADO/TRASLADADO`).
+- Gestión de apoderados (MVP):
+  - RUT de apoderado normalizado antes de crear/vincular.
+  - creación de usuario `ROL=APODERADO` con password inicial = RUT normalizado (BCrypt).
+  - máximo un apoderado por alumno en flujo admin actual (`existsByAlumnoId`).
+  - si el alumno ya tiene vínculo, responde conflicto (`409`).
+- Portal apoderado:
+  - ownership estricto por vínculo `apoderado_alumno`.
+  - asistencia mensual marca día `PARCIAL` cuando hay bloques presentes y ausentes en la misma fecha.
+  - porcentaje de asistencia se calcula sobre bloques con registro, no sobre bloques teóricos.
+- Jornada para apoderado:
+  - `GET /api/cursos/{cursoId}/jornada` solo permitido si existe matrícula `ACTIVA` de algún alumno del apoderado en ese curso.
 
 ---
 
@@ -1399,6 +1525,14 @@ Para alumnos:
   - horario consolidado agrupado por día y ordenado por hora
   - resumen semanal (`totalBloques`, `diasConClase`)
   - `horasAsignadas` calculadas sobre el año consultado
+- `GET /api/apoderado/mis-alumnos` retorna:
+  - hijos vinculados al apoderado autenticado
+  - `cursoId/cursoNombre/anoEscolarId` cuando existe matrícula `ACTIVA` en año activo
+- `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual` retorna:
+  - lista `dias[]` solo con fechas que tienen registros
+  - por día: `totalBloques`, `bloquesPresente`, `bloquesAusente`, `estado`
+- `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen` retorna:
+  - `totalClases`, `totalPresente`, `totalAusente`, `porcentajeAsistencia`
 
 - `GET /api/alumnos` y `GET /api/alumnos/{id}`:
   - si se envía `anoEscolarId`, agrega datos de matrícula activa (`curso`, `grado`, `estado`, `fechaMatricula`).
@@ -1436,6 +1570,10 @@ Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`):
   - `anoEscolarId`
 - `GET /api/cursos/{cursoId}/jornada`:
   - filtro opcional `diaSemana`
+- `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual`:
+  - `mes`, `anio`
+- `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen`:
+  - `anoEscolarId`
 
 ### Uso de `anoEscolarId` para enriquecer respuestas
 
@@ -1531,26 +1669,28 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 | Malla Curricular | ✅ | list por año, por materia, por grado, create, update, bulk, delete lógico |
 | Cursos | ✅ | list/get/create/update |
 | Profesores | ✅ | list/get/create/update |
+| Apoderados (admin) | ✅ | create/vincular, buscar por RUT, obtener por alumno |
+| Portal Apoderado | ✅ parcial | mis-alumnos, asistencia mensual, resumen asistencia |
 | Alumnos | ✅ | list/get/create/update |
 | Matrículas | ✅ | create, list por curso, historial por alumno, cambio estado |
-| Jornada escolar por curso | ✅ | guardar día, obtener jornada/resumen, copiar día, eliminar día, asignar/quitar materia y profesor por bloque, resúmenes de asignación |
-| Ownership por rol no-admin | ⚠️ parcial | horario de profesor con validación por `principal.profesorId` |
-| Asistencia | ❌ | no existe |
+| Jornada escolar por curso | ✅ | guardar día, obtener jornada/resumen (admin + apoderado con ownership en GET), copiar día, eliminar día, asignar/quitar materia y profesor por bloque, resúmenes de asignación |
+| Ownership por rol no-admin | ⚠️ parcial | profesor (horario, asistencia, matrículas por curso) + apoderado (portal y lectura de jornada por curso) |
+| Asistencia | ✅ parcial | registro/consulta por profesor + consulta mensual/resumen por apoderado |
 | Reportes | ❌ | no existe |
 | Dashboards | ❌ | no existe |
 
 ### Qué falta para que frontend deje DataContext completamente
 
-- Endpoints orientados a rol `PROFESOR`/`APODERADO` (actualmente casi todo es `ADMIN`).
-- Completar ownership en backend para más dominios (`principal.profesorId/apoderadoId`).
+- Completar ownership en backend para más dominios (`principal.profesorId/apoderadoId`) fuera de los ya cubiertos.
+- Extender capacidades de `APODERADO` a más vistas académicas (más allá de asistencia y jornada).
 - Endpoints de agregación operacional (dashboard, indicadores) si frontend hoy los calcula localmente.
-- Cobertura de módulos pendientes (asistencia/reportes) que normalmente DataContext simula.
+- Completar módulos pendientes (reportes/dashboards) que normalmente DataContext simula.
 
 ### Próximos módulos lógicos
 
-1. Asistencia (registro por bloque/alumno, consolidado diario/mensual).
-2. Reportes (académico, matrícula, carga docente).
-3. Dashboards (KPIs por año/curso/docente).
+1. Reportes (académico, matrícula, carga docente).
+2. Dashboards (KPIs por año/curso/docente).
+3. Asistencia avanzada (justificaciones, alertas, historiales comparativos).
 
 ---
 
@@ -1630,8 +1770,8 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 5. Import duplicado en `CursoController` (`EstadoMatricula` importado dos veces).
 
-6. Reglas de ownership no implementadas:
-- existen roles `PROFESOR` y `APODERADO` en auth, pero casi todo el dominio exige `ADMIN`.
+6. Reglas de ownership implementadas de forma parcial:
+- ya existe ownership para `PROFESOR` (horario/asistencia/matrículas por curso) y `APODERADO` (portal + lectura de jornada por curso), pero faltan más dominios con permisos finos por rol.
 
 7. Secretos hardcodeados:
 - datasource password y `jwt.secret` están en YAML versionado.

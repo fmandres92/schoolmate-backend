@@ -10,4 +10,8 @@ public interface ApoderadoRepository extends JpaRepository<Apoderado, String> {
     Optional<Apoderado> findByEmail(String email);
 
     Optional<Apoderado> findByRut(String rut);
+
+    boolean existsByRut(String rut);
+
+    boolean existsByEmail(String email);
 }

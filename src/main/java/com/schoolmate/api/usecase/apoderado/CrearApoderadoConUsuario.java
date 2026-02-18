@@ -1,0 +1,137 @@
+package com.schoolmate.api.usecase.apoderado;
+
+import com.schoolmate.api.common.rut.RutNormalizer;
+import com.schoolmate.api.dto.ApoderadoRequest;
+import com.schoolmate.api.dto.ApoderadoResponse;
+import com.schoolmate.api.entity.Alumno;
+import com.schoolmate.api.entity.Apoderado;
+import com.schoolmate.api.entity.ApoderadoAlumno;
+import com.schoolmate.api.entity.ApoderadoAlumnoId;
+import com.schoolmate.api.entity.Usuario;
+import com.schoolmate.api.enums.Rol;
+import com.schoolmate.api.exception.BusinessException;
+import com.schoolmate.api.exception.ConflictException;
+import com.schoolmate.api.exception.ResourceNotFoundException;
+import com.schoolmate.api.repository.AlumnoRepository;
+import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
+import com.schoolmate.api.repository.ApoderadoRepository;
+import com.schoolmate.api.repository.UsuarioRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Component
+@RequiredArgsConstructor
+public class CrearApoderadoConUsuario {
+
+    private final ApoderadoRepository apoderadoRepo;
+    private final ApoderadoAlumnoRepository apoderadoAlumnoRepo;
+    private final UsuarioRepository usuarioRepo;
+    private final AlumnoRepository alumnoRepo;
+    private final PasswordEncoder passwordEncoder;
+
+    @Transactional
+    public ApoderadoResponse execute(ApoderadoRequest request) {
+        Alumno alumno = alumnoRepo.findById(request.getAlumnoId())
+                .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
+
+        if (apoderadoAlumnoRepo.existsByAlumnoId(request.getAlumnoId())) {
+            throw new ConflictException("Este alumno ya tiene un apoderado vinculado");
+        }
+
+        String rutNormalizado = normalizarRut(request.getRut());
+        String emailNormalizado = request.getEmail().trim().toLowerCase();
+
+        Optional<Apoderado> apoderadoExistente = apoderadoRepo.findByRut(rutNormalizado);
+        Apoderado apoderado;
+
+        if (apoderadoExistente.isPresent()) {
+            apoderado = apoderadoExistente.get();
+
+            if (apoderadoAlumnoRepo.existsByApoderadoIdAndAlumnoId(apoderado.getId(), request.getAlumnoId())) {
+                throw new ConflictException("Este apoderado ya está vinculado a este alumno");
+            }
+        } else {
+            if (Boolean.TRUE.equals(usuarioRepo.existsByEmail(emailNormalizado))) {
+                throw new ConflictException("Ya existe un usuario con el email: " + emailNormalizado);
+            }
+
+            if (apoderadoRepo.existsByEmail(emailNormalizado)) {
+                throw new ConflictException("Ya existe un apoderado con el email: " + emailNormalizado);
+            }
+
+            apoderado = Apoderado.builder()
+                    .nombre(request.getNombre())
+                    .apellido(request.getApellido())
+                    .rut(rutNormalizado)
+                    .email(emailNormalizado)
+                    .telefono(request.getTelefono())
+                    .build();
+            apoderado = apoderadoRepo.save(apoderado);
+
+            Usuario usuario = Usuario.builder()
+                    .id(UUID.randomUUID().toString())
+                    .email(emailNormalizado)
+                    .nombre(request.getNombre())
+                    .apellido(request.getApellido())
+                    .rol(Rol.APODERADO)
+                    .rut(rutNormalizado)
+                    .apoderadoId(apoderado.getId())
+                    .passwordHash(passwordEncoder.encode(rutNormalizado))
+                    .activo(true)
+                    .build();
+            usuarioRepo.save(usuario);
+        }
+
+        ApoderadoAlumno vinculo = ApoderadoAlumno.builder()
+                .id(new ApoderadoAlumnoId(apoderado.getId(), alumno.getId()))
+                .apoderado(apoderado)
+                .alumno(alumno)
+                .esPrincipal(true)
+                .build();
+        apoderadoAlumnoRepo.save(vinculo);
+
+        return buildResponse(apoderado);
+    }
+
+    private String normalizarRut(String rut) {
+        try {
+            return RutNormalizer.normalize(rut);
+        } catch (IllegalArgumentException ex) {
+            throw new BusinessException("RUT inválido");
+        }
+    }
+
+    private ApoderadoResponse buildResponse(Apoderado apoderado) {
+        List<ApoderadoResponse.AlumnoResumen> alumnosResumen = apoderadoAlumnoRepo.findByApoderadoId(apoderado.getId())
+                .stream()
+                .map(v -> alumnoRepo.findById(v.getId().getAlumnoId()).orElse(null))
+                .filter(java.util.Objects::nonNull)
+                .map(al -> ApoderadoResponse.AlumnoResumen.builder()
+                        .id(al.getId())
+                        .nombre(al.getNombre())
+                        .apellido(al.getApellido())
+                        .build())
+                .collect(Collectors.toList());
+
+        Usuario usuario = usuarioRepo.findByApoderadoId(apoderado.getId()).orElse(null);
+
+        return ApoderadoResponse.builder()
+                .id(apoderado.getId())
+                .nombre(apoderado.getNombre())
+                .apellido(apoderado.getApellido())
+                .rut(apoderado.getRut())
+                .email(apoderado.getEmail())
+                .telefono(apoderado.getTelefono())
+                .usuarioId(usuario != null ? usuario.getId() : null)
+                .cuentaActiva(usuario != null && Boolean.TRUE.equals(usuario.getActivo()))
+                .alumnos(alumnosResumen)
+                .build();
+    }
+}

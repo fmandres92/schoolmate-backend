@@ -12,6 +12,11 @@ import com.schoolmate.api.dto.response.JornadaDiaResponse;
 import com.schoolmate.api.dto.response.JornadaResumenResponse;
 import com.schoolmate.api.dto.response.MateriasDisponiblesResponse;
 import com.schoolmate.api.dto.response.ProfesoresDisponiblesResponse;
+import com.schoolmate.api.entity.ApoderadoAlumno;
+import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
+import com.schoolmate.api.repository.MatriculaRepository;
+import com.schoolmate.api.security.UserPrincipal;
 import com.schoolmate.api.usecase.jornada.AsignarMateriaBloque;
 import com.schoolmate.api.usecase.jornada.AsignarProfesorBloque;
 import com.schoolmate.api.usecase.jornada.CopiarJornadaDia;
@@ -27,7 +32,9 @@ import com.schoolmate.api.usecase.jornada.QuitarProfesorBloque;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -38,6 +45,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/cursos/{cursoId}/jornada")
@@ -56,6 +66,8 @@ public class JornadaController {
     private final AsignarProfesorBloque asignarProfesorBloque;
     private final QuitarProfesorBloque quitarProfesorBloque;
     private final ObtenerResumenAsignacionProfesores obtenerResumenAsignacionProfesores;
+    private final ApoderadoAlumnoRepository apoderadoAlumnoRepo;
+    private final MatriculaRepository matriculaRepo;
 
     @PutMapping("/{diaSemana}")
     @PreAuthorize("hasRole('ADMIN')")
@@ -68,11 +80,15 @@ public class JornadaController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'APODERADO')")
     public ResponseEntity<JornadaCursoResponse> obtenerJornada(
         @PathVariable String cursoId,
-        @RequestParam(required = false) Integer diaSemana
+        @RequestParam(required = false) Integer diaSemana,
+        @AuthenticationPrincipal UserPrincipal user
     ) {
+        if (user != null && user.getRol() != null && "APODERADO".equals(user.getRol().name())) {
+            validarOwnershipApoderadoCurso(user.getApoderadoId(), cursoId);
+        }
         return ResponseEntity.ok(obtenerJornadaCurso.ejecutar(cursoId, diaSemana));
     }
 
@@ -173,5 +189,23 @@ public class JornadaController {
         @PathVariable String cursoId
     ) {
         return ResponseEntity.ok(obtenerResumenAsignacionProfesores.execute(cursoId));
+    }
+
+    private void validarOwnershipApoderadoCurso(String apoderadoId, String cursoId) {
+        Set<String> alumnoIds = apoderadoAlumnoRepo.findByApoderadoId(apoderadoId).stream()
+                .map(ApoderadoAlumno::getId)
+                .map(id -> id.getAlumnoId())
+                .collect(Collectors.toSet());
+
+        if (alumnoIds.isEmpty()) {
+            throw new AccessDeniedException("No tienes acceso al horario de este curso");
+        }
+
+        boolean tieneAcceso = matriculaRepo.findByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA).stream()
+                .anyMatch(m -> alumnoIds.contains(m.getAlumno().getId()));
+
+        if (!tieneAcceso) {
+            throw new AccessDeniedException("No tienes acceso al horario de este curso");
+        }
     }
 }

@@ -1,12 +1,15 @@
 package com.schoolmate.api.repository;
 
+import com.schoolmate.api.dto.RegistroConFecha;
 import com.schoolmate.api.entity.RegistroAsistencia;
+import com.schoolmate.api.enums.EstadoAsistencia;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public interface RegistroAsistenciaRepository extends JpaRepository<RegistroAsistencia, String> {
@@ -17,4 +20,37 @@ public interface RegistroAsistenciaRepository extends JpaRepository<RegistroAsis
     @Modifying
     @Query("DELETE FROM RegistroAsistencia r WHERE r.asistenciaClase.id = :asistenciaClaseId")
     int deleteByAsistenciaClaseId(@Param("asistenciaClaseId") String asistenciaClaseId);
+
+    @Query("""
+        SELECT new com.schoolmate.api.dto.RegistroConFecha(
+            ra.id, ra.alumno.id, ra.estado, ac.fecha
+        )
+        FROM RegistroAsistencia ra
+        JOIN ra.asistenciaClase ac
+        WHERE ra.alumno.id = :alumnoId
+          AND ac.fecha >= :fechaInicio
+          AND ac.fecha <= :fechaFin
+        ORDER BY ac.fecha
+        """)
+    List<RegistroConFecha> findByAlumnoIdAndFechaEntre(
+        @Param("alumnoId") String alumnoId,
+        @Param("fechaInicio") LocalDate fechaInicio,
+        @Param("fechaFin") LocalDate fechaFin
+    );
+
+    @Query("""
+        SELECT COUNT(ra)
+        FROM RegistroAsistencia ra
+        JOIN ra.asistenciaClase ac
+        JOIN ac.bloqueHorario bh
+        JOIN bh.curso c
+        WHERE ra.alumno.id = :alumnoId
+          AND ra.estado = :estado
+          AND c.anoEscolar.id = :anoEscolarId
+        """)
+    long countByAlumnoIdAndEstadoAndAnoEscolarId(
+        @Param("alumnoId") String alumnoId,
+        @Param("estado") EstadoAsistencia estado,
+        @Param("anoEscolarId") String anoEscolarId
+    );
 }
