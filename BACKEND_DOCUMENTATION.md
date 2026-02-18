@@ -709,10 +709,11 @@ Sí existe en controllers de:
 
 ### Regla de ownership (profesor solo sus datos)
 
-Implementación parcial:
+Implementación actual:
 
 - En `ProfesorHorarioController`, si el rol autenticado es `PROFESOR`, solo puede consultar su propio `profesorId`.
 - Si intenta consultar otro `profesorId`, responde `403` (`AccessDeniedException` -> `ACCESS_DENIED`).
+- En `AsistenciaController`, el profesor autenticado solo puede registrar/consultar asistencia de bloques donde está asignado como docente.
 
 ---
 
@@ -817,7 +818,7 @@ Implementación parcial:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/asistencia/clase` | Registra asistencia de HOY para un bloque CLASE dentro de ventana ±15 min | `PROFESOR` (ownership por bloque) | Body | `GuardarAsistenciaRequest {bloqueHorarioId,fecha,registros[]}` | `AsistenciaClaseResponse` | `GuardarAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `POST /api/asistencia/clase` | Registra o edita (reemplaza registros) la asistencia de HOY para un bloque CLASE dentro de ventana ±15 min | `PROFESOR` (ownership por bloque) | Body | `GuardarAsistenciaRequest {bloqueHorarioId,fecha,registros[]}` | `AsistenciaClaseResponse` (`201 Created`) | `GuardarAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/asistencia/clase?bloqueHorarioId=...&fecha=...` | Obtiene asistencia registrada para un bloque y fecha | `PROFESOR` (ownership por bloque) | Query `bloqueHorarioId`,`fecha` | - | `AsistenciaClaseResponse` | `ObtenerAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
 
 ### Dominio: Jornada
@@ -844,7 +845,7 @@ Implementación parcial:
 
 ### `com.schoolmate.api.usecase.asistencia.GuardarAsistenciaClase`
 
-- Función: registrar asistencia de una clase para la fecha actual.
+- Función: registrar o editar asistencia de una clase para la fecha actual.
 - Repositorios/dependencias:
   - `BloqueHorarioRepository`, `MatriculaRepository`, `AsistenciaClaseRepository`, `RegistroAsistenciaRepository`, `ClockProvider`
 - Validaciones:
@@ -853,11 +854,13 @@ Implementación parcial:
   - fecha del request debe ser `clockProvider.today()`
   - fecha debe corresponder al `diaSemana` del bloque
   - ventana horaria permitida: `horaInicio-15min` a `horaFin+15min`
-  - no debe existir asistencia previa para `(bloque,fecha)`
   - todos los alumnos del request deben estar con matrícula `ACTIVA` en el curso
   - no se aceptan alumnos duplicados en el request
+- Comportamiento de persistencia:
+  - si no existe asistencia para `(bloque,fecha)`, crea `asistencia_clase` + registros
+  - si ya existe, actualiza `updatedAt`, borra registros previos y vuelve a insertar los registros enviados
 - Manejo de concurrencia:
-  - captura `DataIntegrityViolationException` por índice único y la traduce a `BusinessException`
+  - ante carrera al crear cabecera (`asistencia_clase`), recupera la existente y continúa como edición
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.asistencia.ObtenerAsistenciaClase`
@@ -1173,7 +1176,7 @@ Implementación parcial:
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
 | `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
 | `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
-| `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId` | no | no |
+| `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId` | `DELETE` por `asistenciaClase.id` con `@Modifying @Query` | no |
 | `SeccionCatalogoRepository` | `SeccionCatalogo` | `findByActivoTrueOrderByOrdenAsc` | no | no |
 | `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
 

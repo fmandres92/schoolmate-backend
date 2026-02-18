@@ -77,10 +77,6 @@ public class GuardarAsistenciaClase {
             throw new BusinessException("Fuera de la ventana horaria para tomar asistencia");
         }
 
-        if (asistenciaClaseRepository.existsByBloqueHorarioIdAndFecha(bloque.getId(), hoy)) {
-            throw new BusinessException("La asistencia de este bloque ya fue registrada");
-        }
-
         List<Matricula> matriculasActivas = matriculaRepository.findByCursoIdAndEstado(
             bloque.getCurso().getId(), EstadoMatricula.ACTIVA);
         Map<String, Alumno> alumnosActivosById = matriculasActivas.stream()
@@ -90,25 +86,53 @@ public class GuardarAsistenciaClase {
         validarRegistros(request.getRegistros(), alumnosActivos);
 
         LocalDateTime ahora = clockProvider.now();
-        AsistenciaClase asistenciaClase = AsistenciaClase.builder()
-            .bloqueHorario(bloque)
-            .fecha(request.getFecha())
-            .createdAt(ahora)
-            .updatedAt(ahora)
-            .build();
-
         AsistenciaClase savedAsistencia;
-        try {
-            savedAsistencia = asistenciaClaseRepository.save(asistenciaClase);
-        } catch (DataIntegrityViolationException ex) {
-            throw new BusinessException("La asistencia de este bloque ya fue registrada");
+        AsistenciaClase existente = asistenciaClaseRepository
+            .findByBloqueHorarioIdAndFecha(bloque.getId(), hoy)
+            .orElse(null);
+
+        if (existente == null) {
+            AsistenciaClase nuevaAsistencia = AsistenciaClase.builder()
+                .bloqueHorario(bloque)
+                .fecha(request.getFecha())
+                .createdAt(ahora)
+                .updatedAt(ahora)
+                .build();
+            try {
+                savedAsistencia = asistenciaClaseRepository.save(nuevaAsistencia);
+            } catch (DataIntegrityViolationException ex) {
+                // Si hubo carrera y otro proceso creó la asistencia, editar sobre la existente.
+                savedAsistencia = asistenciaClaseRepository
+                    .findByBloqueHorarioIdAndFecha(bloque.getId(), hoy)
+                    .orElseThrow(() -> new BusinessException("No se pudo guardar la asistencia"));
+                savedAsistencia.setUpdatedAt(ahora);
+                savedAsistencia = asistenciaClaseRepository.save(savedAsistencia);
+            }
+        } else {
+            existente.setUpdatedAt(ahora);
+            savedAsistencia = asistenciaClaseRepository.save(existente);
         }
 
+        registroAsistenciaRepository.deleteByAsistenciaClaseId(savedAsistencia.getId());
+        registroAsistenciaRepository.flush();
+        List<RegistroAsistencia> registros = construirRegistros(
+            request.getRegistros(), alumnosActivosById, savedAsistencia, ahora);
+
+        List<RegistroAsistencia> guardados = registroAsistenciaRepository.saveAll(registros);
+        return mapResponse(savedAsistencia, guardados);
+    }
+
+    private List<RegistroAsistencia> construirRegistros(
+        List<RegistroAlumnoRequest> registrosRequest,
+        Map<String, Alumno> alumnosActivosById,
+        AsistenciaClase asistenciaClase,
+        LocalDateTime ahora
+    ) {
         List<RegistroAsistencia> registros = new ArrayList<>();
-        for (RegistroAlumnoRequest registroRequest : request.getRegistros()) {
+        for (RegistroAlumnoRequest registroRequest : registrosRequest) {
             Alumno alumno = alumnosActivosById.get(registroRequest.getAlumnoId());
             RegistroAsistencia registro = RegistroAsistencia.builder()
-                .asistenciaClase(savedAsistencia)
+                .asistenciaClase(asistenciaClase)
                 .alumno(alumno)
                 .estado(registroRequest.getEstado())
                 .createdAt(ahora)
@@ -116,9 +140,7 @@ public class GuardarAsistenciaClase {
                 .build();
             registros.add(registro);
         }
-
-        List<RegistroAsistencia> guardados = registroAsistenciaRepository.saveAll(registros);
-        return mapResponse(savedAsistencia, guardados);
+        return registros;
     }
 
     private void validarRegistros(List<RegistroAlumnoRequest> registros, Set<String> alumnosActivos) {
