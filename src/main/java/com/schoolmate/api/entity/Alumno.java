@@ -33,21 +33,6 @@ public class Alumno {
     @Column(name = "fecha_nacimiento", nullable = false)
     private LocalDate fechaNacimiento;
 
-    @Column(name = "apoderado_nombre", nullable = false, length = 100)
-    private String apoderadoNombre;
-
-    @Column(name = "apoderado_apellido", nullable = false, length = 100)
-    private String apoderadoApellido;
-
-    @Column(name = "apoderado_email", nullable = false)
-    private String apoderadoEmail;
-
-    @Column(name = "apoderado_telefono", nullable = false, length = 30)
-    private String apoderadoTelefono;
-
-    @Column(name = "apoderado_vinculo", nullable = false, length = 20)
-    private String apoderadoVinculo;
-
     @Column(nullable = false)
     private Boolean activo = true;
 

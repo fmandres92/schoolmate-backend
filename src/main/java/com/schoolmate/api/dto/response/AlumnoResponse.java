@@ -28,6 +28,7 @@ public class AlumnoResponse {
     private String apoderadoEmail;
     private String apoderadoTelefono;
     private String apoderadoVinculo;
+    private ApoderadoInfo apoderado;
 
     // Estado
     private Boolean activo;
@@ -52,11 +53,6 @@ public class AlumnoResponse {
                 .nombre(alumno.getNombre())
                 .apellido(alumno.getApellido())
                 .fechaNacimiento(alumno.getFechaNacimiento().toString())
-                .apoderadoNombre(alumno.getApoderadoNombre())
-                .apoderadoApellido(alumno.getApoderadoApellido())
-                .apoderadoEmail(alumno.getApoderadoEmail())
-                .apoderadoTelefono(alumno.getApoderadoTelefono())
-                .apoderadoVinculo(alumno.getApoderadoVinculo())
                 .activo(alumno.getActivo())
                 .createdAt(alumno.getCreatedAt())
                 .updatedAt(alumno.getUpdatedAt())
@@ -77,5 +73,17 @@ public class AlumnoResponse {
             response.setFechaMatricula(matricula.getFechaMatricula().toString());
         }
         return response;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ApoderadoInfo {
+        private String id;
+        private String nombre;
+        private String apellido;
+        private String rut;
+        private String vinculo;
     }
 }

@@ -2,7 +2,7 @@
 
 ## SECCIÓN 1: RESUMEN EJECUTIVO
 
-`schoolmate-hub-api` es un backend REST para gestión escolar (catálogos académicos, cursos, profesores, alumnos, matrícula, jornada escolar por curso y portal de apoderado). La API está construida en Spring Boot con seguridad JWT stateless y acceso a PostgreSQL en Supabase usando JPA + Flyway. La implementación actual mantiene foco administrativo (`ADMIN`), pero ya incorpora flujos de `APODERADO` para consultar hijos, asistencia y jornada con ownership. El diseño separa catálogos estables (`materia`, `grado`, `año`) de vínculos temporales (`malla_curricular`, `matricula`) y bloques de jornada (`bloque_horario`).
+`schoolmate-hub-api` es un backend REST para gestión escolar (catálogos académicos, cursos, profesores, alumnos, matrícula, jornada escolar por curso y portal de apoderado). La API está construida en Spring Boot con seguridad JWT stateless y acceso a PostgreSQL en Supabase usando JPA + Flyway. La implementación actual mantiene foco administrativo (`ADMIN`), pero ya incorpora flujos de `APODERADO` para consultar hijos, asistencia y jornada con ownership, además de creación transaccional `alumno + apoderado` desde administración. El diseño separa catálogos estables (`materia`, `grado`, `año`) de vínculos temporales (`malla_curricular`, `matricula`) y bloques de jornada (`bloque_horario`).
 
 ### Stack tecnológico (versiones exactas verificadas)
 
@@ -42,7 +42,7 @@ Fuente: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-a
 | Malla curricular | ✅ operativo |
 | Cursos | ✅ operativo |
 | Profesores | ✅ operativo |
-| Alumnos | ✅ operativo |
+| Alumnos | ✅ operativo (incluye alta con apoderado) |
 | Matrículas | ✅ operativo |
 | Jornada escolar por curso | ✅ operativo |
 | Ownership por profesor/apoderado | ⚠️ parcial (profesor + apoderado en dominios acotados) |
@@ -153,6 +153,7 @@ Clase: `ApiErrorResponse`
 │   ├── specification         # filtros dinámicos JPA
 │   ├── usecase/asistencia    # casos de uso de asistencia por bloque
 │   ├── usecase/apoderado     # casos de uso portal/gestión apoderado
+│   ├── usecase/alumno        # casos de uso de creación/enlace alumno-apoderado
 │   ├── usecase/auth          # caso de uso login
 │   ├── usecase/jornada       # casos de uso jornada escolar
 │   ├── usecase/matricula     # casos de uso matrícula
@@ -162,7 +163,7 @@ Clase: `ApiErrorResponse`
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway V1..V17
+    └── db/migration          # migraciones Flyway V1..V18
 ```
 
 ### TODAS las clases por paquete
@@ -211,6 +212,7 @@ Clase: `ApiErrorResponse`
   - `BloqueRequest`
   - `GuardarAsistenciaRequest`
   - `CopiarJornadaRequest`
+  - `CrearAlumnoConApoderadoRequest`
   - `CursoRequest`
   - `JornadaDiaRequest`
   - `LoginRequest`
@@ -274,6 +276,7 @@ Clase: `ApiErrorResponse`
   - `EstadoMatricula`
   - `Rol`
   - `TipoBloque`
+  - `VinculoApoderado`
 - `com.schoolmate.api.exception`
   - `ApiException`
   - `BusinessException`
@@ -313,6 +316,8 @@ Clase: `ApiErrorResponse`
   - `ObtenerResumenAsistenciaAlumno`
 - `com.schoolmate.api.usecase.auth`
   - `LoginUsuario`
+- `com.schoolmate.api.usecase.alumno`
+  - `CrearAlumnoConApoderado`
 - `com.schoolmate.api.usecase.asistencia`
   - `GuardarAsistenciaClase`
   - `ObtenerAsistenciaClase`
@@ -387,6 +392,7 @@ Nota de integridad:
 | `id.apoderadoId` | `String` | `apoderado_id` | `VARCHAR(36)` | PK compuesta, FK lógica |
 | `id.alumnoId` | `String` | `alumno_id` | `VARCHAR(36)` | PK compuesta, FK lógica |
 | `esPrincipal` | `Boolean` | `es_principal` | `BOOLEAN` | NOT NULL |
+| `vinculo` | `VinculoApoderado` | `vinculo` | `VARCHAR(20)` | NOT NULL (`MADRE`,`PADRE`,`TUTOR_LEGAL`,`ABUELO`,`OTRO`) |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 
 Relaciones JPA:
@@ -497,11 +503,6 @@ Relaciones:
 | `nombre` | `String` | `nombre` | `VARCHAR(100)` |
 | `apellido` | `String` | `apellido` | `VARCHAR(100)` |
 | `fechaNacimiento` | `LocalDate` | `fecha_nacimiento` | `DATE` |
-| `apoderadoNombre` | `String` | `apoderado_nombre` | `VARCHAR(100)` |
-| `apoderadoApellido` | `String` | `apoderado_apellido` | `VARCHAR(100)` |
-| `apoderadoEmail` | `String` | `apoderado_email` | `VARCHAR(255)` |
-| `apoderadoTelefono` | `String` | `apoderado_telefono` | `VARCHAR(30)` |
-| `apoderadoVinculo` | `String` | `apoderado_vinculo` | `VARCHAR(20)` |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` |
@@ -591,6 +592,7 @@ Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 - `EstadoAnoEscolar`: `FUTURO`, `PLANIFICACION`, `ACTIVO`, `CERRADO`
 - `EstadoMatricula`: `ACTIVA`, `RETIRADO`, `TRASLADADO`
 - `TipoBloque`: `CLASE`, `RECREO`, `ALMUERZO`
+- `VinculoApoderado`: `MADRE`, `PADRE`, `TUTOR_LEGAL`, `ABUELO`, `OTRO`
 
 ### Diagrama ER ASCII (modelo lógico actual)
 
@@ -645,6 +647,7 @@ seccion_catalogo 1---* curso (por letra)
 15. `V15__usuario_rut_y_backfill_profesores.sql`
 16. `V16__create_asistencia.sql`
 17. `V17__apoderado_entity.sql`
+18. `V18__req04_alumno_con_apoderado.sql`
 
 ### Qué hace cada migración
 
@@ -667,10 +670,12 @@ seccion_catalogo 1---* curso (por letra)
 | `V15` | Agrega `usuario.rut` (nullable + índice único parcial), completa RUT en usuarios existentes vinculados a profesor y crea usuarios faltantes para profesores activos (password inicial: RUT normalizado en BCrypt) |
 | `V16` | Crea `asistencia_clase` y `registro_asistencia` con FKs, índices y unicidad por bloque/fecha y por alumno en una clase |
 | `V17` | Migración marcador: documenta refactor de apoderado ejecutado directamente en Supabase (`apoderado`, `apoderado_alumno`, `usuario.apoderado_id`) sin DDL en Flyway |
+| `V18` | Migración marcador REQ-04: documenta `ALTER TABLE apoderado_alumno ADD COLUMN vinculo VARCHAR(20) NOT NULL DEFAULT 'OTRO'` ejecutado directamente en Supabase |
 
 ### Estado resultante del esquema (según migraciones + código)
 
 - Modelo oficial en código y queries usa: `usuario`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
+- `apoderado_alumno` incorpora columna `vinculo` en el modelo actual (REQ-04) y es tratada como enum `VinculoApoderado` en JPA.
 - Riesgo de drift:
   - `ano_escolar.fecha_inicio_planificacion` requerido por código pero no aparece en `V3`.
   - `alumno` no está versionado explícitamente en repo (V7/V8 placeholders).
@@ -688,7 +693,7 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V17+` para cualquier ajuste de esquema.
+2. Crear nueva `V18+` para cualquier ajuste de esquema.
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
@@ -793,7 +798,7 @@ Implementación actual:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `POST /api/apoderados` | Crea apoderado + usuario `ROL=APODERADO`, o vincula un apoderado existente por RUT | `ADMIN` | Body JSON | `ApoderadoRequest` | `ApoderadoResponse` (`201`) | `CrearApoderadoConUsuario` | `RESOURCE_NOT_FOUND`, `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `GET /api/apoderados/buscar-por-rut?rut=...` | Busca apoderado por RUT normalizado | `ADMIN` | Query `rut` | - | `ApoderadoBuscarResponse` | directo repository | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
+| `GET /api/apoderados/buscar-por-rut?rut=...` | Busca apoderado por RUT normalizado e incluye lista de alumnos vinculados (`cursoNombre` cuando existe matrícula activa) | `ADMIN` | Query `rut` | - | `ApoderadoBuscarResponse` | directo repository | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 | `GET /api/apoderados/por-alumno/{alumnoId}` | Retorna apoderado vinculado al alumno (MVP: primer vínculo) | `ADMIN` | Path `alumnoId` | - | `ApoderadoResponse` o `204` | directo repository | `RESOURCE_NOT_FOUND` |
 
 ### Dominio: Portal Apoderado
@@ -876,9 +881,10 @@ Implementación actual:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `GET /api/alumnos` | Lista paginada con búsqueda y enriquecimiento opcional por matrícula | `ADMIN` | Query: `page,size,sortBy,sortDir,anoEscolarId,cursoId,gradoId,q` | - | `AlumnoPageResponse` | directo + `AlumnoSpecifications` | - |
-| `GET /api/alumnos/{id}` | Obtiene alumno; opcional matrícula activa por año | `ADMIN` | Path + Query opcional `anoEscolarId` | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
+| `GET /api/alumnos/{id}` | Obtiene alumno; opcional matrícula activa por año y apoderado principal vinculado (si existe) | `ADMIN` | Path + Query opcional `anoEscolarId` | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
 | `GET /api/alumnos/buscar-por-rut` | Búsqueda exacta por RUT (normaliza con/sin puntos y guion) + matrícula opcional por año | `ADMIN` | Query: `rut` (obligatorio), `anoEscolarId` (opcional) | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
 | `POST /api/alumnos` | Crea alumno | `ADMIN` | Body | `AlumnoRequest` | `AlumnoResponse` | directo | `409` (RUT duplicado vía `ResponseStatusException`), `VALIDATION_FAILED` |
+| `POST /api/alumnos/con-apoderado` | Crea alumno y vincula/crea apoderado en una transacción | `ADMIN` | Body | `CrearAlumnoConApoderadoRequest` | `AlumnoResponse` (`201`) | `CrearAlumnoConApoderado` | `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `PUT /api/alumnos/{id}` | Actualiza alumno | `ADMIN` | Path + Body | `AlumnoRequest` | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND`, `409` (RUT duplicado), `VALIDATION_FAILED` |
 
 ### Dominio: Matrículas
@@ -1034,6 +1040,26 @@ Implementación actual:
   - `AccessDeniedException`
   - `ResourceNotFoundException`
 - `@Transactional`: no.
+
+### `com.schoolmate.api.usecase.alumno.CrearAlumnoConApoderado`
+
+- Función: crear alumno y gestionar su apoderado principal en una sola transacción.
+- Repositorios/dependencias:
+  - `AlumnoRepository`, `ApoderadoRepository`, `ApoderadoAlumnoRepository`, `UsuarioRepository`, `PasswordEncoder`
+- Reglas:
+  - valida RUT de alumno único (`existsByRut`)
+  - normaliza RUT de alumno/apoderado con `RutNormalizer`
+  - si apoderado no existe por RUT:
+    - valida unicidad de email en `usuario` y `apoderado`
+    - crea `Apoderado`
+    - crea `Usuario` con `ROL=APODERADO`, `apoderadoId` y password inicial = RUT normalizado (BCrypt)
+  - crea `Alumno` activo
+  - crea vínculo `apoderado_alumno` con `esPrincipal=true` y `vinculo` (`VinculoApoderado`)
+  - respuesta retorna `AlumnoResponse` con `apoderado` enriquecido
+- Errores:
+  - `ConflictException`
+  - `BusinessException`
+- `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.profesor.CrearProfesorConUsuario`
 
@@ -1313,7 +1339,7 @@ Implementación actual:
 | `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
 | `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |
-| `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | no | no |
+| `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | `findByApoderadoIdWithAlumno` (JPQL con `JOIN FETCH`) | no |
 | `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId`, `findByAlumnoIdAndFechaEntre`, `countByAlumnoIdAndEstadoAndAnoEscolarId` | `DELETE` por `asistenciaClase.id`; JPQL para mensual por fecha y resumen por año escolar vía joins `asistencia_clase -> bloque_horario -> curso` | no |
 | `SeccionCatalogoRepository` | `SeccionCatalogo` | `findByActivoTrueOrderByOrdenAsc` | no | no |
 | `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `findByApoderadoId`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
@@ -1340,7 +1366,8 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `MateriaRequest` | `nombre`, `icono` | `@NotBlank(nombre)` | `@Data` |
 | `ProfesorRequest` | `rut,nombre,apellido,email,telefono,fechaContratacion,horasPedagogicasContrato?,materiaIds` | `@NotBlank`, `@Size`, `@Email`, `@NotNull`, `@NotEmpty`, `@Min(1)`, `@Max(50)` (opcional) | `@Data` |
 | `CursoRequest` | `gradoId`, `anoEscolarId` | `@NotBlank` | `@Data` |
-| `AlumnoRequest` | `rut,nombre,apellido,fechaNacimiento,apoderadoNombre,apoderadoApellido,apoderadoEmail,apoderadoTelefono,apoderadoVinculo` | `@NotBlank`, `@Size`, `@Email` | `@Data @Builder` |
+| `AlumnoRequest` | `rut,nombre,apellido,fechaNacimiento` | `@NotBlank`, `@Size`, `@NotNull` | `@Data @Builder` |
+| `CrearAlumnoConApoderadoRequest` | `alumno{rut,nombre,apellido,fechaNacimiento}, apoderado{rut,nombre,apellido,email,telefono}, vinculo` | `@NotNull`, `@Valid`, `@NotBlank`, `@Email`, `@Size` | `@Data` |
 | `MatriculaRequest` | `alumnoId,cursoId,anoEscolarId,fechaMatricula?` | `@NotBlank` (except fecha) | `@Data @Builder` |
 | `MallaCurricularRequest` | `materiaId,gradoId,anoEscolarId,horasPedagogicas` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(15)` | `@Data` |
 | `MallaCurricularBulkRequest` | `materiaId,anoEscolarId,grados[]` | `@NotBlank`, `@NotEmpty`, `@Valid` | `@Data` |
@@ -1358,7 +1385,8 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | DTO | Campos principales | Builder/Lombok |
 |---|---|---|
 | `ApoderadoRequest` | `nombre,apellido,rut,email,telefono,alumnoId` | `@Getter/@Setter` + validaciones `@NotBlank/@Email` |
-| `ApoderadoBuscarResponse` | `id,nombre,apellido,rut,email,telefono,existe` | `@Getter/@Setter @Builder` |
+| `ApoderadoBuscarResponse` | `id,nombre,apellido,rut,email,telefono,existe,alumnos[]` | `@Getter/@Setter @Builder` |
+| `ApoderadoBuscarResponse.AlumnoVinculado` | `id,nombre,apellido,cursoNombre` | `@Getter/@Setter @Builder` |
 | `ApoderadoResponse` | `id,nombre,apellido,rut,email,telefono,usuarioId,cuentaActiva,alumnos[]` | `@Getter/@Setter @Builder` |
 | `ApoderadoResponse.AlumnoResumen` | `id,nombre,apellido` | `@Getter/@Setter @Builder` |
 | `AlumnoApoderadoResponse` | `id,nombre,apellido,cursoId,cursoNombre,anoEscolarId` | `@Getter/@Setter @Builder` |
@@ -1380,7 +1408,8 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `ProfesorResponse.MateriaInfo` | `id,nombre,icono` | `@Data @Builder` |
 | `CursoResponse` | `id,nombre,letra,gradoId,gradoNombre,anoEscolarId,anoEscolar,activo,alumnosMatriculados,cantidadMaterias,totalHorasPedagogicas,materias,createdAt,updatedAt` | `@Data @Builder` |
 | `CursoResponse.MateriaCargaResponse` | `materiaId,materiaNombre,materiaIcono,horasPedagogicas` | `@Data @Builder` |
-| `AlumnoResponse` | datos personales + apoderado + auditoría + matrícula opcional (`matriculaId,cursoId,cursoNombre,gradoNombre,estadoMatricula,fechaMatricula`) | `@Data @Builder` |
+| `AlumnoResponse` | datos personales + compatibilidad (`apoderadoNombre/apellido/email/telefono/vinculo`) + `apoderado` (objeto) + auditoría + matrícula opcional (`matriculaId,cursoId,cursoNombre,gradoNombre,estadoMatricula,fechaMatricula`) | `@Data @Builder` |
+| `AlumnoResponse.ApoderadoInfo` | `id,nombre,apellido,rut,vinculo` | `@Data @Builder` |
 | `AlumnoPageResponse` | contrato paginado equivalente a materias | `@Data @Builder` |
 | `MallaCurricularResponse` | `id,materiaId,materiaNombre,materiaIcono,gradoId,gradoNombre,gradoNivel,anoEscolarId,anoEscolar,horasPedagogicas,activo,createdAt,updatedAt` | `@Data @Builder` |
 | `MatriculaResponse` | `id,alumno*,curso*,gradoNombre,anoEscolar*,fechaMatricula,estado,createdAt,updatedAt` | `@Data @Builder` |
@@ -1469,7 +1498,13 @@ Implementadas explícitamente en `ProfesorController`:
 
 Para alumnos:
 
-- solo unicidad de `rut` validada en controller.
+- `POST /api/alumnos` y `PUT /api/alumnos/{id}` validan unicidad de `rut` del alumno.
+- `POST /api/alumnos/con-apoderado` agrega reglas transaccionales:
+  - RUT alumno no duplicado
+  - normalización de RUT alumno/apoderado
+  - reuso de apoderado existente por RUT o creación de nuevo apoderado + usuario
+  - password inicial de usuario apoderado = RUT normalizado (BCrypt)
+  - creación de vínculo `apoderado_alumno` con `vinculo` (`MADRE`, `PADRE`, `TUTOR_LEGAL`, `ABUELO`, `OTRO`)
 
 ### Otras reglas relevantes
 
@@ -1495,6 +1530,7 @@ Para alumnos:
   - creación de usuario `ROL=APODERADO` con password inicial = RUT normalizado (BCrypt).
   - máximo un apoderado por alumno en flujo admin actual (`existsByAlumnoId`).
   - si el alumno ya tiene vínculo, responde conflicto (`409`).
+  - `GET /api/apoderados/buscar-por-rut` retorna alumnos vinculados; incluye `cursoNombre` cuando hay matrícula activa.
 - Portal apoderado:
   - ownership estricto por vínculo `apoderado_alumno`.
   - asistencia mensual marca día `PARCIAL` cuando hay bloques presentes y ausentes en la misma fecha.
@@ -1533,9 +1569,15 @@ Para alumnos:
   - por día: `totalBloques`, `bloquesPresente`, `bloquesAusente`, `estado`
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen` retorna:
   - `totalClases`, `totalPresente`, `totalAusente`, `porcentajeAsistencia`
+- `GET /api/apoderados/buscar-por-rut?rut=...` retorna:
+  - datos del apoderado
+  - `alumnos[]` vinculados con `id,nombre,apellido,cursoNombre`
+- `POST /api/alumnos/con-apoderado` retorna:
+  - `AlumnoResponse` con el objeto `apoderado` poblado (`id,nombre,apellido,rut,vinculo`)
 
 - `GET /api/alumnos` y `GET /api/alumnos/{id}`:
   - si se envía `anoEscolarId`, agrega datos de matrícula activa (`curso`, `grado`, `estado`, `fechaMatricula`).
+  - en `GET /api/alumnos/{id}`, además agrega `apoderado` principal si existe vínculo.
 - `GET /api/alumnos/buscar-por-rut?rut=...`:
   - endpoint dedicado para búsqueda exacta por RUT en frontend
   - acepta RUT con o sin formato (`9.057.419-9`, `9057419-9`, `90574199`)
@@ -1671,7 +1713,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 | Profesores | ✅ | list/get/create/update |
 | Apoderados (admin) | ✅ | create/vincular, buscar por RUT, obtener por alumno |
 | Portal Apoderado | ✅ parcial | mis-alumnos, asistencia mensual, resumen asistencia |
-| Alumnos | ✅ | list/get/create/update |
+| Alumnos | ✅ | list/get/create/update + `POST /api/alumnos/con-apoderado` |
 | Matrículas | ✅ | create, list por curso, historial por alumno, cambio estado |
 | Jornada escolar por curso | ✅ | guardar día, obtener jornada/resumen (admin + apoderado con ownership en GET), copiar día, eliminar día, asignar/quitar materia y profesor por bloque, resúmenes de asignación |
 | Ownership por rol no-admin | ⚠️ parcial | profesor (horario, asistencia, matrículas por curso) + apoderado (portal y lectura de jornada por curso) |

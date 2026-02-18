@@ -1,9 +1,12 @@
 package com.schoolmate.api.entity;
 
 import com.schoolmate.api.common.time.TimeContext;
+import com.schoolmate.api.enums.VinculoApoderado;
 import jakarta.persistence.Column;
 import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -41,6 +44,11 @@ public class ApoderadoAlumno {
     @Column(name = "es_principal", nullable = false)
     @Builder.Default
     private Boolean esPrincipal = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "vinculo", nullable = false)
+    @Builder.Default
+    private VinculoApoderado vinculo = VinculoApoderado.OTRO;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

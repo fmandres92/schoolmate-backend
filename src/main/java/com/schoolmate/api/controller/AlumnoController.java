@@ -1,15 +1,21 @@
 package com.schoolmate.api.controller;
 
 import com.schoolmate.api.dto.request.AlumnoRequest;
+import com.schoolmate.api.dto.request.CrearAlumnoConApoderadoRequest;
 import com.schoolmate.api.dto.response.AlumnoPageResponse;
 import com.schoolmate.api.dto.response.AlumnoResponse;
 import com.schoolmate.api.entity.Alumno;
+import com.schoolmate.api.entity.Apoderado;
+import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AlumnoRepository;
+import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
+import com.schoolmate.api.repository.ApoderadoRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.specification.AlumnoSpecifications;
+import com.schoolmate.api.usecase.alumno.CrearAlumnoConApoderado;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -22,7 +28,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -38,6 +43,9 @@ public class AlumnoController {
 
     private final AlumnoRepository alumnoRepository;
     private final MatriculaRepository matriculaRepository;
+    private final ApoderadoAlumnoRepository apoderadoAlumnoRepository;
+    private final ApoderadoRepository apoderadoRepository;
+    private final CrearAlumnoConApoderado crearAlumnoConApoderado;
 
     /**
      * Listar alumnos con paginación.
@@ -137,10 +145,14 @@ public class AlumnoController {
             Matricula matricula = matriculaRepository
                     .findByAlumnoIdAndAnoEscolarIdAndEstado(id, anoEscolarId, EstadoMatricula.ACTIVA)
                     .orElse(null);
-            return ResponseEntity.ok(AlumnoResponse.fromEntityWithMatricula(alumno, matricula));
+            AlumnoResponse response = AlumnoResponse.fromEntityWithMatricula(alumno, matricula);
+            enriquecerConApoderado(id, response);
+            return ResponseEntity.ok(response);
         }
 
-        return ResponseEntity.ok(AlumnoResponse.fromEntity(alumno));
+        AlumnoResponse response = AlumnoResponse.fromEntity(alumno);
+        enriquecerConApoderado(id, response);
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -176,12 +188,7 @@ public class AlumnoController {
                 .rut(request.getRut())
                 .nombre(request.getNombre())
                 .apellido(request.getApellido())
-                .fechaNacimiento(LocalDate.parse(request.getFechaNacimiento()))
-                .apoderadoNombre(request.getApoderadoNombre())
-                .apoderadoApellido(request.getApoderadoApellido())
-                .apoderadoEmail(request.getApoderadoEmail())
-                .apoderadoTelefono(request.getApoderadoTelefono())
-                .apoderadoVinculo(request.getApoderadoVinculo())
+                .fechaNacimiento(request.getFechaNacimiento())
                 .activo(true)
                 .build();
 
@@ -204,15 +211,17 @@ public class AlumnoController {
         alumno.setRut(request.getRut());
         alumno.setNombre(request.getNombre());
         alumno.setApellido(request.getApellido());
-        alumno.setFechaNacimiento(LocalDate.parse(request.getFechaNacimiento()));
-        alumno.setApoderadoNombre(request.getApoderadoNombre());
-        alumno.setApoderadoApellido(request.getApoderadoApellido());
-        alumno.setApoderadoEmail(request.getApoderadoEmail());
-        alumno.setApoderadoTelefono(request.getApoderadoTelefono());
-        alumno.setApoderadoVinculo(request.getApoderadoVinculo());
+        alumno.setFechaNacimiento(request.getFechaNacimiento());
 
         Alumno saved = alumnoRepository.save(alumno);
         return ResponseEntity.ok(AlumnoResponse.fromEntity(saved));
+    }
+
+    @PostMapping("/con-apoderado")
+    public ResponseEntity<AlumnoResponse> crearConApoderado(
+            @Valid @RequestBody CrearAlumnoConApoderadoRequest request) {
+        AlumnoResponse response = crearAlumnoConApoderado.ejecutar(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     // ── Helpers privados ──────────────────────────────────────
@@ -281,5 +290,37 @@ public class AlumnoController {
 
     private boolean isRutSearch(String q) {
         return q.matches("^[0-9]+$") && q.length() >= 5;
+    }
+
+    private void enriquecerConApoderado(String alumnoId, AlumnoResponse response) {
+        List<ApoderadoAlumno> vinculos = apoderadoAlumnoRepository.findByAlumnoId(alumnoId);
+        if (vinculos.isEmpty()) {
+            return;
+        }
+
+        ApoderadoAlumno vinculoPrincipal = vinculos.get(0);
+        Optional<Apoderado> apoderadoOpt = apoderadoRepository.findById(vinculoPrincipal.getId().getApoderadoId());
+        if (apoderadoOpt.isEmpty()) {
+            return;
+        }
+
+        Apoderado apoderado = apoderadoOpt.get();
+        String nombreVinculo = vinculoPrincipal.getVinculo() != null
+                ? vinculoPrincipal.getVinculo().name()
+                : "OTRO";
+
+        response.setApoderado(AlumnoResponse.ApoderadoInfo.builder()
+                .id(apoderado.getId())
+                .nombre(apoderado.getNombre())
+                .apellido(apoderado.getApellido())
+                .rut(apoderado.getRut())
+                .vinculo(nombreVinculo)
+                .build());
+
+        response.setApoderadoNombre(apoderado.getNombre());
+        response.setApoderadoApellido(apoderado.getApellido());
+        response.setApoderadoEmail(apoderado.getEmail());
+        response.setApoderadoTelefono(apoderado.getTelefono());
+        response.setApoderadoVinculo(nombreVinculo);
     }
 }

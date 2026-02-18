@@ -1,12 +1,14 @@
 package com.schoolmate.api.dto.request;
 
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
 
 @Data
 @NoArgsConstructor
@@ -15,6 +17,7 @@ import lombok.NoArgsConstructor;
 public class AlumnoRequest {
 
     @NotBlank(message = "El RUT es obligatorio")
+    @Size(max = 20)
     private String rut;
 
     @NotBlank(message = "El nombre es obligatorio")
@@ -25,24 +28,6 @@ public class AlumnoRequest {
     @Size(max = 100)
     private String apellido;
 
-    @NotBlank(message = "La fecha de nacimiento es obligatoria")
-    private String fechaNacimiento;
-
-    @NotBlank(message = "El nombre del apoderado es obligatorio")
-    @Size(max = 100)
-    private String apoderadoNombre;
-
-    @NotBlank(message = "El apellido del apoderado es obligatorio")
-    @Size(max = 100)
-    private String apoderadoApellido;
-
-    @NotBlank(message = "El email del apoderado es obligatorio")
-    @Email(message = "Email inválido")
-    private String apoderadoEmail;
-
-    @NotBlank(message = "El teléfono del apoderado es obligatorio")
-    private String apoderadoTelefono;
-
-    @NotBlank(message = "El vínculo del apoderado es obligatorio")
-    private String apoderadoVinculo;
+    @NotNull(message = "La fecha de nacimiento es obligatoria")
+    private LocalDate fechaNacimiento;
 }

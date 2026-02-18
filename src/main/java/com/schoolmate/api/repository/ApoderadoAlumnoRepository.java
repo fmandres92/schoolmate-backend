@@ -3,6 +3,8 @@ package com.schoolmate.api.repository;
 import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.ApoderadoAlumnoId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
@@ -29,4 +31,7 @@ public interface ApoderadoAlumnoRepository extends JpaRepository<ApoderadoAlumno
     default boolean existsByApoderadoIdAndAlumnoId(String apoderadoId, String alumnoId) {
         return existsByIdApoderadoIdAndIdAlumnoId(apoderadoId, alumnoId);
     }
+
+    @Query("SELECT aa FROM ApoderadoAlumno aa JOIN FETCH aa.alumno WHERE aa.id.apoderadoId = :apoderadoId")
+    List<ApoderadoAlumno> findByApoderadoIdWithAlumno(@Param("apoderadoId") String apoderadoId);
 }

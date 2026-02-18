@@ -7,11 +7,13 @@ import com.schoolmate.api.dto.ApoderadoResponse;
 import com.schoolmate.api.entity.Apoderado;
 import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.Usuario;
+import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.exception.BusinessException;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AlumnoRepository;
 import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
 import com.schoolmate.api.repository.ApoderadoRepository;
+import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.repository.UsuarioRepository;
 import com.schoolmate.api.usecase.apoderado.CrearApoderadoConUsuario;
 import jakarta.validation.Valid;
@@ -42,6 +44,7 @@ public class ApoderadoController {
     private final ApoderadoAlumnoRepository apoderadoAlumnoRepo;
     private final AlumnoRepository alumnoRepo;
     private final UsuarioRepository usuarioRepo;
+    private final MatriculaRepository matriculaRepo;
 
     @PostMapping
     public ResponseEntity<ApoderadoResponse> crear(@Valid @RequestBody ApoderadoRequest request) {
@@ -56,6 +59,26 @@ public class ApoderadoController {
         Apoderado apoderado = apoderadoRepo.findByRut(rutNormalizado)
                 .orElseThrow(() -> new ResourceNotFoundException("No existe un apoderado con RUT: " + rutNormalizado));
 
+        List<ApoderadoBuscarResponse.AlumnoVinculado> alumnosVinculados = apoderadoAlumnoRepo
+                .findByApoderadoIdWithAlumno(apoderado.getId())
+                .stream()
+                .map(v -> {
+                    var alumno = v.getAlumno();
+                    String cursoNombre = matriculaRepo.findByAlumnoId(alumno.getId()).stream()
+                            .filter(m -> EstadoMatricula.ACTIVA.equals(m.getEstado()))
+                            .map(m -> m.getCurso().getNombre())
+                            .findFirst()
+                            .orElse(null);
+
+                    return ApoderadoBuscarResponse.AlumnoVinculado.builder()
+                            .id(alumno.getId())
+                            .nombre(alumno.getNombre())
+                            .apellido(alumno.getApellido())
+                            .cursoNombre(cursoNombre)
+                            .build();
+                })
+                .toList();
+
         return ResponseEntity.ok(ApoderadoBuscarResponse.builder()
                 .id(apoderado.getId())
                 .nombre(apoderado.getNombre())
@@ -64,6 +87,7 @@ public class ApoderadoController {
                 .email(apoderado.getEmail())
                 .telefono(apoderado.getTelefono())
                 .existe(true)
+                .alumnos(alumnosVinculados)
                 .build());
     }
 
