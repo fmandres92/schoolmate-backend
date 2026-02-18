@@ -43,8 +43,8 @@ public class Usuario {
     @Column(name = "profesor_id")
     private String profesorId;
 
-    @Column(name = "alumno_id")
-    private String alumnoId;
+    @Column(name = "apoderado_id", length = 36)
+    private String apoderadoId;
 
     @Column(nullable = false)
     private Boolean activo = true;

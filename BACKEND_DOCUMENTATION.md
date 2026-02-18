@@ -159,7 +159,7 @@ Clase: `ApiErrorResponse`
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway V1..V16
+    └── db/migration          # migraciones Flyway V1..V17
 ```
 
 ### TODAS las clases por paquete
@@ -238,6 +238,9 @@ Clase: `ApiErrorResponse`
   - `ProfesorResponse`
   - `RegistroAsistenciaResponse`
 - `com.schoolmate.api.entity`
+  - `Apoderado`
+  - `ApoderadoAlumno`
+  - `ApoderadoAlumnoId`
   - `Alumno`
   - `AnoEscolar`
   - `AsistenciaClase`
@@ -265,6 +268,8 @@ Clase: `ApiErrorResponse`
   - `ResourceNotFoundException`
   - `UnauthorizedException`
 - `com.schoolmate.api.repository`
+  - `ApoderadoAlumnoRepository`
+  - `ApoderadoRepository`
   - `AlumnoRepository`
   - `AnoEscolarRepository`
   - `AsistenciaClaseRepository`
@@ -330,17 +335,43 @@ Clase: `ApiErrorResponse`
 | `apellido` | `String` | `apellido` | `VARCHAR(100)` | NOT NULL |
 | `rol` | `Rol` | `rol` | `VARCHAR(20)` | NOT NULL |
 | `profesorId` | `String` | `profesor_id` | `VARCHAR(36)` | nullable |
-| `alumnoId` | `String` | `alumno_id` | `VARCHAR(36)` | nullable |
+| `apoderadoId` | `String` | `apoderado_id` | `VARCHAR(36)` | nullable |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
 
-Relaciones JPA: no hay relaciones `@ManyToOne`; `profesorId/alumnoId` son campos planos.
+Relaciones JPA: no hay relaciones `@ManyToOne`; `profesorId/apoderadoId` son campos planos.
 
 Nota de integridad:
 
-- En migraciones (`V1`/`V2`) `usuario.profesor_id` y `usuario.alumno_id` se usan como referencias lógicas.
-- No existe `FOREIGN KEY` declarada desde `usuario` hacia `profesor`/`alumno` en el esquema versionado.
+- En migraciones históricas (`V1`/`V2`) `usuario.profesor_id` y `usuario.alumno_id` se usaron como referencias lógicas.
+- Estado actual versionado: `usuario` referencia lógicamente `profesor_id` y `apoderado_id` (sin FK declarada en migraciones).
+
+### `Apoderado` (`apoderado`)
+
+| Campo Java | Tipo Java | Columna BD | Tipo BD esperado | Constraints |
+|---|---|---|---|---|
+| `id` | `String` | `id` | `VARCHAR(36)` | PK |
+| `nombre` | `String` | `nombre` | `VARCHAR(100)` | NOT NULL |
+| `apellido` | `String` | `apellido` | `VARCHAR(100)` | NOT NULL |
+| `rut` | `String` | `rut` | `VARCHAR(20)` | UNIQUE, nullable |
+| `email` | `String` | `email` | `VARCHAR(255)` | UNIQUE, nullable |
+| `telefono` | `String` | `telefono` | `VARCHAR(30)` | nullable |
+| `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
+| `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
+
+### `ApoderadoAlumno` (`apoderado_alumno`)
+
+| Campo Java | Tipo Java | Columna BD | Tipo BD esperado | Constraints |
+|---|---|---|---|---|
+| `id.apoderadoId` | `String` | `apoderado_id` | `VARCHAR(36)` | PK compuesta, FK lógica |
+| `id.alumnoId` | `String` | `alumno_id` | `VARCHAR(36)` | PK compuesta, FK lógica |
+| `esPrincipal` | `Boolean` | `es_principal` | `BOOLEAN` | NOT NULL |
+| `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
+
+Relaciones JPA:
+- `ManyToOne` hacia `Apoderado` con `@MapsId("apoderadoId")`.
+- `ManyToOne` hacia `Alumno` con `@MapsId("alumnoId")`.
 
 Índices: `idx_usuario_email`, `idx_usuario_rol`, `ux_usuario_rut_not_null`.
 
@@ -545,7 +576,9 @@ Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 
 ```text
 usuario
-  (profesor_id, alumno_id como string sin FK JPA)
+  (profesor_id, apoderado_id como string sin FK JPA)
+
+apoderado 1---* apoderado_alumno *---1 alumno
 
 profesor --< profesor_materia >-- materia
 
@@ -591,6 +624,7 @@ seccion_catalogo 1---* curso (por letra)
 14. `V14__profesor_horas_pedagogicas_contrato.sql`
 15. `V15__usuario_rut_y_backfill_profesores.sql`
 16. `V16__create_asistencia.sql`
+17. `V17__apoderado_entity.sql`
 
 ### Qué hace cada migración
 
@@ -612,10 +646,11 @@ seccion_catalogo 1---* curso (por letra)
 | `V14` | Agrega columna nullable `profesor.horas_pedagogicas_contrato` |
 | `V15` | Agrega `usuario.rut` (nullable + índice único parcial), completa RUT en usuarios existentes vinculados a profesor y crea usuarios faltantes para profesores activos (password inicial: RUT normalizado en BCrypt) |
 | `V16` | Crea `asistencia_clase` y `registro_asistencia` con FKs, índices y unicidad por bloque/fecha y por alumno en una clase |
+| `V17` | Migración marcador: documenta refactor de apoderado ejecutado directamente en Supabase (`apoderado`, `apoderado_alumno`, `usuario.apoderado_id`) sin DDL en Flyway |
 
 ### Estado resultante del esquema (según migraciones + código)
 
-- Modelo oficial en código y queries usa: `usuario`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
+- Modelo oficial en código y queries usa: `usuario`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
 - Riesgo de drift:
   - `ano_escolar.fecha_inicio_planificacion` requerido por código pero no aparece en `V3`.
   - `alumno` no está versionado explícitamente en repo (V7/V8 placeholders).
@@ -633,7 +668,7 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V16+` para cualquier ajuste de esquema.
+2. Crear nueva `V17+` para cualquier ajuste de esquema.
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
@@ -680,7 +715,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 
 Campos:
 
-- `id`, `email`, `password`, `rol`, `profesorId`, `alumnoId`, `nombre`, `apellido`.
+- `id`, `email`, `password`, `rol`, `profesorId`, `apoderadoId`, `nombre`, `apellido`.
 
 Authorities:
 
@@ -688,7 +723,7 @@ Authorities:
 
 Datos en token (`JwtTokenProvider`):
 
-- `sub=email`, claims: `id`, `rol`, `profesorId`, `alumnoId`, `nombre`, `apellido`, `iat`, `exp`.
+- `sub=email`, claims: `id`, `rol`, `profesorId`, `apoderadoId`, `nombre`, `apellido`, `iat`, `exp`.
 
 ### Manejo de roles (`ADMIN`, `PROFESOR`, `APODERADO`)
 
@@ -725,8 +760,8 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/auth/login` | Login y emisión JWT (email o RUT) | Público | Body JSON | `LoginRequest {identificador,password}` | `AuthResponse {token,tipo,id,email,nombre,apellido,rol,profesorId,alumnoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
-| `GET /api/auth/me` | Datos del usuario actual | Público por `permitAll` (intención: autenticado) | Header `Authorization` esperado | - | `Map{id,email,nombre,apellido,rol,profesorId,alumnoId}` | directo | sin token puede terminar en `INTERNAL_SERVER_ERROR` (NPE) |
+| `POST /api/auth/login` | Login y emisión JWT (email o RUT) | Público | Body JSON | `LoginRequest {identificador,password}` | `AuthResponse {token,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
+| `GET /api/auth/me` | Datos del usuario actual | Público por `permitAll` (intención: autenticado) | Header `Authorization` esperado | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}` | directo | sin token puede terminar en `INTERNAL_SERVER_ERROR` (NPE) |
 
 ### Dominio: DevTools (solo perfil `dev`)
 
@@ -1176,6 +1211,8 @@ Implementación actual:
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
 | `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
 | `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
+| `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut` | no | no |
+| `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId` | no | no |
 | `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId` | `DELETE` por `asistenciaClase.id` con `@Modifying @Query` | no |
 | `SeccionCatalogoRepository` | `SeccionCatalogo` | `findByActivoTrueOrderByOrdenAsc` | no | no |
 | `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
@@ -1219,7 +1256,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 
 | DTO | Campos principales | Builder/Lombok |
 |---|---|---|
-| `AuthResponse` | `token,tipo,id,email,nombre,apellido,rol,profesorId,alumnoId` | `@Data @Builder` |
+| `AuthResponse` | `token,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId` | `@Data @Builder` |
 | `ApiErrorResponse` | `code,message,status,field,path,timestamp,details` | `@Data @Builder` |
 | `AnoEscolarResponse` | `id,ano,fechaInicioPlanificacion,fechaInicio,fechaFin,estado,createdAt,updatedAt` | `@Data @Builder` |
 | `MateriaResponse` | `id,nombre,icono,createdAt,updatedAt` | `@Data @Builder` |
@@ -1505,7 +1542,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 ### Qué falta para que frontend deje DataContext completamente
 
 - Endpoints orientados a rol `PROFESOR`/`APODERADO` (actualmente casi todo es `ADMIN`).
-- Completar ownership en backend para más dominios (`principal.profesorId/alumnoId`).
+- Completar ownership en backend para más dominios (`principal.profesorId/apoderadoId`).
 - Endpoints de agregación operacional (dashboard, indicadores) si frontend hoy los calcula localmente.
 - Cobertura de módulos pendientes (asistencia/reportes) que normalmente DataContext simula.
 

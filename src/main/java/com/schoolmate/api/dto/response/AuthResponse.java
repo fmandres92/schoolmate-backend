@@ -14,5 +14,5 @@ public class AuthResponse {
     private String apellido;
     private String rol;
     private String profesorId;
-    private String alumnoId;
+    private String apoderadoId;
 }

@@ -24,7 +24,7 @@ public class JwtTokenProvider {
                 .claim("id", userPrincipal.getId())
                 .claim("rol", userPrincipal.getRol().name())
                 .claim("profesorId", userPrincipal.getProfesorId())
-                .claim("alumnoId", userPrincipal.getAlumnoId())
+                .claim("apoderadoId", userPrincipal.getApoderadoId())
                 .claim("nombre", userPrincipal.getNombre())
                 .claim("apellido", userPrincipal.getApellido())
                 .issuedAt(now)

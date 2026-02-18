@@ -69,7 +69,7 @@ public class CrearProfesorConUsuario {
             .apellido(savedProfesor.getApellido())
             .rol(Rol.PROFESOR)
             .profesorId(savedProfesor.getId())
-            .alumnoId(null)
+            .apoderadoId(null)
             .activo(true)
             .build();
 

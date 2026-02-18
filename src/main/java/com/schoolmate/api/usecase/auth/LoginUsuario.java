@@ -45,7 +45,7 @@ public class LoginUsuario {
                 .apellido(usuario.getApellido())
                 .rol(usuario.getRol().name())
                 .profesorId(usuario.getProfesorId())
-                .alumnoId(usuario.getAlumnoId())
+                .apoderadoId(usuario.getApoderadoId())
                 .build();
     }
 

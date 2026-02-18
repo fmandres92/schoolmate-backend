@@ -20,7 +20,7 @@ public class UserPrincipal implements UserDetails {
     private final String password;
     private final Rol rol;
     private final String profesorId;
-    private final String alumnoId;
+    private final String apoderadoId;
     private final String nombre;
     private final String apellido;
 
@@ -61,7 +61,7 @@ public class UserPrincipal implements UserDetails {
                 usuario.getPasswordHash(),
                 usuario.getRol(),
                 usuario.getProfesorId(),
-                usuario.getAlumnoId(),
+                usuario.getApoderadoId(),
                 usuario.getNombre(),
                 usuario.getApellido()
         );

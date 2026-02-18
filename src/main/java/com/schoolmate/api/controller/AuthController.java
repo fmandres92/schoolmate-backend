@@ -34,7 +34,7 @@ public class AuthController {
                 "apellido", user.getApellido(),
                 "rol", user.getRol().name(),
                 "profesorId", user.getProfesorId(),
-                "alumnoId", user.getAlumnoId()
+                "apoderadoId", user.getApoderadoId()
         ));
     }
 }
