@@ -181,7 +181,7 @@ Clase: `ApiErrorResponse`
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway V1..V20
+    └── db/migration          # migraciones Flyway versionadas en repo: V1..V18
 ```
 
 ### TODAS las clases por paquete
@@ -376,15 +376,15 @@ Clase: `ApiErrorResponse`
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD (migración) | Constraints |
 |---|---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` | PK |
+| `id` | `UUID` | `id` | `UUID` | PK |
 | `email` | `String` | `email` | `VARCHAR(255)` | NOT NULL, UNIQUE |
 | `rut` | `String` | `rut` | `VARCHAR(20)` | nullable, UNIQUE parcial (`rut IS NOT NULL`) |
 | `passwordHash` | `String` | `password_hash` | `VARCHAR(255)` | NOT NULL |
 | `nombre` | `String` | `nombre` | `VARCHAR(100)` | NOT NULL |
 | `apellido` | `String` | `apellido` | `VARCHAR(100)` | NOT NULL |
 | `rol` | `Rol` | `rol` | `VARCHAR(20)` | NOT NULL |
-| `profesorId` | `String` | `profesor_id` | `VARCHAR(36)` | nullable |
-| `apoderadoId` | `String` | `apoderado_id` | `VARCHAR(36)` | nullable |
+| `profesorId` | `UUID` | `profesor_id` | `UUID` | nullable |
+| `apoderadoId` | `UUID` | `apoderado_id` | `UUID` | nullable |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
@@ -400,7 +400,7 @@ Nota de integridad:
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD esperado | Constraints |
 |---|---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` | PK |
+| `id` | `UUID` | `id` | `UUID` | PK |
 | `nombre` | `String` | `nombre` | `VARCHAR(100)` | NOT NULL |
 | `apellido` | `String` | `apellido` | `VARCHAR(100)` | NOT NULL |
 | `rut` | `String` | `rut` | `VARCHAR(20)` | UNIQUE, nullable |
@@ -413,8 +413,8 @@ Nota de integridad:
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD esperado | Constraints |
 |---|---|---|---|---|
-| `id.apoderadoId` | `String` | `apoderado_id` | `VARCHAR(36)` | PK compuesta, FK lógica |
-| `id.alumnoId` | `String` | `alumno_id` | `VARCHAR(36)` | PK compuesta, FK lógica |
+| `id.apoderadoId` | `UUID` | `apoderado_id` | `UUID` | PK compuesta, FK lógica |
+| `id.alumnoId` | `UUID` | `alumno_id` | `UUID` | PK compuesta, FK lógica |
 | `esPrincipal` | `Boolean` | `es_principal` | `BOOLEAN` | NOT NULL |
 | `vinculo` | `VinculoApoderado` | `vinculo` | `VARCHAR(20)` | NOT NULL (`MADRE`,`PADRE`,`TUTOR_LEGAL`,`ABUELO`,`OTRO`) |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
@@ -429,7 +429,7 @@ Relaciones JPA:
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD esperado |
 |---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` |
+| `id` | `UUID` | `id` | `UUID` |
 | `ano` | `Integer` | `ano` | `INTEGER` |
 | `fechaInicioPlanificacion` | `LocalDate` | `fecha_inicio_planificacion` | `DATE` |
 | `fechaInicio` | `LocalDate` | `fecha_inicio` | `DATE` |
@@ -449,7 +449,7 @@ Divergencia: `V3` crea `ano_escolar` con columna `activo` y **sin** `fecha_inici
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
 |---|---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` | PK |
+| `id` | `UUID` | `id` | `UUID` | PK |
 | `nombre` | `String` | `nombre` | `VARCHAR(50)` | NOT NULL |
 | `nivel` | `Integer` | `nivel` | `INTEGER` | NOT NULL |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
@@ -461,9 +461,10 @@ Divergencia: `V3` crea `ano_escolar` con columna `activo` y **sin** `fecha_inici
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
 |---|---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` | PK |
+| `id` | `UUID` | `id` | `UUID` | PK |
 | `nombre` | `String` | `nombre` | `VARCHAR(100)` | NOT NULL |
 | `icono` | `String` | `icono` | `VARCHAR(50)` | nullable |
+| `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
 
@@ -471,7 +472,7 @@ Divergencia: `V3` crea `ano_escolar` con columna `activo` y **sin** `fecha_inici
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
 |---|---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` | PK |
+| `id` | `UUID` | `id` | `UUID` | PK |
 | `rut` | `String` | `rut` | `VARCHAR(20)` | NOT NULL, UNIQUE |
 | `nombre` | `String` | `nombre` | `VARCHAR(100)` | NOT NULL |
 | `apellido` | `String` | `apellido` | `VARCHAR(100)` | NOT NULL |
@@ -493,11 +494,11 @@ Relaciones:
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
 |---|---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` | PK |
+| `id` | `UUID` | `id` | `UUID` | PK |
 | `nombre` | `String` | `nombre` | `VARCHAR(50)` | NOT NULL |
 | `letra` | `String` | `letra` | `VARCHAR(5)` (V5), validado a 1 char por V10 | NOT NULL |
-| `grado` | `Grado` | `grado_id` | `VARCHAR(36)` | FK NOT NULL |
-| `anoEscolar` | `AnoEscolar` | `ano_escolar_id` | `VARCHAR(36)` | FK NOT NULL |
+| `grado` | `Grado` | `grado_id` | `UUID` | FK NOT NULL |
+| `anoEscolar` | `AnoEscolar` | `ano_escolar_id` | `UUID` | FK NOT NULL |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
@@ -522,7 +523,7 @@ Relaciones:
 
 | Campo Java | Tipo Java | Columna BD esperada | Tipo BD esperado |
 |---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` |
+| `id` | `UUID` | `id` | `UUID` |
 | `rut` | `String` | `rut` | `VARCHAR(20)` UNIQUE |
 | `nombre` | `String` | `nombre` | `VARCHAR(100)` |
 | `apellido` | `String` | `apellido` | `VARCHAR(100)` |
@@ -537,10 +538,10 @@ Divergencia/migraciones: `V7__create_alumnos.sql` y `V8__seed_alumnos.sql` está
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
 |---|---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` | PK |
-| `alumno` | `Alumno` | `alumno_id` | `VARCHAR(36)` | FK NOT NULL |
-| `curso` | `Curso` | `curso_id` | `VARCHAR(36)` | FK NOT NULL |
-| `anoEscolar` | `AnoEscolar` | `ano_escolar_id` | `VARCHAR(36)` | FK NOT NULL |
+| `id` | `UUID` | `id` | `UUID` | PK |
+| `alumno` | `Alumno` | `alumno_id` | `UUID` | FK NOT NULL |
+| `curso` | `Curso` | `curso_id` | `UUID` | FK NOT NULL |
+| `anoEscolar` | `AnoEscolar` | `ano_escolar_id` | `UUID` | FK NOT NULL |
 | `fechaMatricula` | `LocalDate` | `fecha_matricula` | `DATE` | NOT NULL |
 | `estado` | `EstadoMatricula` | `estado` | `VARCHAR(20)` | NOT NULL DEFAULT ACTIVA |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
@@ -558,10 +559,10 @@ Relaciones:
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
 |---|---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` | PK |
-| `materia` | `Materia` | `materia_id` | `VARCHAR(36)` | FK NOT NULL |
-| `grado` | `Grado` | `grado_id` | `VARCHAR(36)` | FK NOT NULL |
-| `anoEscolar` | `AnoEscolar` | `ano_escolar_id` | `VARCHAR(36)` | FK NOT NULL |
+| `id` | `UUID` | `id` | `UUID` | PK |
+| `materia` | `Materia` | `materia_id` | `UUID` | FK NOT NULL |
+| `grado` | `Grado` | `grado_id` | `UUID` | FK NOT NULL |
+| `anoEscolar` | `AnoEscolar` | `ano_escolar_id` | `UUID` | FK NOT NULL |
 | `horasPedagogicas` | `Integer` | `horas_pedagogicas` | `INTEGER` | NOT NULL DEFAULT 2 |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
@@ -579,15 +580,15 @@ Constraint: `uq_malla_materia_grado_ano`.
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
 |---|---|---|---|---|
-| `id` | `String` | `id` | `VARCHAR(36)` | PK |
-| `curso` | `Curso` | `curso_id` | `VARCHAR(36)` | FK NOT NULL |
+| `id` | `UUID` | `id` | `UUID` | PK |
+| `curso` | `Curso` | `curso_id` | `UUID` | FK NOT NULL |
 | `diaSemana` | `Integer` | `dia_semana` | `INTEGER` | CHECK 1..5 |
 | `numeroBloque` | `Integer` | `numero_bloque` | `INTEGER` | NOT NULL |
 | `horaInicio` | `LocalTime` | `hora_inicio` | `TIME` | NOT NULL |
 | `horaFin` | `LocalTime` | `hora_fin` | `TIME` | NOT NULL, > inicio |
 | `tipo` | `TipoBloque` | `tipo` | `VARCHAR(20)` | NOT NULL (`CLASE`,`RECREO`,`ALMUERZO`) |
-| `profesor` | `Profesor` | `profesor_id` | `VARCHAR(36)` | FK nullable |
-| `materia` | `Materia` | `materia_id` | `VARCHAR(36)` | FK nullable |
+| `profesor` | `Profesor` | `profesor_id` | `UUID` | FK nullable |
+| `materia` | `Materia` | `materia_id` | `UUID` | FK nullable |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
@@ -607,7 +608,7 @@ Constraints DB adicionales:
 
 Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 
-- `created_at` + `updated_at`: `Usuario`, `AnoEscolar`, `Grado`, `Materia`, `Profesor`, `Curso`, `Alumno`, `Matricula`, `MallaCurricular`, `BloqueHorario`.
+- `created_at` + `updated_at`: `Usuario`, `AnoEscolar`, `Grado`, `Materia`, `Profesor`, `Curso`, `Alumno`, `Matricula`, `MallaCurricular`, `BloqueHorario`, `AsistenciaClase`, `RegistroAsistencia`, `Apoderado`.
 - Solo `created_at`: `SeccionCatalogo`.
 
 ### Enums usados y valores
@@ -622,7 +623,7 @@ Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 
 ```text
 usuario
-  (profesor_id, apoderado_id como string sin FK JPA)
+  (profesor_id, apoderado_id como UUID sin FK JPA)
 
 apoderado 1---* apoderado_alumno *---1 alumno
 
@@ -672,6 +673,8 @@ seccion_catalogo 1---* curso (por letra)
 16. `V16__create_asistencia.sql`
 17. `V17__apoderado_entity.sql`
 18. `V18__req04_alumno_con_apoderado.sql`
+19. `V19__consolidacion_integridad_y_performance.sql` *(aplicada en BD, no versionada en este repo)*
+20. `V20__migracion_uuid_nativo.sql` *(aplicada en BD, no versionada en este repo)*
 
 ### Qué hace cada migración
 
@@ -695,11 +698,14 @@ seccion_catalogo 1---* curso (por letra)
 | `V16` | Crea `asistencia_clase` y `registro_asistencia` con FKs, índices y unicidad por bloque/fecha y por alumno en una clase |
 | `V17` | Migración marcador: documenta refactor de apoderado ejecutado directamente en Supabase (`apoderado`, `apoderado_alumno`, `usuario.apoderado_id`) sin DDL en Flyway |
 | `V18` | Migración marcador REQ-04: documenta `ALTER TABLE apoderado_alumno ADD COLUMN vinculo VARCHAR(20) NOT NULL DEFAULT 'OTRO'` ejecutado directamente en Supabase |
+| `V19` | Consolidación de integridad/performance en BD y base para nuevos campos de dominio (incluye soporte para `materia.activo` y `registro_asistencia.observacion`) |
+| `V20` | Migración global a UUID nativo en BD (`id`/FKs) para entidades de negocio |
 
 ### Estado resultante del esquema (según migraciones + código)
 
 - Modelo oficial en código y queries usa: `usuario`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
 - `apoderado_alumno` incorpora columna `vinculo` en el modelo actual (REQ-04) y es tratada como enum `VinculoApoderado` en JPA.
+- IDs/FKs operativos en modelo actual: `UUID` (alineado con V20).
 - Riesgo de drift:
   - `ano_escolar.fecha_inicio_planificacion` requerido por código pero no aparece en `V3`.
   - `alumno` no está versionado explícitamente en repo (V7/V8 placeholders).
@@ -717,7 +723,7 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V18+` para cualquier ajuste de esquema.
+2. Crear nueva `V21+` para cualquier ajuste de esquema (V19/V20 ya aplicadas en BD).
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
@@ -775,7 +781,7 @@ Infraestructura MVC implementada:
 
 Importante:
 
-- El header usa el mismo tipo de ID real de `ano_escolar.id` (en este proyecto es `String`, p. ej. `"1"`, `"2"`, `"3"` en seed), no se exige UUID.
+- El header usa el tipo real de `ano_escolar.id` en el modelo actual (`UUID`), por lo que se valida formato UUID.
 - Los endpoints migrados usan estrategia gradual: prioridad `header > query/body` para mantener compatibilidad temporal con frontend anterior.
 
 ### `JwtAuthenticationFilter`
@@ -1524,7 +1530,7 @@ Reglas adicionales en controller:
   - registro en `WebMvcConfig`
 - Regla de prioridad en endpoints migrados: `header > query/body`.
 - Compatibilidad temporal: se mantienen query params/campos body legacy `anoEscolarId` como fallback.
-- El ID aceptado en header es `String` (no UUID obligatorio), consistente con `ano_escolar.id` actual.
+- El ID aceptado en header es `UUID`, consistente con `ano_escolar.id` actual.
 
 ### Generación automática de curso (nombre + letra)
 
