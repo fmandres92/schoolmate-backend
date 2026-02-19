@@ -1,5 +1,5 @@
 -- Auto-generated schema snapshot from live PostgreSQL
--- Generated at: 2026-02-18T17:49:02.126629-03:00
+-- Generated at: 2026-02-19T14:54:36.304616-03:00
 
 -- Table: auth.audit_log_entries
 CREATE TABLE "auth"."audit_log_entries" (
@@ -442,7 +442,7 @@ CREATE UNIQUE INDEX users_phone_key ON auth.users USING btree (phone);
 
 -- Table: public.alumno
 CREATE TABLE "public"."alumno" (
-    "id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
     "rut" character varying(20) NOT NULL,
     "nombre" character varying(100) NOT NULL,
     "apellido" character varying(100) NOT NULL,
@@ -457,11 +457,10 @@ ALTER TABLE ONLY "public"."alumno" ADD CONSTRAINT "alumno_rut_key" UNIQUE (rut);
 
 CREATE UNIQUE INDEX alumno_rut_key ON public.alumno USING btree (rut);
 CREATE INDEX idx_alumno_activo ON public.alumno USING btree (activo);
-CREATE INDEX idx_alumno_rut ON public.alumno USING btree (rut);
 
 -- Table: public.ano_escolar
 CREATE TABLE "public"."ano_escolar" (
-    "id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
     "ano" integer NOT NULL,
     "fecha_inicio" date NOT NULL,
     "fecha_fin" date NOT NULL,
@@ -474,12 +473,11 @@ ALTER TABLE ONLY "public"."ano_escolar" ADD CONSTRAINT "ano_escolar_pkey" PRIMAR
 ALTER TABLE ONLY "public"."ano_escolar" ADD CONSTRAINT "uq_ano_escolar_ano" UNIQUE (ano);
 ALTER TABLE ONLY "public"."ano_escolar" ADD CONSTRAINT "chk_fechas_orden" CHECK (fecha_inicio_planificacion < fecha_inicio AND fecha_inicio < fecha_fin);
 
-CREATE INDEX idx_ano_escolar_ano ON public.ano_escolar USING btree (ano);
 CREATE UNIQUE INDEX uq_ano_escolar_ano ON public.ano_escolar USING btree (ano);
 
 -- Table: public.apoderado
 CREATE TABLE "public"."apoderado" (
-    "id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
     "nombre" character varying(100) NOT NULL,
     "apellido" character varying(100) NOT NULL,
     "rut" character varying(20),
@@ -495,13 +493,11 @@ ALTER TABLE ONLY "public"."apoderado" ADD CONSTRAINT "apoderado_rut_key" UNIQUE 
 
 CREATE UNIQUE INDEX apoderado_email_key ON public.apoderado USING btree (email);
 CREATE UNIQUE INDEX apoderado_rut_key ON public.apoderado USING btree (rut);
-CREATE INDEX idx_apoderado_email ON public.apoderado USING btree (email);
-CREATE INDEX idx_apoderado_rut ON public.apoderado USING btree (rut);
 
 -- Table: public.apoderado_alumno
 CREATE TABLE "public"."apoderado_alumno" (
-    "apoderado_id" character varying(36) NOT NULL,
-    "alumno_id" character varying(36) NOT NULL,
+    "apoderado_id" uuid NOT NULL,
+    "alumno_id" uuid NOT NULL,
     "es_principal" boolean DEFAULT true NOT NULL,
     "created_at" timestamp without time zone DEFAULT now() NOT NULL,
     "vinculo" character varying(20) DEFAULT 'OTRO'::character varying NOT NULL
@@ -510,16 +506,17 @@ CREATE TABLE "public"."apoderado_alumno" (
 ALTER TABLE ONLY "public"."apoderado_alumno" ADD CONSTRAINT "apoderado_alumno_pkey" PRIMARY KEY (apoderado_id, alumno_id);
 ALTER TABLE ONLY "public"."apoderado_alumno" ADD CONSTRAINT "apoderado_alumno_alumno_id_fkey" FOREIGN KEY (alumno_id) REFERENCES alumno(id);
 ALTER TABLE ONLY "public"."apoderado_alumno" ADD CONSTRAINT "apoderado_alumno_apoderado_id_fkey" FOREIGN KEY (apoderado_id) REFERENCES apoderado(id);
+ALTER TABLE ONLY "public"."apoderado_alumno" ADD CONSTRAINT "chk_apoderado_alumno_vinculo" CHECK (vinculo::text = ANY (ARRAY['MADRE'::character varying, 'PADRE'::character varying, 'TUTOR_LEGAL'::character varying, 'ABUELO'::character varying, 'OTRO'::character varying]::text[]));
 
 CREATE INDEX idx_apoderado_alumno_alumno_id ON public.apoderado_alumno USING btree (alumno_id);
 
 -- Table: public.asistencia_clase
 CREATE TABLE "public"."asistencia_clase" (
-    "id" character varying(36) NOT NULL,
-    "bloque_horario_id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+    "bloque_horario_id" uuid NOT NULL,
     "fecha" date NOT NULL,
-    "created_at" timestamp without time zone NOT NULL,
-    "updated_at" timestamp without time zone NOT NULL
+    "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
 ALTER TABLE ONLY "public"."asistencia_clase" ADD CONSTRAINT "asistencia_clase_pkey" PRIMARY KEY (id);
@@ -532,15 +529,15 @@ CREATE UNIQUE INDEX uk_asistencia_clase_bloque_fecha ON public.asistencia_clase 
 
 -- Table: public.bloque_horario
 CREATE TABLE "public"."bloque_horario" (
-    "id" character varying(36) NOT NULL,
-    "curso_id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+    "curso_id" uuid NOT NULL,
     "dia_semana" integer NOT NULL,
     "numero_bloque" integer NOT NULL,
     "hora_inicio" time without time zone NOT NULL,
     "hora_fin" time without time zone NOT NULL,
     "tipo" character varying(20) NOT NULL,
-    "materia_id" character varying(36),
-    "profesor_id" character varying(36),
+    "materia_id" uuid,
+    "profesor_id" uuid,
     "activo" boolean DEFAULT true NOT NULL,
     "created_at" timestamp without time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp without time zone DEFAULT now() NOT NULL
@@ -553,9 +550,10 @@ ALTER TABLE ONLY "public"."bloque_horario" ADD CONSTRAINT "bloque_horario_profes
 ALTER TABLE ONLY "public"."bloque_horario" ADD CONSTRAINT "ck_bloque_dia_semana" CHECK (dia_semana >= 1 AND dia_semana <= 5);
 ALTER TABLE ONLY "public"."bloque_horario" ADD CONSTRAINT "ck_bloque_hora_fin" CHECK (hora_fin > hora_inicio);
 ALTER TABLE ONLY "public"."bloque_horario" ADD CONSTRAINT "ck_bloque_tipo" CHECK (tipo::text = ANY (ARRAY['CLASE'::character varying, 'RECREO'::character varying, 'ALMUERZO'::character varying]::text[]));
-ALTER TABLE ONLY "public"."bloque_horario" ADD CONSTRAINT "ck_bloque_tipo_campos" CHECK ((tipo::text = ANY (ARRAY['RECREO'::character varying, 'ALMUERZO'::character varying]::text[])) AND materia_id IS NULL AND profesor_id IS NULL OR tipo::text = 'CLASE'::text);
+ALTER TABLE ONLY "public"."bloque_horario" ADD CONSTRAINT "ck_bloque_tipo_campos" CHECK ((tipo::text = ANY (ARRAY['RECREO'::character varying::text, 'ALMUERZO'::character varying::text])) AND materia_id IS NULL AND profesor_id IS NULL OR tipo::text = 'CLASE'::text);
 
 CREATE INDEX idx_bloque_horario_curso ON public.bloque_horario USING btree (curso_id);
+CREATE INDEX idx_bloque_horario_curso_activo_tipo ON public.bloque_horario USING btree (curso_id, activo, tipo) WHERE ((activo = true) AND ((tipo)::text = 'CLASE'::text));
 CREATE INDEX idx_bloque_horario_curso_dia ON public.bloque_horario USING btree (curso_id, dia_semana);
 CREATE INDEX idx_bloque_horario_profesor_dia ON public.bloque_horario USING btree (profesor_id, dia_semana) WHERE ((activo = true) AND (profesor_id IS NOT NULL));
 CREATE UNIQUE INDEX uq_bloque_curso_dia_hora_activo ON public.bloque_horario USING btree (curso_id, dia_semana, hora_inicio) WHERE (activo = true);
@@ -563,11 +561,11 @@ CREATE UNIQUE INDEX uq_bloque_curso_dia_numero_activo ON public.bloque_horario U
 
 -- Table: public.curso
 CREATE TABLE "public"."curso" (
-    "id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
     "nombre" character varying(50) NOT NULL,
     "letra" character varying(5) NOT NULL,
-    "grado_id" character varying(36) NOT NULL,
-    "ano_escolar_id" character varying(36) NOT NULL,
+    "grado_id" uuid NOT NULL,
+    "ano_escolar_id" uuid NOT NULL,
     "activo" boolean DEFAULT true NOT NULL,
     "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
@@ -586,7 +584,7 @@ CREATE UNIQUE INDEX uq_curso_grado_ano_letra ON public.curso USING btree (grado_
 
 -- Table: public.grado
 CREATE TABLE "public"."grado" (
-    "id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
     "nombre" character varying(50) NOT NULL,
     "nivel" integer NOT NULL,
     "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -594,15 +592,19 @@ CREATE TABLE "public"."grado" (
 );
 
 ALTER TABLE ONLY "public"."grado" ADD CONSTRAINT "grado_pkey" PRIMARY KEY (id);
+ALTER TABLE ONLY "public"."grado" ADD CONSTRAINT "uq_grado_nivel" UNIQUE (nivel);
+ALTER TABLE ONLY "public"."grado" ADD CONSTRAINT "uq_grado_nombre" UNIQUE (nombre);
 
 CREATE INDEX idx_grado_nivel ON public.grado USING btree (nivel);
+CREATE UNIQUE INDEX uq_grado_nivel ON public.grado USING btree (nivel);
+CREATE UNIQUE INDEX uq_grado_nombre ON public.grado USING btree (nombre);
 
 -- Table: public.malla_curricular
 CREATE TABLE "public"."malla_curricular" (
-    "id" character varying(36) NOT NULL,
-    "materia_id" character varying(36) NOT NULL,
-    "grado_id" character varying(36) NOT NULL,
-    "ano_escolar_id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+    "materia_id" uuid NOT NULL,
+    "grado_id" uuid NOT NULL,
+    "ano_escolar_id" uuid NOT NULL,
     "horas_pedagogicas" integer DEFAULT 2 NOT NULL,
     "activo" boolean DEFAULT true NOT NULL,
     "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -614,6 +616,7 @@ ALTER TABLE ONLY "public"."malla_curricular" ADD CONSTRAINT "uq_malla_materia_gr
 ALTER TABLE ONLY "public"."malla_curricular" ADD CONSTRAINT "malla_curricular_ano_escolar_id_fkey" FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id);
 ALTER TABLE ONLY "public"."malla_curricular" ADD CONSTRAINT "malla_curricular_grado_id_fkey" FOREIGN KEY (grado_id) REFERENCES grado(id);
 ALTER TABLE ONLY "public"."malla_curricular" ADD CONSTRAINT "malla_curricular_materia_id_fkey" FOREIGN KEY (materia_id) REFERENCES materia(id);
+ALTER TABLE ONLY "public"."malla_curricular" ADD CONSTRAINT "chk_malla_horas_positivas" CHECK (horas_pedagogicas > 0);
 
 CREATE INDEX idx_malla_activo ON public.malla_curricular USING btree (activo);
 CREATE INDEX idx_malla_ano_escolar ON public.malla_curricular USING btree (ano_escolar_id);
@@ -624,22 +627,26 @@ CREATE UNIQUE INDEX uq_malla_materia_grado_ano ON public.malla_curricular USING 
 
 -- Table: public.materia
 CREATE TABLE "public"."materia" (
-    "id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
     "nombre" character varying(100) NOT NULL,
     "icono" character varying(50),
     "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "activo" boolean DEFAULT true NOT NULL
 );
 
 ALTER TABLE ONLY "public"."materia" ADD CONSTRAINT "materia_pkey" PRIMARY KEY (id);
+ALTER TABLE ONLY "public"."materia" ADD CONSTRAINT "uq_materia_nombre" UNIQUE (nombre);
 
+CREATE INDEX idx_materia_activo ON public.materia USING btree (activo);
+CREATE UNIQUE INDEX uq_materia_nombre ON public.materia USING btree (nombre);
 
 -- Table: public.matricula
 CREATE TABLE "public"."matricula" (
-    "id" character varying(36) NOT NULL,
-    "alumno_id" character varying(36) NOT NULL,
-    "curso_id" character varying(36) NOT NULL,
-    "ano_escolar_id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+    "alumno_id" uuid NOT NULL,
+    "curso_id" uuid NOT NULL,
+    "ano_escolar_id" uuid NOT NULL,
     "fecha_matricula" date NOT NULL,
     "estado" character varying(20) DEFAULT 'ACTIVA'::character varying NOT NULL,
     "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -650,9 +657,11 @@ ALTER TABLE ONLY "public"."matricula" ADD CONSTRAINT "matricula_pkey" PRIMARY KE
 ALTER TABLE ONLY "public"."matricula" ADD CONSTRAINT "matricula_alumno_id_fkey" FOREIGN KEY (alumno_id) REFERENCES alumno(id);
 ALTER TABLE ONLY "public"."matricula" ADD CONSTRAINT "matricula_ano_escolar_id_fkey" FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id);
 ALTER TABLE ONLY "public"."matricula" ADD CONSTRAINT "matricula_curso_id_fkey" FOREIGN KEY (curso_id) REFERENCES curso(id);
+ALTER TABLE ONLY "public"."matricula" ADD CONSTRAINT "chk_matricula_estado" CHECK (estado::text = ANY (ARRAY['ACTIVA'::character varying, 'RETIRADO'::character varying, 'TRASLADADO'::character varying]::text[]));
 
 CREATE INDEX idx_matricula_alumno ON public.matricula USING btree (alumno_id);
 CREATE INDEX idx_matricula_ano_escolar ON public.matricula USING btree (ano_escolar_id);
+CREATE INDEX idx_matricula_ano_estado ON public.matricula USING btree (ano_escolar_id, estado);
 CREATE INDEX idx_matricula_curso ON public.matricula USING btree (curso_id);
 CREATE INDEX idx_matricula_curso_estado ON public.matricula USING btree (curso_id, estado);
 CREATE INDEX idx_matricula_estado ON public.matricula USING btree (estado);
@@ -660,7 +669,7 @@ CREATE UNIQUE INDEX uq_matricula_alumno_ano_activa ON public.matricula USING btr
 
 -- Table: public.profesor
 CREATE TABLE "public"."profesor" (
-    "id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
     "rut" character varying(20) NOT NULL,
     "nombre" character varying(100) NOT NULL,
     "apellido" character varying(100) NOT NULL,
@@ -676,16 +685,16 @@ CREATE TABLE "public"."profesor" (
 ALTER TABLE ONLY "public"."profesor" ADD CONSTRAINT "profesor_pkey" PRIMARY KEY (id);
 ALTER TABLE ONLY "public"."profesor" ADD CONSTRAINT "profesor_email_key" UNIQUE (email);
 ALTER TABLE ONLY "public"."profesor" ADD CONSTRAINT "profesor_rut_key" UNIQUE (rut);
+ALTER TABLE ONLY "public"."profesor" ADD CONSTRAINT "chk_profesor_horas_contrato" CHECK (horas_pedagogicas_contrato IS NULL OR horas_pedagogicas_contrato > 0);
 
 CREATE INDEX idx_profesor_activo ON public.profesor USING btree (activo);
-CREATE INDEX idx_profesor_email ON public.profesor USING btree (email);
 CREATE UNIQUE INDEX profesor_email_key ON public.profesor USING btree (email);
 CREATE UNIQUE INDEX profesor_rut_key ON public.profesor USING btree (rut);
 
 -- Table: public.profesor_materia
 CREATE TABLE "public"."profesor_materia" (
-    "profesor_id" character varying(36) NOT NULL,
-    "materia_id" character varying(36) NOT NULL
+    "profesor_id" uuid NOT NULL,
+    "materia_id" uuid NOT NULL
 );
 
 ALTER TABLE ONLY "public"."profesor_materia" ADD CONSTRAINT "profesor_materia_pkey" PRIMARY KEY (profesor_id, materia_id);
@@ -695,21 +704,23 @@ ALTER TABLE ONLY "public"."profesor_materia" ADD CONSTRAINT "profesor_materia_pr
 
 -- Table: public.registro_asistencia
 CREATE TABLE "public"."registro_asistencia" (
-    "id" character varying(36) NOT NULL,
-    "asistencia_clase_id" character varying(36) NOT NULL,
-    "alumno_id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+    "asistencia_clase_id" uuid NOT NULL,
+    "alumno_id" uuid NOT NULL,
     "estado" character varying(20) NOT NULL,
-    "created_at" timestamp without time zone NOT NULL,
-    "updated_at" timestamp without time zone NOT NULL
+    "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "observacion" character varying(500)
 );
 
 ALTER TABLE ONLY "public"."registro_asistencia" ADD CONSTRAINT "registro_asistencia_pkey" PRIMARY KEY (id);
 ALTER TABLE ONLY "public"."registro_asistencia" ADD CONSTRAINT "uk_registro_asistencia_clase_alumno" UNIQUE (asistencia_clase_id, alumno_id);
 ALTER TABLE ONLY "public"."registro_asistencia" ADD CONSTRAINT "fk_registro_asistencia_alumno" FOREIGN KEY (alumno_id) REFERENCES alumno(id);
 ALTER TABLE ONLY "public"."registro_asistencia" ADD CONSTRAINT "fk_registro_asistencia_clase" FOREIGN KEY (asistencia_clase_id) REFERENCES asistencia_clase(id) ON DELETE CASCADE;
-ALTER TABLE ONLY "public"."registro_asistencia" ADD CONSTRAINT "chk_registro_asistencia_estado" CHECK (estado::text = ANY (ARRAY['PRESENTE'::character varying, 'AUSENTE'::character varying]::text[]));
+ALTER TABLE ONLY "public"."registro_asistencia" ADD CONSTRAINT "chk_registro_asistencia_estado" CHECK (estado::text = ANY (ARRAY['PRESENTE'::character varying, 'AUSENTE'::character varying, 'TARDANZA'::character varying, 'JUSTIFICADO'::character varying]::text[]));
 
 CREATE INDEX idx_registro_asistencia_alumno ON public.registro_asistencia USING btree (alumno_id);
+CREATE INDEX idx_registro_asistencia_alumno_clase ON public.registro_asistencia USING btree (alumno_id, asistencia_clase_id);
 CREATE INDEX idx_registro_asistencia_clase ON public.registro_asistencia USING btree (asistencia_clase_id);
 CREATE UNIQUE INDEX uk_registro_asistencia_clase_alumno ON public.registro_asistencia USING btree (asistencia_clase_id, alumno_id);
 
@@ -728,26 +739,28 @@ CREATE UNIQUE INDEX seccion_catalogo_orden_key ON public.seccion_catalogo USING 
 
 -- Table: public.usuario
 CREATE TABLE "public"."usuario" (
-    "id" character varying(36) NOT NULL,
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
     "email" character varying(255) NOT NULL,
     "password_hash" character varying(255) NOT NULL,
     "nombre" character varying(100) NOT NULL,
     "apellido" character varying(100) NOT NULL,
     "rol" character varying(20) NOT NULL,
-    "profesor_id" character varying(36),
+    "profesor_id" uuid,
     "activo" boolean DEFAULT true NOT NULL,
     "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     "rut" character varying(20),
-    "apoderado_id" character varying(36)
+    "apoderado_id" uuid
 );
 
 ALTER TABLE ONLY "public"."usuario" ADD CONSTRAINT "usuario_pkey" PRIMARY KEY (id);
 ALTER TABLE ONLY "public"."usuario" ADD CONSTRAINT "usuario_email_key" UNIQUE (email);
+ALTER TABLE ONLY "public"."usuario" ADD CONSTRAINT "fk_usuario_profesor" FOREIGN KEY (profesor_id) REFERENCES profesor(id);
 ALTER TABLE ONLY "public"."usuario" ADD CONSTRAINT "usuario_apoderado_id_fkey" FOREIGN KEY (apoderado_id) REFERENCES apoderado(id);
+ALTER TABLE ONLY "public"."usuario" ADD CONSTRAINT "chk_usuario_rol" CHECK (rol::text = ANY (ARRAY['ADMIN'::character varying, 'PROFESOR'::character varying, 'APODERADO'::character varying]::text[]));
 
 CREATE INDEX idx_usuario_apoderado ON public.usuario USING btree (apoderado_id);
-CREATE INDEX idx_usuario_email ON public.usuario USING btree (email);
+CREATE INDEX idx_usuario_profesor ON public.usuario USING btree (profesor_id) WHERE (profesor_id IS NOT NULL);
 CREATE INDEX idx_usuario_rol ON public.usuario USING btree (rol);
 CREATE UNIQUE INDEX usuario_email_key ON public.usuario USING btree (email);
 CREATE UNIQUE INDEX ux_usuario_rut_not_null ON public.usuario USING btree (rut) WHERE (rut IS NOT NULL);

@@ -1,6 +1,6 @@
 # Database Structure Inventory
 
-Generated at: `2026-02-18T17:49:02.137834-03:00`  
+Generated at: `2026-02-19T14:54:36.313856-03:00`  
 Source: live PostgreSQL catalog (`information_schema` + `pg_catalog`)  
 Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres?sslmode=require`
 
@@ -8,7 +8,7 @@ Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres
 
 - Schemas: **5**
 - Tables: **47**
-- Foreign Keys: **41**
+- Foreign Keys: **42**
 
 ## Relationships (Foreign Keys)
 
@@ -47,6 +47,7 @@ Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres
 - `public.profesor_materia` -> `profesor_materia_profesor_id_fkey`: `FOREIGN KEY (profesor_id) REFERENCES profesor(id)`
 - `public.registro_asistencia` -> `fk_registro_asistencia_alumno`: `FOREIGN KEY (alumno_id) REFERENCES alumno(id)`
 - `public.registro_asistencia` -> `fk_registro_asistencia_clase`: `FOREIGN KEY (asistencia_clase_id) REFERENCES asistencia_clase(id) ON DELETE CASCADE`
+- `public.usuario` -> `fk_usuario_profesor`: `FOREIGN KEY (profesor_id) REFERENCES profesor(id)`
 - `public.usuario` -> `usuario_apoderado_id_fkey`: `FOREIGN KEY (apoderado_id) REFERENCES apoderado(id)`
 - `storage.objects` -> `objects_bucketId_fkey`: `FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id)`
 - `storage.s3_multipart_uploads` -> `s3_multipart_uploads_bucket_id_fkey`: `FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id)`
@@ -661,7 +662,7 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
 | `rut` | `character varying(20)` | NO | `` |
 | `nombre` | `character varying(100)` | NO | `` |
 | `apellido` | `character varying(100)` | NO | `` |
@@ -680,7 +681,6 @@ Indexes:
 - [PK-INDEX] `alumno_pkey`: `CREATE UNIQUE INDEX alumno_pkey ON public.alumno USING btree (id)`
 - [INDEX] `alumno_rut_key`: `CREATE UNIQUE INDEX alumno_rut_key ON public.alumno USING btree (rut)`
 - [INDEX] `idx_alumno_activo`: `CREATE INDEX idx_alumno_activo ON public.alumno USING btree (activo)`
-- [INDEX] `idx_alumno_rut`: `CREATE INDEX idx_alumno_rut ON public.alumno USING btree (rut)`
 
 ### `public.ano_escolar`
 
@@ -688,7 +688,7 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
 | `ano` | `integer` | NO | `` |
 | `fecha_inicio` | `date` | NO | `` |
 | `fecha_fin` | `date` | NO | `` |
@@ -705,7 +705,6 @@ Constraints:
 Indexes:
 
 - [PK-INDEX] `ano_escolar_pkey`: `CREATE UNIQUE INDEX ano_escolar_pkey ON public.ano_escolar USING btree (id)`
-- [INDEX] `idx_ano_escolar_ano`: `CREATE INDEX idx_ano_escolar_ano ON public.ano_escolar USING btree (ano)`
 - [INDEX] `uq_ano_escolar_ano`: `CREATE UNIQUE INDEX uq_ano_escolar_ano ON public.ano_escolar USING btree (ano)`
 
 ### `public.apoderado`
@@ -714,7 +713,7 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
 | `nombre` | `character varying(100)` | NO | `` |
 | `apellido` | `character varying(100)` | NO | `` |
 | `rut` | `character varying(20)` | YES | `` |
@@ -734,8 +733,6 @@ Indexes:
 - [INDEX] `apoderado_email_key`: `CREATE UNIQUE INDEX apoderado_email_key ON public.apoderado USING btree (email)`
 - [PK-INDEX] `apoderado_pkey`: `CREATE UNIQUE INDEX apoderado_pkey ON public.apoderado USING btree (id)`
 - [INDEX] `apoderado_rut_key`: `CREATE UNIQUE INDEX apoderado_rut_key ON public.apoderado USING btree (rut)`
-- [INDEX] `idx_apoderado_email`: `CREATE INDEX idx_apoderado_email ON public.apoderado USING btree (email)`
-- [INDEX] `idx_apoderado_rut`: `CREATE INDEX idx_apoderado_rut ON public.apoderado USING btree (rut)`
 
 ### `public.apoderado_alumno`
 
@@ -743,8 +740,8 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `apoderado_id` | `character varying(36)` | NO | `` |
-| `alumno_id` | `character varying(36)` | NO | `` |
+| `apoderado_id` | `uuid` | NO | `` |
+| `alumno_id` | `uuid` | NO | `` |
 | `es_principal` | `boolean` | NO | `true` |
 | `created_at` | `timestamp without time zone` | NO | `now()` |
 | `vinculo` | `character varying(20)` | NO | `'OTRO'::character varying` |
@@ -754,6 +751,7 @@ Constraints:
 - [PK] `apoderado_alumno_pkey`: `PRIMARY KEY (apoderado_id, alumno_id)`
 - [FK] `apoderado_alumno_alumno_id_fkey`: `FOREIGN KEY (alumno_id) REFERENCES alumno(id)`
 - [FK] `apoderado_alumno_apoderado_id_fkey`: `FOREIGN KEY (apoderado_id) REFERENCES apoderado(id)`
+- [CHECK] `chk_apoderado_alumno_vinculo`: `CHECK (vinculo::text = ANY (ARRAY['MADRE'::character varying, 'PADRE'::character varying, 'TUTOR_LEGAL'::character varying, 'ABUELO'::character varying, 'OTRO'::character varying]::text[]))`
 
 Indexes:
 
@@ -766,11 +764,11 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
-| `bloque_horario_id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
+| `bloque_horario_id` | `uuid` | NO | `` |
 | `fecha` | `date` | NO | `` |
-| `created_at` | `timestamp without time zone` | NO | `` |
-| `updated_at` | `timestamp without time zone` | NO | `` |
+| `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
+| `updated_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
 
 Constraints:
 
@@ -791,15 +789,15 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
-| `curso_id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
+| `curso_id` | `uuid` | NO | `` |
 | `dia_semana` | `integer` | NO | `` |
 | `numero_bloque` | `integer` | NO | `` |
 | `hora_inicio` | `time without time zone` | NO | `` |
 | `hora_fin` | `time without time zone` | NO | `` |
 | `tipo` | `character varying(20)` | NO | `` |
-| `materia_id` | `character varying(36)` | YES | `` |
-| `profesor_id` | `character varying(36)` | YES | `` |
+| `materia_id` | `uuid` | YES | `` |
+| `profesor_id` | `uuid` | YES | `` |
 | `activo` | `boolean` | NO | `true` |
 | `created_at` | `timestamp without time zone` | NO | `now()` |
 | `updated_at` | `timestamp without time zone` | NO | `now()` |
@@ -813,12 +811,13 @@ Constraints:
 - [CHECK] `ck_bloque_dia_semana`: `CHECK (dia_semana >= 1 AND dia_semana <= 5)`
 - [CHECK] `ck_bloque_hora_fin`: `CHECK (hora_fin > hora_inicio)`
 - [CHECK] `ck_bloque_tipo`: `CHECK (tipo::text = ANY (ARRAY['CLASE'::character varying, 'RECREO'::character varying, 'ALMUERZO'::character varying]::text[]))`
-- [CHECK] `ck_bloque_tipo_campos`: `CHECK ((tipo::text = ANY (ARRAY['RECREO'::character varying, 'ALMUERZO'::character varying]::text[])) AND materia_id IS NULL AND profesor_id IS NULL OR tipo::text = 'CLASE'::text)`
+- [CHECK] `ck_bloque_tipo_campos`: `CHECK ((tipo::text = ANY (ARRAY['RECREO'::character varying::text, 'ALMUERZO'::character varying::text])) AND materia_id IS NULL AND profesor_id IS NULL OR tipo::text = 'CLASE'::text)`
 
 Indexes:
 
 - [PK-INDEX] `bloque_horario_pkey`: `CREATE UNIQUE INDEX bloque_horario_pkey ON public.bloque_horario USING btree (id)`
 - [INDEX] `idx_bloque_horario_curso`: `CREATE INDEX idx_bloque_horario_curso ON public.bloque_horario USING btree (curso_id)`
+- [INDEX] `idx_bloque_horario_curso_activo_tipo`: `CREATE INDEX idx_bloque_horario_curso_activo_tipo ON public.bloque_horario USING btree (curso_id, activo, tipo) WHERE ((activo = true) AND ((tipo)::text = 'CLASE'::text))`
 - [INDEX] `idx_bloque_horario_curso_dia`: `CREATE INDEX idx_bloque_horario_curso_dia ON public.bloque_horario USING btree (curso_id, dia_semana)`
 - [INDEX] `idx_bloque_horario_profesor_dia`: `CREATE INDEX idx_bloque_horario_profesor_dia ON public.bloque_horario USING btree (profesor_id, dia_semana) WHERE ((activo = true) AND (profesor_id IS NOT NULL))`
 - [INDEX] `uq_bloque_curso_dia_hora_activo`: `CREATE UNIQUE INDEX uq_bloque_curso_dia_hora_activo ON public.bloque_horario USING btree (curso_id, dia_semana, hora_inicio) WHERE (activo = true)`
@@ -830,11 +829,11 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
 | `nombre` | `character varying(50)` | NO | `` |
 | `letra` | `character varying(5)` | NO | `` |
-| `grado_id` | `character varying(36)` | NO | `` |
-| `ano_escolar_id` | `character varying(36)` | NO | `` |
+| `grado_id` | `uuid` | NO | `` |
+| `ano_escolar_id` | `uuid` | NO | `` |
 | `activo` | `boolean` | NO | `true` |
 | `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
 | `updated_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
@@ -861,7 +860,7 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
 | `nombre` | `character varying(50)` | NO | `` |
 | `nivel` | `integer` | NO | `` |
 | `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
@@ -870,11 +869,15 @@ Columns:
 Constraints:
 
 - [PK] `grado_pkey`: `PRIMARY KEY (id)`
+- [UNIQUE] `uq_grado_nivel`: `UNIQUE (nivel)`
+- [UNIQUE] `uq_grado_nombre`: `UNIQUE (nombre)`
 
 Indexes:
 
 - [PK-INDEX] `grado_pkey`: `CREATE UNIQUE INDEX grado_pkey ON public.grado USING btree (id)`
 - [INDEX] `idx_grado_nivel`: `CREATE INDEX idx_grado_nivel ON public.grado USING btree (nivel)`
+- [INDEX] `uq_grado_nivel`: `CREATE UNIQUE INDEX uq_grado_nivel ON public.grado USING btree (nivel)`
+- [INDEX] `uq_grado_nombre`: `CREATE UNIQUE INDEX uq_grado_nombre ON public.grado USING btree (nombre)`
 
 ### `public.malla_curricular`
 
@@ -882,10 +885,10 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
-| `materia_id` | `character varying(36)` | NO | `` |
-| `grado_id` | `character varying(36)` | NO | `` |
-| `ano_escolar_id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
+| `materia_id` | `uuid` | NO | `` |
+| `grado_id` | `uuid` | NO | `` |
+| `ano_escolar_id` | `uuid` | NO | `` |
 | `horas_pedagogicas` | `integer` | NO | `2` |
 | `activo` | `boolean` | NO | `true` |
 | `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
@@ -898,6 +901,7 @@ Constraints:
 - [FK] `malla_curricular_ano_escolar_id_fkey`: `FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id)`
 - [FK] `malla_curricular_grado_id_fkey`: `FOREIGN KEY (grado_id) REFERENCES grado(id)`
 - [FK] `malla_curricular_materia_id_fkey`: `FOREIGN KEY (materia_id) REFERENCES materia(id)`
+- [CHECK] `chk_malla_horas_positivas`: `CHECK (horas_pedagogicas > 0)`
 
 Indexes:
 
@@ -915,19 +919,23 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
 | `nombre` | `character varying(100)` | NO | `` |
 | `icono` | `character varying(50)` | YES | `` |
 | `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
 | `updated_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
+| `activo` | `boolean` | NO | `true` |
 
 Constraints:
 
 - [PK] `materia_pkey`: `PRIMARY KEY (id)`
+- [UNIQUE] `uq_materia_nombre`: `UNIQUE (nombre)`
 
 Indexes:
 
+- [INDEX] `idx_materia_activo`: `CREATE INDEX idx_materia_activo ON public.materia USING btree (activo)`
 - [PK-INDEX] `materia_pkey`: `CREATE UNIQUE INDEX materia_pkey ON public.materia USING btree (id)`
+- [INDEX] `uq_materia_nombre`: `CREATE UNIQUE INDEX uq_materia_nombre ON public.materia USING btree (nombre)`
 
 ### `public.matricula`
 
@@ -935,10 +943,10 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
-| `alumno_id` | `character varying(36)` | NO | `` |
-| `curso_id` | `character varying(36)` | NO | `` |
-| `ano_escolar_id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
+| `alumno_id` | `uuid` | NO | `` |
+| `curso_id` | `uuid` | NO | `` |
+| `ano_escolar_id` | `uuid` | NO | `` |
 | `fecha_matricula` | `date` | NO | `` |
 | `estado` | `character varying(20)` | NO | `'ACTIVA'::character varying` |
 | `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
@@ -950,11 +958,13 @@ Constraints:
 - [FK] `matricula_alumno_id_fkey`: `FOREIGN KEY (alumno_id) REFERENCES alumno(id)`
 - [FK] `matricula_ano_escolar_id_fkey`: `FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id)`
 - [FK] `matricula_curso_id_fkey`: `FOREIGN KEY (curso_id) REFERENCES curso(id)`
+- [CHECK] `chk_matricula_estado`: `CHECK (estado::text = ANY (ARRAY['ACTIVA'::character varying, 'RETIRADO'::character varying, 'TRASLADADO'::character varying]::text[]))`
 
 Indexes:
 
 - [INDEX] `idx_matricula_alumno`: `CREATE INDEX idx_matricula_alumno ON public.matricula USING btree (alumno_id)`
 - [INDEX] `idx_matricula_ano_escolar`: `CREATE INDEX idx_matricula_ano_escolar ON public.matricula USING btree (ano_escolar_id)`
+- [INDEX] `idx_matricula_ano_estado`: `CREATE INDEX idx_matricula_ano_estado ON public.matricula USING btree (ano_escolar_id, estado)`
 - [INDEX] `idx_matricula_curso`: `CREATE INDEX idx_matricula_curso ON public.matricula USING btree (curso_id)`
 - [INDEX] `idx_matricula_curso_estado`: `CREATE INDEX idx_matricula_curso_estado ON public.matricula USING btree (curso_id, estado)`
 - [INDEX] `idx_matricula_estado`: `CREATE INDEX idx_matricula_estado ON public.matricula USING btree (estado)`
@@ -967,7 +977,7 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
 | `rut` | `character varying(20)` | NO | `` |
 | `nombre` | `character varying(100)` | NO | `` |
 | `apellido` | `character varying(100)` | NO | `` |
@@ -984,11 +994,11 @@ Constraints:
 - [PK] `profesor_pkey`: `PRIMARY KEY (id)`
 - [UNIQUE] `profesor_email_key`: `UNIQUE (email)`
 - [UNIQUE] `profesor_rut_key`: `UNIQUE (rut)`
+- [CHECK] `chk_profesor_horas_contrato`: `CHECK (horas_pedagogicas_contrato IS NULL OR horas_pedagogicas_contrato > 0)`
 
 Indexes:
 
 - [INDEX] `idx_profesor_activo`: `CREATE INDEX idx_profesor_activo ON public.profesor USING btree (activo)`
-- [INDEX] `idx_profesor_email`: `CREATE INDEX idx_profesor_email ON public.profesor USING btree (email)`
 - [INDEX] `profesor_email_key`: `CREATE UNIQUE INDEX profesor_email_key ON public.profesor USING btree (email)`
 - [PK-INDEX] `profesor_pkey`: `CREATE UNIQUE INDEX profesor_pkey ON public.profesor USING btree (id)`
 - [INDEX] `profesor_rut_key`: `CREATE UNIQUE INDEX profesor_rut_key ON public.profesor USING btree (rut)`
@@ -999,8 +1009,8 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `profesor_id` | `character varying(36)` | NO | `` |
-| `materia_id` | `character varying(36)` | NO | `` |
+| `profesor_id` | `uuid` | NO | `` |
+| `materia_id` | `uuid` | NO | `` |
 
 Constraints:
 
@@ -1018,12 +1028,13 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
-| `asistencia_clase_id` | `character varying(36)` | NO | `` |
-| `alumno_id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
+| `asistencia_clase_id` | `uuid` | NO | `` |
+| `alumno_id` | `uuid` | NO | `` |
 | `estado` | `character varying(20)` | NO | `` |
-| `created_at` | `timestamp without time zone` | NO | `` |
-| `updated_at` | `timestamp without time zone` | NO | `` |
+| `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
+| `updated_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
+| `observacion` | `character varying(500)` | YES | `` |
 
 Constraints:
 
@@ -1031,11 +1042,12 @@ Constraints:
 - [UNIQUE] `uk_registro_asistencia_clase_alumno`: `UNIQUE (asistencia_clase_id, alumno_id)`
 - [FK] `fk_registro_asistencia_alumno`: `FOREIGN KEY (alumno_id) REFERENCES alumno(id)`
 - [FK] `fk_registro_asistencia_clase`: `FOREIGN KEY (asistencia_clase_id) REFERENCES asistencia_clase(id) ON DELETE CASCADE`
-- [CHECK] `chk_registro_asistencia_estado`: `CHECK (estado::text = ANY (ARRAY['PRESENTE'::character varying, 'AUSENTE'::character varying]::text[]))`
+- [CHECK] `chk_registro_asistencia_estado`: `CHECK (estado::text = ANY (ARRAY['PRESENTE'::character varying, 'AUSENTE'::character varying, 'TARDANZA'::character varying, 'JUSTIFICADO'::character varying]::text[]))`
 
 Indexes:
 
 - [INDEX] `idx_registro_asistencia_alumno`: `CREATE INDEX idx_registro_asistencia_alumno ON public.registro_asistencia USING btree (alumno_id)`
+- [INDEX] `idx_registro_asistencia_alumno_clase`: `CREATE INDEX idx_registro_asistencia_alumno_clase ON public.registro_asistencia USING btree (alumno_id, asistencia_clase_id)`
 - [INDEX] `idx_registro_asistencia_clase`: `CREATE INDEX idx_registro_asistencia_clase ON public.registro_asistencia USING btree (asistencia_clase_id)`
 - [PK-INDEX] `registro_asistencia_pkey`: `CREATE UNIQUE INDEX registro_asistencia_pkey ON public.registro_asistencia USING btree (id)`
 - [INDEX] `uk_registro_asistencia_clase_alumno`: `CREATE UNIQUE INDEX uk_registro_asistencia_clase_alumno ON public.registro_asistencia USING btree (asistencia_clase_id, alumno_id)`
@@ -1067,29 +1079,31 @@ Columns:
 
 | Name | Type | Nullable | Default |
 |---|---|---|---|
-| `id` | `character varying(36)` | NO | `` |
+| `id` | `uuid` | NO | `gen_random_uuid()` |
 | `email` | `character varying(255)` | NO | `` |
 | `password_hash` | `character varying(255)` | NO | `` |
 | `nombre` | `character varying(100)` | NO | `` |
 | `apellido` | `character varying(100)` | NO | `` |
 | `rol` | `character varying(20)` | NO | `` |
-| `profesor_id` | `character varying(36)` | YES | `` |
+| `profesor_id` | `uuid` | YES | `` |
 | `activo` | `boolean` | NO | `true` |
 | `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
 | `updated_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
 | `rut` | `character varying(20)` | YES | `` |
-| `apoderado_id` | `character varying(36)` | YES | `` |
+| `apoderado_id` | `uuid` | YES | `` |
 
 Constraints:
 
 - [PK] `usuario_pkey`: `PRIMARY KEY (id)`
 - [UNIQUE] `usuario_email_key`: `UNIQUE (email)`
+- [FK] `fk_usuario_profesor`: `FOREIGN KEY (profesor_id) REFERENCES profesor(id)`
 - [FK] `usuario_apoderado_id_fkey`: `FOREIGN KEY (apoderado_id) REFERENCES apoderado(id)`
+- [CHECK] `chk_usuario_rol`: `CHECK (rol::text = ANY (ARRAY['ADMIN'::character varying, 'PROFESOR'::character varying, 'APODERADO'::character varying]::text[]))`
 
 Indexes:
 
 - [INDEX] `idx_usuario_apoderado`: `CREATE INDEX idx_usuario_apoderado ON public.usuario USING btree (apoderado_id)`
-- [INDEX] `idx_usuario_email`: `CREATE INDEX idx_usuario_email ON public.usuario USING btree (email)`
+- [INDEX] `idx_usuario_profesor`: `CREATE INDEX idx_usuario_profesor ON public.usuario USING btree (profesor_id) WHERE (profesor_id IS NOT NULL)`
 - [INDEX] `idx_usuario_rol`: `CREATE INDEX idx_usuario_rol ON public.usuario USING btree (rol)`
 - [INDEX] `usuario_email_key`: `CREATE UNIQUE INDEX usuario_email_key ON public.usuario USING btree (email)`
 - [PK-INDEX] `usuario_pkey`: `CREATE UNIQUE INDEX usuario_pkey ON public.usuario USING btree (id)`
