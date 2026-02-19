@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "materia")
@@ -18,13 +19,18 @@ import java.time.LocalDateTime;
 public class Materia {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false)
     private String nombre;
 
     @Column
     private String icono;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean activo = true;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -34,9 +40,11 @@ public class Materia {
 
     @PrePersist
     protected void onCreate() {
-        this.id = this.id != null ? this.id : java.util.UUID.randomUUID().toString();
         this.createdAt = TimeContext.now();
         this.updatedAt = TimeContext.now();
+        if (this.activo == null) {
+            this.activo = true;
+        }
     }
 
     @PreUpdate

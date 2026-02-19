@@ -6,29 +6,30 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public interface MallaCurricularRepository extends JpaRepository<MallaCurricular, String> {
+public interface MallaCurricularRepository extends JpaRepository<MallaCurricular, UUID> {
 
-    List<MallaCurricular> findByAnoEscolarIdAndActivoTrue(String anoEscolarId);
+    List<MallaCurricular> findByAnoEscolarIdAndActivoTrue(UUID anoEscolarId);
 
-    List<MallaCurricular> findByMateriaIdAndAnoEscolarId(String materiaId, String anoEscolarId);
+    List<MallaCurricular> findByMateriaIdAndAnoEscolarId(UUID materiaId, UUID anoEscolarId);
 
-    List<MallaCurricular> findByGradoIdAndAnoEscolarId(String gradoId, String anoEscolarId);
+    List<MallaCurricular> findByGradoIdAndAnoEscolarId(UUID gradoId, UUID anoEscolarId);
 
-    List<MallaCurricular> findByGradoIdAndAnoEscolarIdAndActivoTrue(String gradoId, String anoEscolarId);
+    List<MallaCurricular> findByGradoIdAndAnoEscolarIdAndActivoTrue(UUID gradoId, UUID anoEscolarId);
 
     Optional<MallaCurricular> findByMateriaIdAndGradoIdAndAnoEscolarId(
-        String materiaId,
-        String gradoId,
-        String anoEscolarId
+        UUID materiaId,
+        UUID gradoId,
+        UUID anoEscolarId
     );
 
     Optional<MallaCurricular> findByMateriaIdAndGradoIdAndAnoEscolarIdAndActivoTrue(
-        String materiaId,
-        String gradoId,
-        String anoEscolarId
+        UUID materiaId,
+        UUID gradoId,
+        UUID anoEscolarId
     );
 
-    boolean existsByMateriaIdAndGradoIdAndAnoEscolarId(String materiaId, String gradoId, String anoEscolarId);
+    boolean existsByMateriaIdAndGradoIdAndAnoEscolarId(UUID materiaId, UUID gradoId, UUID anoEscolarId);
 }

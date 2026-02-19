@@ -8,30 +8,31 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
-public interface MatriculaRepository extends JpaRepository<Matricula, String> {
-
-    @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
-    List<Matricula> findByAlumnoId(String alumnoId);
+public interface MatriculaRepository extends JpaRepository<Matricula, UUID> {
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
-    List<Matricula> findByCursoIdAndEstado(String cursoId, EstadoMatricula estado);
+    List<Matricula> findByAlumnoId(UUID alumnoId);
+
+    @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
+    List<Matricula> findByCursoIdAndEstado(UUID cursoId, EstadoMatricula estado);
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
     Optional<Matricula> findByAlumnoIdAndAnoEscolarIdAndEstado(
-        String alumnoId, String anoEscolarId, EstadoMatricula estado);
+        UUID alumnoId, UUID anoEscolarId, EstadoMatricula estado);
 
     boolean existsByAlumnoIdAndAnoEscolarIdAndEstado(
-        String alumnoId, String anoEscolarId, EstadoMatricula estado);
+        UUID alumnoId, UUID anoEscolarId, EstadoMatricula estado);
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
-    List<Matricula> findByAnoEscolarIdAndEstado(String anoEscolarId, EstadoMatricula estado);
+    List<Matricula> findByAnoEscolarIdAndEstado(UUID anoEscolarId, EstadoMatricula estado);
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
     List<Matricula> findByCursoIdAndEstadoOrderByAlumnoApellidoAsc(
-        String cursoId, EstadoMatricula estado);
+        UUID cursoId, EstadoMatricula estado);
 
-    long countByCursoIdAndEstado(String cursoId, EstadoMatricula estado);
+    long countByCursoIdAndEstado(UUID cursoId, EstadoMatricula estado);
 
     @Query("""
         select m.curso.id, count(m.id)
@@ -40,5 +41,5 @@ public interface MatriculaRepository extends JpaRepository<Matricula, String> {
           and m.curso.id in :cursoIds
         group by m.curso.id
         """)
-    List<Object[]> countActivasByCursoIds(List<String> cursoIds, EstadoMatricula estado);
+    List<Object[]> countActivasByCursoIds(List<UUID> cursoIds, EstadoMatricula estado);
 }

@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.enums.EstadoAnoEscolar;
@@ -8,7 +9,7 @@ import lombok.Data;
 @Data
 @Builder
 public class AnoEscolarResponse {
-    private String id;
+    private UUID id;
     private Integer ano;
     private String fechaInicioPlanificacion;
     private String fechaInicio;

@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.common.rut.RutNormalizer;
 import com.schoolmate.api.dto.ApoderadoBuscarResponse;
@@ -92,7 +93,7 @@ public class ApoderadoController {
     }
 
     @GetMapping("/por-alumno/{alumnoId}")
-    public ResponseEntity<ApoderadoResponse> obtenerPorAlumno(@PathVariable String alumnoId) {
+    public ResponseEntity<ApoderadoResponse> obtenerPorAlumno(@PathVariable UUID alumnoId) {
         if (!alumnoRepo.existsById(alumnoId)) {
             throw new ResourceNotFoundException("Alumno no encontrado");
         }

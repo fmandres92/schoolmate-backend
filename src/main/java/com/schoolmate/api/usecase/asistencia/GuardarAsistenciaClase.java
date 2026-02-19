@@ -36,6 +36,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -51,7 +52,7 @@ public class GuardarAsistenciaClase {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public AsistenciaClaseResponse execute(GuardarAsistenciaRequest request, String profesorId) {
+    public AsistenciaClaseResponse execute(GuardarAsistenciaRequest request, UUID profesorId) {
         BloqueHorario bloque = bloqueHorarioRepository.findById(request.getBloqueHorarioId())
             .orElseThrow(() -> new ResourceNotFoundException("Bloque horario no encontrado"));
 
@@ -101,9 +102,9 @@ public class GuardarAsistenciaClase {
 
         List<Matricula> matriculasActivas = matriculaRepository.findByCursoIdAndEstado(
             bloque.getCurso().getId(), EstadoMatricula.ACTIVA);
-        Map<String, Alumno> alumnosActivosById = matriculasActivas.stream()
+        Map<UUID, Alumno> alumnosActivosById = matriculasActivas.stream()
             .collect(Collectors.toMap(m -> m.getAlumno().getId(), Matricula::getAlumno, (a, b) -> a));
-        Set<String> alumnosActivos = alumnosActivosById.keySet();
+        Set<UUID> alumnosActivos = alumnosActivosById.keySet();
 
         validarRegistros(request.getRegistros(), alumnosActivos);
 
@@ -146,7 +147,7 @@ public class GuardarAsistenciaClase {
 
     private List<RegistroAsistencia> construirRegistros(
         List<RegistroAlumnoRequest> registrosRequest,
-        Map<String, Alumno> alumnosActivosById,
+        Map<UUID, Alumno> alumnosActivosById,
         AsistenciaClase asistenciaClase,
         LocalDateTime ahora
     ) {
@@ -157,6 +158,7 @@ public class GuardarAsistenciaClase {
                 .asistenciaClase(asistenciaClase)
                 .alumno(alumno)
                 .estado(registroRequest.getEstado())
+                .observacion(registroRequest.getObservacion())
                 .createdAt(ahora)
                 .updatedAt(ahora)
                 .build();
@@ -165,11 +167,11 @@ public class GuardarAsistenciaClase {
         return registros;
     }
 
-    private void validarRegistros(List<RegistroAlumnoRequest> registros, Set<String> alumnosActivos) {
-        Set<String> vistos = new HashSet<>();
-        List<String> invalidos = new ArrayList<>();
+    private void validarRegistros(List<RegistroAlumnoRequest> registros, Set<UUID> alumnosActivos) {
+        Set<UUID> vistos = new HashSet<>();
+        List<UUID> invalidos = new ArrayList<>();
         for (RegistroAlumnoRequest registro : registros) {
-            String alumnoId = registro.getAlumnoId();
+            UUID alumnoId = registro.getAlumnoId();
             if (!vistos.add(alumnoId)) {
                 throw new BusinessException("Registros de asistencia duplicados para el mismo alumno");
             }
@@ -180,7 +182,10 @@ public class GuardarAsistenciaClase {
 
         if (!invalidos.isEmpty()) {
             Map<String, String> details = new HashMap<>();
-            details.put("alumnosInvalidos", String.join(",", invalidos));
+            details.put(
+                "alumnosInvalidos",
+                invalidos.stream().map(UUID::toString).collect(Collectors.joining(","))
+            );
             throw new BusinessException("Hay alumnos que no tienen matricula activa en el curso", details);
         }
     }
@@ -192,6 +197,7 @@ public class GuardarAsistenciaClase {
                 .alumnoNombre(r.getAlumno().getNombre())
                 .alumnoApellido(r.getAlumno().getApellido())
                 .estado(r.getEstado())
+                .observacion(r.getObservacion())
                 .build())
             .toList();
 

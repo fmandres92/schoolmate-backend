@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -36,7 +37,15 @@ public class AnoEscolarHeaderInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        String anoEscolarId = headerValue.trim();
+        UUID anoEscolarId;
+        try {
+            anoEscolarId = UUID.fromString(headerValue.trim());
+        } catch (IllegalArgumentException e) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "El header X-Ano-Escolar-Id debe contener un UUID válido",
+                    Map.of());
+        }
 
         AnoEscolar anoEscolar = anoEscolarRepository.findById(anoEscolarId)
                 .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado: " + anoEscolarId));

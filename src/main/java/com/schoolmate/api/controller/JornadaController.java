@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.dto.request.AsignarMateriaRequest;
 import com.schoolmate.api.dto.request.AsignarProfesorRequest;
@@ -72,7 +73,7 @@ public class JornadaController {
     @PutMapping("/{diaSemana}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<JornadaDiaResponse> guardarJornada(
-        @PathVariable String cursoId,
+        @PathVariable UUID cursoId,
         @PathVariable Integer diaSemana,
         @Valid @RequestBody JornadaDiaRequest request
     ) {
@@ -82,7 +83,7 @@ public class JornadaController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'APODERADO')")
     public ResponseEntity<JornadaCursoResponse> obtenerJornada(
-        @PathVariable String cursoId,
+        @PathVariable UUID cursoId,
         @RequestParam(required = false) Integer diaSemana,
         @AuthenticationPrincipal UserPrincipal user
     ) {
@@ -94,7 +95,7 @@ public class JornadaController {
 
     @GetMapping("/resumen")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<JornadaResumenResponse> obtenerResumen(@PathVariable String cursoId) {
+    public ResponseEntity<JornadaResumenResponse> obtenerResumen(@PathVariable UUID cursoId) {
         JornadaCursoResponse full = obtenerJornadaCurso.ejecutar(cursoId, null);
         return ResponseEntity.ok(full.getResumen());
     }
@@ -102,7 +103,7 @@ public class JornadaController {
     @PostMapping("/{diaSemanaOrigen}/copiar")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<JornadaCursoResponse> copiarJornada(
-        @PathVariable String cursoId,
+        @PathVariable UUID cursoId,
         @PathVariable Integer diaSemanaOrigen,
         @Valid @RequestBody CopiarJornadaRequest request
     ) {
@@ -112,7 +113,7 @@ public class JornadaController {
     @DeleteMapping("/{diaSemana}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Void> eliminarJornada(
-        @PathVariable String cursoId,
+        @PathVariable UUID cursoId,
         @PathVariable Integer diaSemana
     ) {
         eliminarJornadaDia.ejecutar(cursoId, diaSemana);
@@ -122,8 +123,8 @@ public class JornadaController {
     @GetMapping("/materias-disponibles")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MateriasDisponiblesResponse> obtenerMateriasDisponibles(
-        @PathVariable String cursoId,
-        @RequestParam String bloqueId
+        @PathVariable UUID cursoId,
+        @RequestParam UUID bloqueId
     ) {
         return ResponseEntity.ok(obtenerMateriasDisponibles.execute(cursoId, bloqueId));
     }
@@ -131,8 +132,8 @@ public class JornadaController {
     @PatchMapping("/bloques/{bloqueId}/materia")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BloqueHorarioResponse> asignarMateria(
-        @PathVariable String cursoId,
-        @PathVariable String bloqueId,
+        @PathVariable UUID cursoId,
+        @PathVariable UUID bloqueId,
         @Valid @RequestBody AsignarMateriaRequest request
     ) {
         return ResponseEntity.ok(asignarMateriaBloque.execute(cursoId, bloqueId, request.getMateriaId()));
@@ -141,8 +142,8 @@ public class JornadaController {
     @DeleteMapping("/bloques/{bloqueId}/materia")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BloqueHorarioResponse> quitarMateria(
-        @PathVariable String cursoId,
-        @PathVariable String bloqueId
+        @PathVariable UUID cursoId,
+        @PathVariable UUID bloqueId
     ) {
         return ResponseEntity.ok(quitarMateriaBloque.execute(cursoId, bloqueId));
     }
@@ -150,7 +151,7 @@ public class JornadaController {
     @GetMapping("/asignacion-materias")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AsignacionMateriaResumenResponse> obtenerResumenAsignacion(
-        @PathVariable String cursoId
+        @PathVariable UUID cursoId
     ) {
         return ResponseEntity.ok(obtenerResumenAsignacionMaterias.execute(cursoId));
     }
@@ -158,8 +159,8 @@ public class JornadaController {
     @GetMapping("/bloques/{bloqueId}/profesores-disponibles")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ProfesoresDisponiblesResponse> getProfesoresDisponibles(
-        @PathVariable String cursoId,
-        @PathVariable String bloqueId
+        @PathVariable UUID cursoId,
+        @PathVariable UUID bloqueId
     ) {
         return ResponseEntity.ok(obtenerProfesoresDisponibles.execute(cursoId, bloqueId));
     }
@@ -167,8 +168,8 @@ public class JornadaController {
     @PatchMapping("/bloques/{bloqueId}/profesor")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BloqueHorarioResponse> asignarProfesor(
-        @PathVariable String cursoId,
-        @PathVariable String bloqueId,
+        @PathVariable UUID cursoId,
+        @PathVariable UUID bloqueId,
         @Valid @RequestBody AsignarProfesorRequest request
     ) {
         return ResponseEntity.ok(asignarProfesorBloque.execute(cursoId, bloqueId, request.getProfesorId()));
@@ -177,8 +178,8 @@ public class JornadaController {
     @DeleteMapping("/bloques/{bloqueId}/profesor")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<BloqueHorarioResponse> quitarProfesor(
-        @PathVariable String cursoId,
-        @PathVariable String bloqueId
+        @PathVariable UUID cursoId,
+        @PathVariable UUID bloqueId
     ) {
         return ResponseEntity.ok(quitarProfesorBloque.execute(cursoId, bloqueId));
     }
@@ -186,13 +187,13 @@ public class JornadaController {
     @GetMapping("/asignacion-profesores")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AsignacionProfesoresResumenResponse> getResumenAsignacionProfesores(
-        @PathVariable String cursoId
+        @PathVariable UUID cursoId
     ) {
         return ResponseEntity.ok(obtenerResumenAsignacionProfesores.execute(cursoId));
     }
 
-    private void validarOwnershipApoderadoCurso(String apoderadoId, String cursoId) {
-        Set<String> alumnoIds = apoderadoAlumnoRepo.findByApoderadoId(apoderadoId).stream()
+    private void validarOwnershipApoderadoCurso(UUID apoderadoId, UUID cursoId) {
+        Set<UUID> alumnoIds = apoderadoAlumnoRepo.findByApoderadoId(apoderadoId).stream()
                 .map(ApoderadoAlumno::getId)
                 .map(id -> id.getAlumnoId())
                 .collect(Collectors.toSet());

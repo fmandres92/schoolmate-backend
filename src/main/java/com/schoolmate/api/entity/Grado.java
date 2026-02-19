@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "grado")
@@ -18,7 +19,8 @@ import java.time.LocalDateTime;
 public class Grado {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false)
     private String nombre;
@@ -34,7 +36,6 @@ public class Grado {
 
     @PrePersist
     protected void onCreate() {
-        this.id = this.id != null ? this.id : java.util.UUID.randomUUID().toString();
         this.createdAt = TimeContext.now();
         this.updatedAt = TimeContext.now();
     }

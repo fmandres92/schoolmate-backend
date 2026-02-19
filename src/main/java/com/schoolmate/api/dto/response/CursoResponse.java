@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import com.schoolmate.api.entity.Curso;
 import lombok.AllArgsConstructor;
@@ -11,12 +12,12 @@ import java.util.List;
 @Data
 @Builder
 public class CursoResponse {
-    private String id;
+    private UUID id;
     private String nombre;
     private String letra;
-    private String gradoId;
+    private UUID gradoId;
     private String gradoNombre;
-    private String anoEscolarId;
+    private UUID anoEscolarId;
     private Integer anoEscolar;
     private Boolean activo;
     private Long alumnosMatriculados;
@@ -64,7 +65,7 @@ public class CursoResponse {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class MateriaCargaResponse {
-        private String materiaId;
+        private UUID materiaId;
         private String materiaNombre;
         private String materiaIcono;
         private Integer horasPedagogicas;

@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import com.schoolmate.api.entity.Materia;
 import lombok.AllArgsConstructor;
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 @Builder
 public class MateriaResponse {
 
-    private String id;
+    private UUID id;
     private String nombre;
     private String icono;
     private LocalDateTime createdAt;

@@ -9,6 +9,8 @@ import com.schoolmate.api.repository.ProfesorRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class RutValidationService {
@@ -36,7 +38,7 @@ public class RutValidationService {
         }
     }
 
-    public void validarRutDisponible(String rutNormalizado, TipoPersona tipoActual, String idEntidadActual) {
+    public void validarRutDisponible(String rutNormalizado, TipoPersona tipoActual, UUID idEntidadActual) {
         if (tipoActual != TipoPersona.ALUMNO && alumnoRepository.existsByRut(rutNormalizado)) {
             throw new ConflictException("Este RUT ya está registrado como alumno en el sistema.");
         }

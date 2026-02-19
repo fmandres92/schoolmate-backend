@@ -22,6 +22,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -44,7 +45,7 @@ public class GuardarJornadaDia {
     );
 
     @Transactional
-    public JornadaDiaResponse ejecutar(String cursoId, Integer diaSemana, JornadaDiaRequest request) {
+    public JornadaDiaResponse ejecutar(UUID cursoId, Integer diaSemana, JornadaDiaRequest request) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado: " + cursoId));
 

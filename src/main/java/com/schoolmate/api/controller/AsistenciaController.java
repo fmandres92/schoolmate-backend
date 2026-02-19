@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/asistencia")
@@ -43,7 +44,7 @@ public class AsistenciaController {
     @PreAuthorize("hasRole('PROFESOR')")
     public ResponseEntity<AsistenciaClaseResponse> obtener(
         @AuthenticationPrincipal UserPrincipal user,
-        @RequestParam String bloqueHorarioId,
+        @RequestParam UUID bloqueHorarioId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha
     ) {
         AsistenciaClaseResponse response = obtenerAsistenciaClase.execute(

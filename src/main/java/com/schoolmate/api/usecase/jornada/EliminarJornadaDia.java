@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Component
 @RequiredArgsConstructor
 public class EliminarJornadaDia {
@@ -20,7 +22,7 @@ public class EliminarJornadaDia {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public void ejecutar(String cursoId, Integer diaSemana) {
+    public void ejecutar(UUID cursoId, Integer diaSemana) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado: " + cursoId));
 

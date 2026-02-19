@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.CursoRequest;
@@ -51,10 +52,10 @@ public class CursoController {
     @GetMapping
     public ResponseEntity<List<CursoResponse>> listar(
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
-            @RequestParam(required = false) String anoEscolarId,
-            @RequestParam(required = false) String gradoId) {
+            @RequestParam(required = false) UUID anoEscolarId,
+            @RequestParam(required = false) UUID gradoId) {
 
-        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId, false);
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId, false);
         List<Curso> cursos;
 
         if (resolvedAnoEscolarId != null && gradoId != null) {
@@ -65,7 +66,7 @@ public class CursoController {
             cursos = cursoRepository.findAll();
         }
 
-        Map<String, Long> matriculadosPorCurso = obtenerMatriculadosPorCurso(cursos);
+        Map<UUID, Long> matriculadosPorCurso = obtenerMatriculadosPorCurso(cursos);
 
         List<CursoResponse> response = cursos.stream()
                 .map(curso -> CursoResponse.fromEntity(
@@ -76,7 +77,7 @@ public class CursoController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<CursoResponse> obtener(@PathVariable String id) {
+    public ResponseEntity<CursoResponse> obtener(@PathVariable UUID id) {
         Curso curso = cursoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
@@ -116,7 +117,7 @@ public class CursoController {
     public ResponseEntity<CursoResponse> crear(
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @Valid @RequestBody CursoRequest request) {
-        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId(), true);
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId(), true);
 
         Grado grado = gradoRepository.findById(request.getGradoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Grado no encontrado"));
@@ -141,10 +142,10 @@ public class CursoController {
     @PutMapping("/{id}")
     @Transactional
     public ResponseEntity<CursoResponse> actualizar(
-            @PathVariable String id,
+            @PathVariable UUID id,
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @Valid @RequestBody CursoRequest request) {
-        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId(), true);
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId(), true);
 
         Curso curso = cursoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
@@ -173,10 +174,10 @@ public class CursoController {
         return ResponseEntity.ok(CursoResponse.fromEntity(saved));
     }
 
-    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId, boolean required) {
-        String resolvedAnoEscolarId = anoEscolarHeader != null
+    private UUID resolveAnoEscolarId(AnoEscolar anoEscolarHeader, UUID anoEscolarId, boolean required) {
+        UUID resolvedAnoEscolarId = anoEscolarHeader != null
                 ? anoEscolarHeader.getId()
-                : (anoEscolarId == null || anoEscolarId.isBlank() ? null : anoEscolarId.trim());
+                : anoEscolarId;
 
         if (required && resolvedAnoEscolarId == null) {
             throw new ApiException(
@@ -199,7 +200,7 @@ public class CursoController {
         }
     }
 
-    private String resolverLetraDisponible(String gradoId, String anoEscolarId) {
+    private String resolverLetraDisponible(UUID gradoId, UUID anoEscolarId) {
         List<SeccionCatalogo> seccionesDisponibles = seccionCatalogoRepository.findByActivoTrueOrderByOrdenAsc();
         Set<String> letrasOcupadas = new HashSet<>(cursoRepository.findLetrasUsadasByGradoIdAndAnoEscolarId(gradoId, anoEscolarId));
 
@@ -216,18 +217,18 @@ public class CursoController {
         return nombreGrado + " " + letra;
     }
 
-    private Map<String, Long> obtenerMatriculadosPorCurso(List<Curso> cursos) {
+    private Map<UUID, Long> obtenerMatriculadosPorCurso(List<Curso> cursos) {
         if (cursos.isEmpty()) {
             return Map.of();
         }
 
-        List<String> cursoIds = cursos.stream()
+        List<UUID> cursoIds = cursos.stream()
                 .map(Curso::getId)
                 .toList();
 
-        Map<String, Long> counts = new HashMap<>();
+        Map<UUID, Long> counts = new HashMap<>();
         for (Object[] row : matriculaRepository.countActivasByCursoIds(cursoIds, EstadoMatricula.ACTIVA)) {
-            counts.put((String) row[0], (Long) row[1]);
+            counts.put((UUID) row[0], (Long) row[1]);
         }
         return counts;
     }

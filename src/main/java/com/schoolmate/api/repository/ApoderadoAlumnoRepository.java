@@ -7,31 +7,32 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface ApoderadoAlumnoRepository extends JpaRepository<ApoderadoAlumno, ApoderadoAlumnoId> {
 
-    boolean existsByIdApoderadoIdAndIdAlumnoId(String apoderadoId, String alumnoId);
+    boolean existsByIdApoderadoIdAndIdAlumnoId(UUID apoderadoId, UUID alumnoId);
 
-    List<ApoderadoAlumno> findByIdApoderadoId(String apoderadoId);
+    List<ApoderadoAlumno> findByIdApoderadoId(UUID apoderadoId);
 
-    List<ApoderadoAlumno> findByIdAlumnoId(String alumnoId);
+    List<ApoderadoAlumno> findByIdAlumnoId(UUID alumnoId);
 
-    default List<ApoderadoAlumno> findByApoderadoId(String apoderadoId) {
+    default List<ApoderadoAlumno> findByApoderadoId(UUID apoderadoId) {
         return findByIdApoderadoId(apoderadoId);
     }
 
-    default List<ApoderadoAlumno> findByAlumnoId(String alumnoId) {
+    default List<ApoderadoAlumno> findByAlumnoId(UUID alumnoId) {
         return findByIdAlumnoId(alumnoId);
     }
 
-    default boolean existsByAlumnoId(String alumnoId) {
+    default boolean existsByAlumnoId(UUID alumnoId) {
         return !findByIdAlumnoId(alumnoId).isEmpty();
     }
 
-    default boolean existsByApoderadoIdAndAlumnoId(String apoderadoId, String alumnoId) {
+    default boolean existsByApoderadoIdAndAlumnoId(UUID apoderadoId, UUID alumnoId) {
         return existsByIdApoderadoIdAndIdAlumnoId(apoderadoId, alumnoId);
     }
 
     @Query("SELECT aa FROM ApoderadoAlumno aa JOIN FETCH aa.alumno WHERE aa.id.apoderadoId = :apoderadoId")
-    List<ApoderadoAlumno> findByApoderadoIdWithAlumno(@Param("apoderadoId") String apoderadoId);
+    List<ApoderadoAlumno> findByApoderadoIdWithAlumno(@Param("apoderadoId") UUID apoderadoId);
 }

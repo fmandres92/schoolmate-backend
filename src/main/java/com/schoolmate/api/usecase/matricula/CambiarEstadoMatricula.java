@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Component
 @RequiredArgsConstructor
 public class CambiarEstadoMatricula {
@@ -16,7 +18,7 @@ public class CambiarEstadoMatricula {
     private final MatriculaRepository matriculaRepository;
 
     @Transactional
-    public Matricula execute(String matriculaId, EstadoMatricula nuevoEstado) {
+    public Matricula execute(UUID matriculaId, EstadoMatricula nuevoEstado) {
         Matricula matricula = matriculaRepository.findById(matriculaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Matrícula no encontrada"));
 

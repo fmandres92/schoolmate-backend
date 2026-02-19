@@ -6,12 +6,13 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.Optional;
+import java.util.UUID;
 
-public interface AlumnoRepository extends JpaRepository<Alumno, String>, JpaSpecificationExecutor<Alumno> {
+public interface AlumnoRepository extends JpaRepository<Alumno, UUID>, JpaSpecificationExecutor<Alumno> {
 
     boolean existsByRut(String rut);
 
-    boolean existsByRutAndIdNot(String rut, String id);
+    boolean existsByRutAndIdNot(String rut, UUID id);
 
     @Query(value = """
         SELECT *

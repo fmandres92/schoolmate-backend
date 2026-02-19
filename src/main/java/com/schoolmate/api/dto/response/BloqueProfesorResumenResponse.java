@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import lombok.Builder;
 import lombok.Data;
@@ -7,7 +8,7 @@ import lombok.Data;
 @Builder
 public class BloqueProfesorResumenResponse {
 
-    private String bloqueId;
+    private UUID bloqueId;
     private Integer diaSemana;
     private Integer numeroBloque;
     private String horaInicio;

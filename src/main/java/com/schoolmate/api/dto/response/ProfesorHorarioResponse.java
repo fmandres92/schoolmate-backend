@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import lombok.Builder;
 import lombok.Data;
@@ -9,9 +10,9 @@ import java.util.List;
 @Builder
 public class ProfesorHorarioResponse {
 
-    private String profesorId;
+    private UUID profesorId;
     private String profesorNombre;
-    private String anoEscolarId;
+    private UUID anoEscolarId;
     private Integer anoEscolar;
     private Integer horasPedagogicasContrato;
     private Integer horasAsignadas;
@@ -36,13 +37,13 @@ public class ProfesorHorarioResponse {
     @Data
     @Builder
     public static class BloqueHorarioProfesor {
-        private String bloqueId;
+        private UUID bloqueId;
         private String horaInicio;
         private String horaFin;
         private int duracionMinutos;
-        private String cursoId;
+        private UUID cursoId;
         private String cursoNombre;
-        private String materiaId;
+        private UUID materiaId;
         private String materiaNombre;
         private String materiaIcono;
     }

@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.entity.Matricula;
@@ -16,7 +17,7 @@ import java.time.LocalDateTime;
 public class AlumnoResponse {
 
     // Datos personales
-    private String id;
+    private UUID id;
     private String rut;
     private String nombre;
     private String apellido;
@@ -36,8 +37,8 @@ public class AlumnoResponse {
     private LocalDateTime updatedAt;
 
     // Matrícula del año consultado (nullable — se llena solo cuando se consulta con anoEscolarId)
-    private String matriculaId;
-    private String cursoId;
+    private UUID matriculaId;
+    private UUID cursoId;
     private String cursoNombre;
     private String gradoNombre;
     private String estadoMatricula;
@@ -80,7 +81,7 @@ public class AlumnoResponse {
     @AllArgsConstructor
     @Builder
     public static class ApoderadoInfo {
-        private String id;
+        private UUID id;
         private String nombre;
         private String apellido;
         private String rut;

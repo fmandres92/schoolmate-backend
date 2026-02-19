@@ -67,7 +67,6 @@ public class CrearProfesorConUsuario {
         Profesor savedProfesor = profesorRepository.save(profesor);
 
         Usuario usuario = Usuario.builder()
-            .id(UUID.randomUUID().toString())
             .email(savedProfesor.getEmail())
             .rut(rutNormalizado)
             .passwordHash(passwordEncoder.encode(rutNormalizado))
@@ -96,10 +95,10 @@ public class CrearProfesorConUsuario {
         }
     }
 
-    private List<Materia> resolverMaterias(List<String> materiaIds) {
+    private List<Materia> resolverMaterias(List<UUID> materiaIds) {
         List<Materia> materias = materiaRepository.findAllById(materiaIds);
-        Set<String> idsEncontrados = materias.stream().map(Materia::getId).collect(Collectors.toSet());
-        Set<String> idsFaltantes = new HashSet<>(materiaIds);
+        Set<UUID> idsEncontrados = materias.stream().map(Materia::getId).collect(Collectors.toSet());
+        Set<UUID> idsFaltantes = new HashSet<>(materiaIds);
         idsFaltantes.removeAll(idsEncontrados);
         if (!idsFaltantes.isEmpty()) {
             throw new ApiException(ErrorCode.MATERIAS_NOT_FOUND, null, new Object[]{idsFaltantes});

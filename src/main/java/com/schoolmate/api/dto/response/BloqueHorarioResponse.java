@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,14 +14,14 @@ import lombok.Setter;
 @AllArgsConstructor
 public class BloqueHorarioResponse {
 
-    private String id;
+    private UUID id;
     private Integer numeroBloque;
     private String horaInicio;
     private String horaFin;
     private String tipo;
-    private String materiaId;
+    private UUID materiaId;
     private String materiaNombre;
     private String materiaIcono;
-    private String profesorId;
+    private UUID profesorId;
     private String profesorNombre;
 }

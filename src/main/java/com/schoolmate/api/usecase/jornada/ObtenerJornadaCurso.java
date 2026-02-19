@@ -16,6 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -26,7 +27,7 @@ public class ObtenerJornadaCurso {
     private final CursoRepository cursoRepository;
     private final GuardarJornadaDia guardarJornadaDia;
 
-    public JornadaCursoResponse ejecutar(String cursoId, Integer diaSemanaFiltro) {
+    public JornadaCursoResponse ejecutar(UUID cursoId, Integer diaSemanaFiltro) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado: " + cursoId));
 

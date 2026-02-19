@@ -22,8 +22,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
-
 @Component
 @RequiredArgsConstructor
 public class CrearAlumnoConApoderado {
@@ -77,7 +75,6 @@ public class CrearAlumnoConApoderado {
             apoderado = apoderadoRepository.save(apoderado);
 
             Usuario usuario = Usuario.builder()
-                    .id(UUID.randomUUID().toString())
                     .email(emailApoderado)
                     .rut(rutApoderadoNorm)
                     .passwordHash(passwordEncoder.encode(rutApoderadoNorm))
@@ -91,7 +88,6 @@ public class CrearAlumnoConApoderado {
         }
 
         Alumno alumno = Alumno.builder()
-                .id(UUID.randomUUID().toString())
                 .rut(rutAlumnoNorm)
                 .nombre(alumnoData.getNombre())
                 .apellido(alumnoData.getApellido())

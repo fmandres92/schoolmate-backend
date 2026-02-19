@@ -5,10 +5,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.UUID;
 
-public interface AsistenciaClaseRepository extends JpaRepository<AsistenciaClase, String> {
+public interface AsistenciaClaseRepository extends JpaRepository<AsistenciaClase, UUID> {
 
-    Optional<AsistenciaClase> findByBloqueHorarioIdAndFecha(String bloqueHorarioId, LocalDate fecha);
+    Optional<AsistenciaClase> findByBloqueHorarioIdAndFecha(UUID bloqueHorarioId, LocalDate fecha);
 
-    boolean existsByBloqueHorarioIdAndFecha(String bloqueHorarioId, LocalDate fecha);
+    boolean existsByBloqueHorarioIdAndFecha(UUID bloqueHorarioId, LocalDate fecha);
 }

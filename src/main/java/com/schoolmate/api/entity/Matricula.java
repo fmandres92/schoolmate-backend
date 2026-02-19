@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "matricula")
@@ -20,7 +21,8 @@ import java.time.LocalDateTime;
 public class Matricula {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "alumno_id", nullable = false)
@@ -52,9 +54,6 @@ public class Matricula {
     protected void onCreate() {
         createdAt = TimeContext.now();
         updatedAt = TimeContext.now();
-        if (id == null) {
-            id = java.util.UUID.randomUUID().toString();
-        }
         if (estado == null) {
             estado = EstadoMatricula.ACTIVA;
         }

@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +16,7 @@ import java.util.Map;
 @AllArgsConstructor
 public class JornadaCursoResponse {
 
-    private String cursoId;
+    private UUID cursoId;
     private String cursoNombre;
     private Map<Integer, JornadaDiaResponse> dias;
     private JornadaResumenResponse resumen;

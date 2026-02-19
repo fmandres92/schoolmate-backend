@@ -1,7 +1,9 @@
 package com.schoolmate.api.dto;
+import java.util.UUID;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -28,6 +30,6 @@ public class ApoderadoRequest {
 
     private String telefono;
 
-    @NotBlank(message = "El ID del alumno es requerido")
-    private String alumnoId;
+    @NotNull(message = "El ID del alumno es requerido")
+    private UUID alumnoId;
 }

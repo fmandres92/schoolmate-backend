@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import lombok.Builder;
 import lombok.Data;
@@ -11,8 +12,8 @@ import java.util.List;
 @Builder
 public class AsistenciaClaseResponse {
 
-    private String asistenciaClaseId;
-    private String bloqueHorarioId;
+    private UUID asistenciaClaseId;
+    private UUID bloqueHorarioId;
     private LocalDate fecha;
     private LocalDateTime tomadaEn;
     private List<RegistroAsistenciaResponse> registros;

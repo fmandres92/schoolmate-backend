@@ -1,6 +1,7 @@
 package com.schoolmate.api.dto.request;
+import java.util.UUID;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,13 +13,13 @@ import lombok.NoArgsConstructor;
 @Builder
 public class MatriculaRequest {
 
-    @NotBlank(message = "El alumno es obligatorio")
-    private String alumnoId;
+    @NotNull(message = "El alumno es obligatorio")
+    private UUID alumnoId;
 
-    @NotBlank(message = "El curso es obligatorio")
-    private String cursoId;
+    @NotNull(message = "El curso es obligatorio")
+    private UUID cursoId;
 
-    private String anoEscolarId;
+    private UUID anoEscolarId;
 
     private String fechaMatricula; // Opcional, si no se envía usa fecha actual
 }

@@ -1,13 +1,14 @@
 package com.schoolmate.api.dto.request;
+import java.util.UUID;
 
-import jakarta.validation.constraints.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
 public class CursoRequest {
 
-    @NotBlank(message = "El grado es obligatorio")
-    private String gradoId;
+    @NotNull(message = "El grado es obligatorio")
+    private UUID gradoId;
 
-    private String anoEscolarId;
+    private UUID anoEscolarId;
 }

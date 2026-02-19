@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.dto.request.MatriculaRequest;
 import com.schoolmate.api.dto.response.MatriculaResponse;
@@ -43,7 +44,7 @@ public class MatriculaController {
     public ResponseEntity<MatriculaResponse> matricular(
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @Valid @RequestBody MatriculaRequest request) {
-        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId());
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId());
         request.setAnoEscolarId(resolvedAnoEscolarId);
 
         Matricula matricula = matricularAlumno.execute(request);
@@ -57,7 +58,7 @@ public class MatriculaController {
     @GetMapping("/curso/{cursoId}")
     @PreAuthorize("hasAnyRole('ADMIN','PROFESOR')")
     public ResponseEntity<List<MatriculaResponse>> porCurso(
-            @PathVariable String cursoId,
+            @PathVariable UUID cursoId,
             @AuthenticationPrincipal UserPrincipal principal) {
 
         validarAccesoMatriculasCursoProfesor.execute(principal, cursoId);
@@ -75,7 +76,7 @@ public class MatriculaController {
      */
     @GetMapping("/alumno/{alumnoId}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<MatriculaResponse>> porAlumno(@PathVariable String alumnoId) {
+    public ResponseEntity<List<MatriculaResponse>> porAlumno(@PathVariable UUID alumnoId) {
         List<MatriculaResponse> matriculas = matriculaRepository
                 .findByAlumnoId(alumnoId)
                 .stream()
@@ -91,7 +92,7 @@ public class MatriculaController {
     @PatchMapping("/{id}/estado")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MatriculaResponse> cambiarEstado(
-            @PathVariable String id,
+            @PathVariable UUID id,
             @RequestBody Map<String, String> body) {
 
         String estadoStr = body.get("estado");
@@ -110,10 +111,10 @@ public class MatriculaController {
         return ResponseEntity.ok(MatriculaResponse.fromEntity(matricula));
     }
 
-    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId) {
-        String resolvedAnoEscolarId = anoEscolarHeader != null
+    private UUID resolveAnoEscolarId(AnoEscolar anoEscolarHeader, UUID anoEscolarId) {
+        UUID resolvedAnoEscolarId = anoEscolarHeader != null
                 ? anoEscolarHeader.getId()
-                : (anoEscolarId == null || anoEscolarId.isBlank() ? null : anoEscolarId.trim());
+                : anoEscolarId;
 
         if (resolvedAnoEscolarId == null) {
             throw new ApiException(

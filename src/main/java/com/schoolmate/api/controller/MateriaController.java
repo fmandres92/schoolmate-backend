@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.dto.request.MateriaRequest;
 import com.schoolmate.api.dto.response.MateriaPageResponse;
@@ -75,7 +76,7 @@ public class MateriaController {
     // Obtener una por ID
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public MateriaResponse obtener(@PathVariable String id) {
+    public MateriaResponse obtener(@PathVariable UUID id) {
         Materia materia = materiaRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
         return MateriaResponse.fromEntity(materia);
@@ -97,7 +98,7 @@ public class MateriaController {
     // Actualizar existente
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public MateriaResponse actualizar(@PathVariable String id, @Valid @RequestBody MateriaRequest request) {
+    public MateriaResponse actualizar(@PathVariable UUID id, @Valid @RequestBody MateriaRequest request) {
         Materia existente = materiaRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
 
@@ -111,7 +112,7 @@ public class MateriaController {
     // Eliminar
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Void> eliminar(@PathVariable String id) {
+    public ResponseEntity<Void> eliminar(@PathVariable UUID id) {
         if (!materiaRepository.existsById(id)) {
             throw new ResourceNotFoundException("Materia no encontrada");
         }

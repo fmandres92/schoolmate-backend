@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto;
+import java.util.UUID;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,7 +16,7 @@ import java.util.List;
 @Builder
 public class ApoderadoBuscarResponse {
 
-    private String id;
+    private UUID id;
     private String nombre;
     private String apellido;
     private String rut;
@@ -30,7 +31,7 @@ public class ApoderadoBuscarResponse {
     @AllArgsConstructor
     @Builder
     public static class AlumnoVinculado {
-        private String id;
+        private UUID id;
         private String nombre;
         private String apellido;
         private String cursoNombre;

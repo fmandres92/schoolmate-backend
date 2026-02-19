@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import lombok.Builder;
 import lombok.Data;
@@ -11,5 +12,5 @@ public class ConflictoHorarioResponse {
     private String materiaNombre;
     private String horaInicio;
     private String horaFin;
-    private String bloqueId;
+    private UUID bloqueId;
 }

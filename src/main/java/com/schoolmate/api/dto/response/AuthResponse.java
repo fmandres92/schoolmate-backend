@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import lombok.Builder;
 import lombok.Data;
@@ -8,11 +9,11 @@ import lombok.Data;
 public class AuthResponse {
     private String token;
     private String tipo;
-    private String id;
+    private UUID id;
     private String email;
     private String nombre;
     private String apellido;
     private String rol;
-    private String profesorId;
-    private String apoderadoId;
+    private UUID profesorId;
+    private UUID apoderadoId;
 }

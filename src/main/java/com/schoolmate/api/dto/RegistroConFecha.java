@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto;
+import java.util.UUID;
 
 import com.schoolmate.api.enums.EstadoAsistencia;
 import lombok.AllArgsConstructor;
@@ -13,8 +14,8 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class RegistroConFecha {
-    private String registroId;
-    private String alumnoId;
+    private UUID registroId;
+    private UUID alumnoId;
     private EstadoAsistencia estado;
     private LocalDate fecha;
 }

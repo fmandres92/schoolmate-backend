@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 @Component
 @RequiredArgsConstructor
 public class ValidarAccesoMatriculasCursoProfesor {
@@ -18,7 +20,7 @@ public class ValidarAccesoMatriculasCursoProfesor {
     private final AnoEscolarRepository anoEscolarRepository;
     private final BloqueHorarioRepository bloqueHorarioRepository;
 
-    public void execute(UserPrincipal principal, String cursoId) {
+    public void execute(UserPrincipal principal, UUID cursoId) {
         if (principal == null) {
             throw new AccessDeniedException("Acceso denegado");
         }

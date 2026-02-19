@@ -3,6 +3,7 @@ package com.schoolmate.api.dto.request;
 import jakarta.validation.constraints.*;
 import lombok.Data;
 import java.util.List;
+import java.util.UUID;
 
 @Data
 public class ProfesorRequest {
@@ -32,5 +33,5 @@ public class ProfesorRequest {
     private Integer horasPedagogicasContrato;
 
     @NotEmpty(message = "Debe asignar al menos una materia")
-    private List<String> materiaIds;
+    private List<UUID> materiaIds;
 }

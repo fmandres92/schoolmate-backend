@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.dto.response.ProfesorHorarioResponse;
 import com.schoolmate.api.entity.AnoEscolar;
@@ -43,11 +44,11 @@ public class ProfesorHorarioController {
     @PreAuthorize("hasAnyRole('ADMIN','PROFESOR')")
     public ResponseEntity<ProfesorHorarioResponse> getHorario(
         @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
-        @PathVariable String profesorId,
-        @RequestParam(required = false) String anoEscolarId,
+        @PathVariable UUID profesorId,
+        @RequestParam(required = false) UUID anoEscolarId,
         @AuthenticationPrincipal UserPrincipal principal
     ) {
-        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
         validarOwnershipProfesor(principal, profesorId);
 
         Profesor profesor = profesorRepository.findById(profesorId)
@@ -114,7 +115,7 @@ public class ProfesorHorarioController {
             .build();
     }
 
-    private void validarOwnershipProfesor(UserPrincipal principal, String profesorId) {
+    private void validarOwnershipProfesor(UserPrincipal principal, UUID profesorId) {
         if (principal == null) {
             throw new AccessDeniedException("Acceso denegado");
         }
@@ -143,10 +144,10 @@ public class ProfesorHorarioController {
         };
     }
 
-    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId) {
-        String resolvedAnoEscolarId = anoEscolarHeader != null
+    private UUID resolveAnoEscolarId(AnoEscolar anoEscolarHeader, UUID anoEscolarId) {
+        UUID resolvedAnoEscolarId = anoEscolarHeader != null
             ? anoEscolarHeader.getId()
-            : (anoEscolarId == null || anoEscolarId.isBlank() ? null : anoEscolarId.trim());
+            : anoEscolarId;
 
         if (resolvedAnoEscolarId == null) {
             throw new ApiException(

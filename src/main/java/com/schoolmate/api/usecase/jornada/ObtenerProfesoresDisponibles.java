@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -31,7 +32,7 @@ public class ObtenerProfesoresDisponibles {
     private final CursoRepository cursoRepository;
     private final ProfesorRepository profesorRepository;
 
-    public ProfesoresDisponiblesResponse execute(String cursoId, String bloqueId) {
+    public ProfesoresDisponiblesResponse execute(UUID cursoId, UUID bloqueId) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
@@ -53,17 +54,17 @@ public class ObtenerProfesoresDisponibles {
                 "El bloque debe tener materia asignada antes de asignar profesor", Map.of());
         }
 
-        String materiaId = bloque.getMateria().getId();
+        UUID materiaId = bloque.getMateria().getId();
         String materiaNombre = bloque.getMateria().getNombre();
-        String anoEscolarId = curso.getAnoEscolar().getId();
+        UUID anoEscolarId = curso.getAnoEscolar().getId();
 
         List<Profesor> profesores = profesorRepository.findByActivoTrueAndMaterias_Id(materiaId);
-        Set<String> profesorIds = profesores.stream().map(Profesor::getId).collect(Collectors.toSet());
+        Set<UUID> profesorIds = profesores.stream().map(Profesor::getId).collect(Collectors.toSet());
         List<BloqueHorario> bloquesProfesores = profesorIds.isEmpty()
             ? Collections.emptyList()
             : bloqueHorarioRepository.findBloquesClaseProfesoresEnAnoEscolar(profesorIds, anoEscolarId);
 
-        Map<String, Long> minutosPorProfesor = bloquesProfesores.stream()
+        Map<UUID, Long> minutosPorProfesor = bloquesProfesores.stream()
             .collect(Collectors.groupingBy(
                 b -> b.getProfesor().getId(),
                 Collectors.summingLong(b -> Duration.between(b.getHoraInicio(), b.getHoraFin()).toMinutes())

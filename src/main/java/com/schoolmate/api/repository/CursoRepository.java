@@ -4,11 +4,12 @@ import com.schoolmate.api.entity.Curso;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
+import java.util.UUID;
 
-public interface CursoRepository extends JpaRepository<Curso, String> {
-    List<Curso> findByAnoEscolarIdOrderByNombreAsc(String anoEscolarId);
-    List<Curso> findByAnoEscolarIdAndGradoIdOrderByLetraAsc(String anoEscolarId, String gradoId);
-    List<Curso> findByActivoTrueAndAnoEscolarIdOrderByNombreAsc(String anoEscolarId);
+public interface CursoRepository extends JpaRepository<Curso, UUID> {
+    List<Curso> findByAnoEscolarIdOrderByNombreAsc(UUID anoEscolarId);
+    List<Curso> findByAnoEscolarIdAndGradoIdOrderByLetraAsc(UUID anoEscolarId, UUID gradoId);
+    List<Curso> findByActivoTrueAndAnoEscolarIdOrderByNombreAsc(UUID anoEscolarId);
 
     @Query("""
         select c.letra
@@ -16,5 +17,5 @@ public interface CursoRepository extends JpaRepository<Curso, String> {
         where c.grado.id = :gradoId
           and c.anoEscolar.id = :anoEscolarId
         """)
-    List<String> findLetrasUsadasByGradoIdAndAnoEscolarId(String gradoId, String anoEscolarId);
+    List<String> findLetrasUsadasByGradoIdAndAnoEscolarId(UUID gradoId, UUID anoEscolarId);
 }

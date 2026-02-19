@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto;
+import java.util.UUID;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,13 +16,13 @@ import java.util.List;
 @Builder
 public class ApoderadoResponse {
 
-    private String id;
+    private UUID id;
     private String nombre;
     private String apellido;
     private String rut;
     private String email;
     private String telefono;
-    private String usuarioId;
+    private UUID usuarioId;
     private boolean cuentaActiva;
     private List<AlumnoResumen> alumnos;
 
@@ -31,7 +32,7 @@ public class ApoderadoResponse {
     @AllArgsConstructor
     @Builder
     public static class AlumnoResumen {
-        private String id;
+        private UUID id;
         private String nombre;
         private String apellido;
     }

@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import lombok.Builder;
 import lombok.Data;
@@ -7,7 +8,7 @@ import lombok.Data;
 @Builder
 public class MateriaDisponibleResponse {
 
-    private String materiaId;
+    private UUID materiaId;
     private String materiaNombre;
     private String materiaIcono;
     private Integer horasPedagogicas;

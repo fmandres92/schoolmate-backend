@@ -10,17 +10,18 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @RequiredArgsConstructor
 public class UserPrincipal implements UserDetails {
 
-    private final String id;
+    private final UUID id;
     private final String email;
     private final String password;
     private final Rol rol;
-    private final String profesorId;
-    private final String apoderadoId;
+    private final UUID profesorId;
+    private final UUID apoderadoId;
     private final String nombre;
     private final String apellido;
 

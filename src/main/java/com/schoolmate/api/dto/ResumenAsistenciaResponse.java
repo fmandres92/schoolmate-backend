@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto;
+import java.util.UUID;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,7 +13,7 @@ import lombok.Setter;
 @AllArgsConstructor
 @Builder
 public class ResumenAsistenciaResponse {
-    private String alumnoId;
+    private UUID alumnoId;
     private String alumnoNombre;
     private int totalClases;
     private int totalPresente;

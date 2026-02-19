@@ -11,15 +11,16 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
-public interface RegistroAsistenciaRepository extends JpaRepository<RegistroAsistencia, String> {
+public interface RegistroAsistenciaRepository extends JpaRepository<RegistroAsistencia, UUID> {
 
     @EntityGraph(attributePaths = {"alumno"})
-    List<RegistroAsistencia> findByAsistenciaClaseId(String asistenciaClaseId);
+    List<RegistroAsistencia> findByAsistenciaClaseId(UUID asistenciaClaseId);
 
     @Modifying
     @Query("DELETE FROM RegistroAsistencia r WHERE r.asistenciaClase.id = :asistenciaClaseId")
-    int deleteByAsistenciaClaseId(@Param("asistenciaClaseId") String asistenciaClaseId);
+    int deleteByAsistenciaClaseId(@Param("asistenciaClaseId") UUID asistenciaClaseId);
 
     @Query("""
         SELECT new com.schoolmate.api.dto.RegistroConFecha(
@@ -33,7 +34,7 @@ public interface RegistroAsistenciaRepository extends JpaRepository<RegistroAsis
         ORDER BY ac.fecha
         """)
     List<RegistroConFecha> findByAlumnoIdAndFechaEntre(
-        @Param("alumnoId") String alumnoId,
+        @Param("alumnoId") UUID alumnoId,
         @Param("fechaInicio") LocalDate fechaInicio,
         @Param("fechaFin") LocalDate fechaFin
     );
@@ -49,8 +50,8 @@ public interface RegistroAsistenciaRepository extends JpaRepository<RegistroAsis
           AND c.anoEscolar.id = :anoEscolarId
         """)
     long countByAlumnoIdAndEstadoAndAnoEscolarId(
-        @Param("alumnoId") String alumnoId,
+        @Param("alumnoId") UUID alumnoId,
         @Param("estado") EstadoAsistencia estado,
-        @Param("anoEscolarId") String anoEscolarId
+        @Param("anoEscolarId") UUID anoEscolarId
     );
 }

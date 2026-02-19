@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "ano_escolar")
@@ -20,7 +21,8 @@ import java.time.LocalDateTime;
 public class AnoEscolar {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, unique = true)
     private Integer ano;
@@ -42,7 +44,6 @@ public class AnoEscolar {
 
     @PrePersist
     protected void onCreate() {
-        this.id = this.id != null ? this.id : java.util.UUID.randomUUID().toString();
         this.createdAt = TimeContext.now();
         this.updatedAt = TimeContext.now();
     }

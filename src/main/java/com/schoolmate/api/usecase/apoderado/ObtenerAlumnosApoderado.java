@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -26,7 +27,7 @@ public class ObtenerAlumnosApoderado {
     private final AnoEscolarRepository anoEscolarRepo;
     private final ClockProvider clockProvider;
 
-    public List<AlumnoApoderadoResponse> execute(String apoderadoId) {
+    public List<AlumnoApoderadoResponse> execute(UUID apoderadoId) {
         List<com.schoolmate.api.entity.ApoderadoAlumno> vinculos = apoderadoAlumnoRepo.findByApoderadoId(apoderadoId);
         if (vinculos.isEmpty()) {
             return List.of();

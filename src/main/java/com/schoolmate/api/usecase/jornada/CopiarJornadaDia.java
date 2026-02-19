@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -22,7 +23,7 @@ public class CopiarJornadaDia {
     private final ObtenerJornadaCurso obtenerJornadaCurso;
 
     @Transactional
-    public JornadaCursoResponse ejecutar(String cursoId, Integer diaSemanaOrigen, List<Integer> diasDestino) {
+    public JornadaCursoResponse ejecutar(UUID cursoId, Integer diaSemanaOrigen, List<Integer> diasDestino) {
         List<BloqueHorario> bloquesOrigen = bloqueHorarioRepository
             .findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc(cursoId, diaSemanaOrigen);
 

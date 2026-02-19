@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -31,7 +32,7 @@ public class AsignarProfesorBloque {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public BloqueHorarioResponse execute(String cursoId, String bloqueId, String profesorId) {
+    public BloqueHorarioResponse execute(UUID cursoId, UUID bloqueId, UUID profesorId) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
@@ -68,7 +69,7 @@ public class AsignarProfesorBloque {
             return buildResponse(bloque);
         }
 
-        String materiaId = bloque.getMateria().getId();
+        UUID materiaId = bloque.getMateria().getId();
         boolean ensenaMateria = profesor.getMaterias().stream()
             .anyMatch(m -> m.getId().equals(materiaId));
 
@@ -84,7 +85,7 @@ public class AsignarProfesorBloque {
             );
         }
 
-        String anoEscolarId = curso.getAnoEscolar().getId();
+        UUID anoEscolarId = curso.getAnoEscolar().getId();
         List<BloqueHorario> colisiones = bloqueHorarioRepository.findColisionesProfesor(
             profesorId,
             bloque.getDiaSemana(),

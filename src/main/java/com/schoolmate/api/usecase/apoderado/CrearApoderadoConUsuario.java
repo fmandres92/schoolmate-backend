@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -86,7 +85,6 @@ public class CrearApoderadoConUsuario {
             apoderado = apoderadoRepo.save(apoderado);
 
             Usuario usuario = Usuario.builder()
-                    .id(UUID.randomUUID().toString())
                     .email(emailNormalizado)
                     .nombre(request.getNombre())
                     .apellido(request.getApellido())

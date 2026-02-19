@@ -3,6 +3,8 @@ package com.schoolmate.api.entity;
 import com.schoolmate.api.common.time.TimeContext;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
@@ -24,8 +26,9 @@ import java.util.UUID;
 public class Apoderado {
 
     @Id
-    @Column(name = "id", length = 36)
-    private String id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "id")
+    private UUID id;
 
     @Column(name = "nombre", length = 100, nullable = false)
     private String nombre;
@@ -50,9 +53,6 @@ public class Apoderado {
 
     @PrePersist
     protected void onCreate() {
-        if (id == null) {
-            id = UUID.randomUUID().toString();
-        }
         createdAt = TimeContext.now();
         updatedAt = createdAt;
     }

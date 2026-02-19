@@ -21,6 +21,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -29,7 +30,7 @@ public class ObtenerResumenAsignacionProfesores {
     private final BloqueHorarioRepository bloqueHorarioRepository;
     private final CursoRepository cursoRepository;
 
-    public AsignacionProfesoresResumenResponse execute(String cursoId) {
+    public AsignacionProfesoresResumenResponse execute(UUID cursoId) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
@@ -42,7 +43,7 @@ public class ObtenerResumenAsignacionProfesores {
         int bloquesConMateriaSinProfesor = 0;
         int bloquesSinMateria = 0;
 
-        Map<String, List<BloqueHorario>> bloquesPorProfesor = new LinkedHashMap<>();
+        Map<UUID, List<BloqueHorario>> bloquesPorProfesor = new LinkedHashMap<>();
         List<BloqueHorario> pendientes = new ArrayList<>();
 
         for (BloqueHorario bloque : bloquesClase) {

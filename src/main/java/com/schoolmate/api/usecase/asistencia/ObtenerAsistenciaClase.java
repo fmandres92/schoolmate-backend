@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -26,7 +27,7 @@ public class ObtenerAsistenciaClase {
     private final RegistroAsistenciaRepository registroAsistenciaRepository;
 
     @Transactional(readOnly = true)
-    public AsistenciaClaseResponse execute(String bloqueHorarioId, LocalDate fecha, String profesorId) {
+    public AsistenciaClaseResponse execute(UUID bloqueHorarioId, LocalDate fecha, UUID profesorId) {
         BloqueHorario bloque = bloqueHorarioRepository.findById(bloqueHorarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Bloque horario no encontrado"));
 
@@ -48,6 +49,7 @@ public class ObtenerAsistenciaClase {
                 .alumnoNombre(r.getAlumno().getNombre())
                 .alumnoApellido(r.getAlumno().getApellido())
                 .estado(r.getEstado())
+                .observacion(r.getObservacion())
                 .build())
             .toList();
 

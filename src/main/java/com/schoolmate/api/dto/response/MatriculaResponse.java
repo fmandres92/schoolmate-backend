@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import com.schoolmate.api.entity.Matricula;
 import lombok.AllArgsConstructor;
@@ -14,15 +15,15 @@ import java.time.LocalDateTime;
 @Builder
 public class MatriculaResponse {
 
-    private String id;
-    private String alumnoId;
+    private UUID id;
+    private UUID alumnoId;
     private String alumnoNombre;
     private String alumnoApellido;
     private String alumnoRut;
-    private String cursoId;
+    private UUID cursoId;
     private String cursoNombre;
     private String gradoNombre;
-    private String anoEscolarId;
+    private UUID anoEscolarId;
     private Integer anoEscolar;
     private String fechaMatricula;
     private String estado;

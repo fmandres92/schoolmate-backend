@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -35,7 +36,7 @@ public class AsignarMateriaBloque {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public BloqueHorarioResponse execute(String cursoId, String bloqueId, String materiaId) {
+    public BloqueHorarioResponse execute(UUID cursoId, UUID bloqueId, UUID materiaId) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
@@ -61,8 +62,8 @@ public class AsignarMateriaBloque {
         Materia materia = materiaRepository.findById(materiaId)
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
 
-        String gradoId = curso.getGrado().getId();
-        String anoEscolarId = curso.getAnoEscolar().getId();
+        UUID gradoId = curso.getGrado().getId();
+        UUID anoEscolarId = curso.getAnoEscolar().getId();
 
         MallaCurricular mallaCurricular = mallaCurricularRepository
             .findByMateriaIdAndGradoIdAndAnoEscolarIdAndActivoTrue(materiaId, gradoId, anoEscolarId)
@@ -106,7 +107,7 @@ public class AsignarMateriaBloque {
 
         bloque.setMateria(materia);
         if (bloque.getProfesor() != null) {
-            String nuevaMateriaId = materia.getId();
+            UUID nuevaMateriaId = materia.getId();
             boolean profesorEnsenaNuevaMateria = bloque.getProfesor().getMaterias().stream()
                 .anyMatch(m -> m.getId().equals(nuevaMateriaId));
             if (!profesorEnsenaNuevaMateria) {

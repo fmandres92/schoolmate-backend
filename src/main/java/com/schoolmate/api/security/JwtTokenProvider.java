@@ -21,10 +21,10 @@ public class JwtTokenProvider {
 
         return Jwts.builder()
                 .subject(userPrincipal.getEmail())
-                .claim("id", userPrincipal.getId())
+                .claim("id", userPrincipal.getId() != null ? userPrincipal.getId().toString() : null)
                 .claim("rol", userPrincipal.getRol().name())
-                .claim("profesorId", userPrincipal.getProfesorId())
-                .claim("apoderadoId", userPrincipal.getApoderadoId())
+                .claim("profesorId", userPrincipal.getProfesorId() != null ? userPrincipal.getProfesorId().toString() : null)
+                .claim("apoderadoId", userPrincipal.getApoderadoId() != null ? userPrincipal.getApoderadoId().toString() : null)
                 .claim("nombre", userPrincipal.getNombre())
                 .claim("apellido", userPrincipal.getApellido())
                 .issuedAt(now)

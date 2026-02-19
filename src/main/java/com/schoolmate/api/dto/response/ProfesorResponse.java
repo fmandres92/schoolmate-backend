@@ -1,4 +1,5 @@
 package com.schoolmate.api.dto.response;
+import java.util.UUID;
 
 import com.schoolmate.api.entity.Profesor;
 import lombok.Builder;
@@ -8,7 +9,7 @@ import java.util.List;
 @Data
 @Builder
 public class ProfesorResponse {
-    private String id;
+    private UUID id;
     private String rut;
     private String nombre;
     private String apellido;
@@ -25,7 +26,7 @@ public class ProfesorResponse {
     @Data
     @Builder
     public static class MateriaInfo {
-        private String id;
+        private UUID id;
         private String nombre;
         private String icono;
     }

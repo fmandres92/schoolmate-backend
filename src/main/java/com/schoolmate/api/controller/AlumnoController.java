@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.common.rut.RutNormalizer;
 import com.schoolmate.api.common.rut.RutValidationService;
@@ -65,9 +66,9 @@ public class AlumnoController {
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(defaultValue = "apellido") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir,
-            @RequestParam(required = false) String anoEscolarId,
-            @RequestParam(required = false) String cursoId,
-            @RequestParam(required = false) String gradoId,
+            @RequestParam(required = false) UUID anoEscolarId,
+            @RequestParam(required = false) UUID cursoId,
+            @RequestParam(required = false) UUID gradoId,
             @RequestParam(required = false) String q) {
 
         // Sanitizar paginación
@@ -76,7 +77,7 @@ public class AlumnoController {
 
         String resolvedSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "apellido";
         Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
 
         // Construir specification base
         Specification<Alumno> spec = Specification.where(AlumnoSpecifications.activoTrue());
@@ -93,7 +94,7 @@ public class AlumnoController {
 
         // Si hay filtros de curso/grado, necesitamos filtrar por matrícula
         if (resolvedAnoEscolarId != null) {
-            List<String> alumnoIdsFiltrados = getAlumnoIdsByMatriculaFilters(resolvedAnoEscolarId, cursoId, gradoId);
+            List<UUID> alumnoIdsFiltrados = getAlumnoIdsByMatriculaFilters(resolvedAnoEscolarId, cursoId, gradoId);
             if (alumnoIdsFiltrados != null) {
                 if (alumnoIdsFiltrados.isEmpty()) {
                     // No hay alumnos que cumplan los filtros de matrícula
@@ -110,11 +111,11 @@ public class AlumnoController {
         // Enriquecer con matrícula si hay anoEscolarId
         List<AlumnoResponse> content;
         if (resolvedAnoEscolarId != null) {
-            List<String> alumnoIds = alumnosPage.getContent().stream()
+            List<UUID> alumnoIds = alumnosPage.getContent().stream()
                     .map(Alumno::getId)
                     .toList();
 
-            Map<String, Matricula> matriculaMap = getMatriculaMap(alumnoIds, resolvedAnoEscolarId);
+            Map<UUID, Matricula> matriculaMap = getMatriculaMap(alumnoIds, resolvedAnoEscolarId);
 
             content = alumnosPage.getContent().stream()
                     .map(alumno -> AlumnoResponse.fromEntityWithMatricula(
@@ -143,10 +144,10 @@ public class AlumnoController {
 
     @GetMapping("/{id}")
     public ResponseEntity<AlumnoResponse> obtener(
-            @PathVariable String id,
+            @PathVariable UUID id,
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
-            @RequestParam(required = false) String anoEscolarId) {
-        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
+            @RequestParam(required = false) UUID anoEscolarId) {
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
 
         Alumno alumno = alumnoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
@@ -173,8 +174,8 @@ public class AlumnoController {
     public ResponseEntity<AlumnoResponse> buscarPorRut(
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @RequestParam String rut,
-            @RequestParam(required = false) String anoEscolarId) {
-        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
+            @RequestParam(required = false) UUID anoEscolarId) {
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
 
         Alumno alumno = alumnoRepository.findActivoByRutNormalizado(rut)
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado para RUT: " + rut));
@@ -200,7 +201,6 @@ public class AlumnoController {
         }
 
         Alumno alumno = Alumno.builder()
-                .id(UUID.randomUUID().toString())
                 .rut(request.getRut())
                 .nombre(request.getNombre())
                 .apellido(request.getApellido())
@@ -214,7 +214,7 @@ public class AlumnoController {
 
     @PutMapping("/{id}")
     public ResponseEntity<AlumnoResponse> actualizar(
-            @PathVariable String id,
+            @PathVariable UUID id,
             @Valid @RequestBody AlumnoRequest request) {
 
         String rutNormalizado = RutNormalizer.normalize(request.getRut());
@@ -251,9 +251,9 @@ public class AlumnoController {
      * Retorna null si no hay filtros de curso/grado (no restringir).
      * Retorna lista vacía si hay filtros pero ningún alumno cumple.
      */
-    private List<String> getAlumnoIdsByMatriculaFilters(String anoEscolarId, String cursoId, String gradoId) {
-        boolean hasCursoFilter = cursoId != null && !cursoId.isBlank();
-        boolean hasGradoFilter = gradoId != null && !gradoId.isBlank();
+    private List<UUID> getAlumnoIdsByMatriculaFilters(UUID anoEscolarId, UUID cursoId, UUID gradoId) {
+        boolean hasCursoFilter = cursoId != null;
+        boolean hasGradoFilter = gradoId != null;
 
         if (!hasCursoFilter && !hasGradoFilter) {
             return null; // Sin filtros de matrícula, no restringir
@@ -279,7 +279,7 @@ public class AlumnoController {
     /**
      * Construye mapa alumnoId → Matricula para enriquecer responses en batch.
      */
-    private Map<String, Matricula> getMatriculaMap(List<String> alumnoIds, String anoEscolarId) {
+    private Map<UUID, Matricula> getMatriculaMap(List<UUID> alumnoIds, UUID anoEscolarId) {
         if (alumnoIds.isEmpty()) return Map.of();
 
         List<Matricula> matriculas = matriculaRepository
@@ -312,17 +312,14 @@ public class AlumnoController {
         return q.matches("^[0-9]+$") && q.length() >= 5;
     }
 
-    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId) {
+    private UUID resolveAnoEscolarId(AnoEscolar anoEscolarHeader, UUID anoEscolarId) {
         if (anoEscolarHeader != null) {
             return anoEscolarHeader.getId();
         }
-        if (anoEscolarId == null || anoEscolarId.isBlank()) {
-            return null;
-        }
-        return anoEscolarId.trim();
+        return anoEscolarId;
     }
 
-    private void enriquecerConApoderado(String alumnoId, AlumnoResponse response) {
+    private void enriquecerConApoderado(UUID alumnoId, AlumnoResponse response) {
         List<ApoderadoAlumno> vinculos = apoderadoAlumnoRepository.findByAlumnoId(alumnoId);
         if (vinculos.isEmpty()) {
             return;

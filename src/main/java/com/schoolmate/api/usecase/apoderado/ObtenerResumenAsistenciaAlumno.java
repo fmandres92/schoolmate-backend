@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 @Component
 @RequiredArgsConstructor
 public class ObtenerResumenAsistenciaAlumno {
@@ -19,7 +21,7 @@ public class ObtenerResumenAsistenciaAlumno {
     private final RegistroAsistenciaRepository registroAsistenciaRepo;
     private final AlumnoRepository alumnoRepo;
 
-    public ResumenAsistenciaResponse execute(String alumnoId, String anoEscolarId, String apoderadoId) {
+    public ResumenAsistenciaResponse execute(UUID alumnoId, UUID anoEscolarId, UUID apoderadoId) {
         if (!apoderadoAlumnoRepo.existsByApoderadoIdAndAlumnoId(apoderadoId, alumnoId)) {
             throw new AccessDeniedException("No tienes acceso a este alumno");
         }

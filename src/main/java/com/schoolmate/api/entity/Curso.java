@@ -4,6 +4,7 @@ import com.schoolmate.api.common.time.TimeContext;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "curso")
@@ -14,7 +15,8 @@ import java.time.LocalDateTime;
 public class Curso {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, length = 50)
     private String nombre;
@@ -43,9 +45,6 @@ public class Curso {
     protected void onCreate() {
         createdAt = TimeContext.now();
         updatedAt = TimeContext.now();
-        if (id == null) {
-            id = java.util.UUID.randomUUID().toString();
-        }
     }
 
     @PreUpdate

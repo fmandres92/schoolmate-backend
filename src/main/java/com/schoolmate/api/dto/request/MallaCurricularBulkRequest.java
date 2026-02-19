@@ -1,9 +1,9 @@
 package com.schoolmate.api.dto.request;
+import java.util.UUID;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -17,10 +17,10 @@ import java.util.List;
 @AllArgsConstructor
 public class MallaCurricularBulkRequest {
 
-    @NotBlank
-    private String materiaId;
+    @NotNull
+    private UUID materiaId;
 
-    private String anoEscolarId;
+    private UUID anoEscolarId;
 
     @Valid
     @NotEmpty
@@ -31,8 +31,8 @@ public class MallaCurricularBulkRequest {
     @AllArgsConstructor
     public static class GradoHoras {
 
-        @NotBlank
-        private String gradoId;
+        @NotNull
+        private UUID gradoId;
 
         @NotNull
         @Min(1)

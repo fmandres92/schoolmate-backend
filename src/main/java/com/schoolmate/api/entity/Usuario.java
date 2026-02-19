@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "usuario")
@@ -19,7 +20,8 @@ import java.time.LocalDateTime;
 public class Usuario {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, unique = true)
     private String email;
@@ -41,10 +43,10 @@ public class Usuario {
     private Rol rol;
 
     @Column(name = "profesor_id")
-    private String profesorId;
+    private UUID profesorId;
 
-    @Column(name = "apoderado_id", length = 36)
-    private String apoderadoId;
+    @Column(name = "apoderado_id")
+    private UUID apoderadoId;
 
     @Column(nullable = false)
     private Boolean activo = true;

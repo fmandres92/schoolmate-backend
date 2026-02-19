@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -27,12 +28,12 @@ public class ObtenerResumenAsignacionMaterias {
     private final CursoRepository cursoRepository;
     private final MallaCurricularRepository mallaCurricularRepository;
 
-    public AsignacionMateriaResumenResponse execute(String cursoId) {
+    public AsignacionMateriaResumenResponse execute(UUID cursoId) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
-        String gradoId = curso.getGrado().getId();
-        String anoEscolarId = curso.getAnoEscolar().getId();
+        UUID gradoId = curso.getGrado().getId();
+        UUID anoEscolarId = curso.getAnoEscolar().getId();
 
         List<MallaCurricular> malla = mallaCurricularRepository
             .findByGradoIdAndAnoEscolarIdAndActivoTrue(gradoId, anoEscolarId);
@@ -58,7 +59,7 @@ public class ObtenerResumenAsignacionMaterias {
             .toList();
 
         for (MallaCurricular mallaCurricular : mallaOrdenada) {
-            String materiaId = mallaCurricular.getMateria().getId();
+            UUID materiaId = mallaCurricular.getMateria().getId();
             int minutosPermitidos = mallaCurricular.getHorasPedagogicas() * 45;
 
             List<BloqueHorario> bloquesDeMateria = todosBloquesClase.stream()

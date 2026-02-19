@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.entity.Grado;
 import com.schoolmate.api.exception.ResourceNotFoundException;
@@ -26,7 +27,7 @@ public class GradoController {
     // Obtener uno por ID
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public Grado obtener(@PathVariable String id) {
+    public Grado obtener(@PathVariable UUID id) {
         return gradoRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Grado no encontrado"));
     }

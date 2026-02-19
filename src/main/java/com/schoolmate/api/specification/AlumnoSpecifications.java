@@ -3,6 +3,9 @@ package com.schoolmate.api.specification;
 import com.schoolmate.api.entity.Alumno;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.util.List;
+import java.util.UUID;
+
 public class AlumnoSpecifications {
 
     public static Specification<Alumno> activoTrue() {
@@ -23,7 +26,7 @@ public class AlumnoSpecifications {
         return (root, query, cb) -> cb.like(root.get("rut"), "%" + digits + "%");
     }
 
-    public static Specification<Alumno> byIdIn(java.util.List<String> ids) {
+    public static Specification<Alumno> byIdIn(List<UUID> ids) {
         return (root, query, cb) -> root.get("id").in(ids);
     }
 }

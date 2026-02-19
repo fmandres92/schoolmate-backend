@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.common.rut.RutNormalizer;
 import com.schoolmate.api.common.rut.RutValidationService;
@@ -54,7 +55,7 @@ public class ProfesorController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ProfesorResponse> obtener(@PathVariable String id) {
+    public ResponseEntity<ProfesorResponse> obtener(@PathVariable UUID id) {
         Profesor profesor = profesorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
 
@@ -80,7 +81,7 @@ public class ProfesorController {
 
     @PutMapping("/{id}")
     public ResponseEntity<ProfesorResponse> actualizar(
-            @PathVariable String id,
+            @PathVariable UUID id,
             @Valid @RequestBody ProfesorRequest request) {
 
         String rutNormalizado = RutNormalizer.normalize(request.getRut());
@@ -109,7 +110,7 @@ public class ProfesorController {
         return ResponseEntity.ok(ProfesorResponse.fromEntity(saved));
     }
 
-    private void validarUnicidadEnActualizacion(ProfesorRequest request, String profesorId) {
+    private void validarUnicidadEnActualizacion(ProfesorRequest request, UUID profesorId) {
         if (profesorRepository.existsByRutAndIdNot(request.getRut(), profesorId)) {
             throw new ApiException(ErrorCode.PROFESOR_RUT_DUPLICADO, "rut");
         }
@@ -122,10 +123,10 @@ public class ProfesorController {
         }
     }
 
-    private List<Materia> resolverMaterias(List<String> materiaIds) {
+    private List<Materia> resolverMaterias(List<UUID> materiaIds) {
         List<Materia> materias = materiaRepository.findAllById(materiaIds);
-        Set<String> idsEncontrados = materias.stream().map(Materia::getId).collect(java.util.stream.Collectors.toSet());
-        Set<String> idsFaltantes = new HashSet<>(materiaIds);
+        Set<UUID> idsEncontrados = materias.stream().map(Materia::getId).collect(java.util.stream.Collectors.toSet());
+        Set<UUID> idsFaltantes = new HashSet<>(materiaIds);
         idsFaltantes.removeAll(idsEncontrados);
         if (!idsFaltantes.isEmpty()) {
             throw new ApiException(ErrorCode.MATERIAS_NOT_FOUND, null, new Object[]{idsFaltantes});

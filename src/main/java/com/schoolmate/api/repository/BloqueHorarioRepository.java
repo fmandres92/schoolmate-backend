@@ -10,18 +10,19 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
-public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, String> {
+public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, UUID> {
 
-    List<BloqueHorario> findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc(String cursoId);
+    List<BloqueHorario> findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc(UUID cursoId);
 
     List<BloqueHorario> findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc(
-        String cursoId, Integer diaSemana);
+        UUID cursoId, Integer diaSemana);
 
     List<BloqueHorario> findByCursoIdAndActivoTrueAndTipoAndMateriaId(
-        String cursoId, TipoBloque tipo, String materiaId);
+        UUID cursoId, TipoBloque tipo, UUID materiaId);
 
-    List<BloqueHorario> findByCursoIdAndActivoTrueAndTipo(String cursoId, TipoBloque tipo);
+    List<BloqueHorario> findByCursoIdAndActivoTrueAndTipo(UUID cursoId, TipoBloque tipo);
 
     @Query("""
         SELECT b
@@ -36,9 +37,9 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, St
         ORDER BY b.horaInicio ASC
         """)
     List<BloqueHorario> findClasesProfesorEnDia(
-        @Param("profesorId") String profesorId,
+        @Param("profesorId") UUID profesorId,
         @Param("diaSemana") Integer diaSemana,
-        @Param("anoEscolarId") String anoEscolarId
+        @Param("anoEscolarId") UUID anoEscolarId
     );
 
     @Query("""
@@ -51,9 +52,9 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, St
           AND c.anoEscolar.id = :anoEscolarId
         """)
     boolean existsBloqueActivoProfesorEnCurso(
-        @Param("profesorId") String profesorId,
-        @Param("cursoId") String cursoId,
-        @Param("anoEscolarId") String anoEscolarId
+        @Param("profesorId") UUID profesorId,
+        @Param("cursoId") UUID cursoId,
+        @Param("anoEscolarId") UUID anoEscolarId
     );
 
     @Query("""
@@ -68,8 +69,8 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, St
         ORDER BY b.diaSemana ASC, b.horaInicio ASC
         """)
     List<BloqueHorario> findHorarioProfesorEnAnoEscolar(
-        @Param("profesorId") String profesorId,
-        @Param("anoEscolarId") String anoEscolarId
+        @Param("profesorId") UUID profesorId,
+        @Param("anoEscolarId") UUID anoEscolarId
     );
 
     @Query("""
@@ -82,8 +83,8 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, St
           AND b.activo = true
         """)
     List<BloqueHorario> findBloquesClaseProfesoresEnAnoEscolar(
-        @Param("profesorIds") Set<String> profesorIds,
-        @Param("anoEscolarId") String anoEscolarId
+        @Param("profesorIds") Set<UUID> profesorIds,
+        @Param("anoEscolarId") UUID anoEscolarId
     );
 
     @Query("SELECT b FROM BloqueHorario b " +
@@ -96,20 +97,20 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, St
         "AND c.anoEscolar.id = :anoEscolarId " +
         "AND b.id <> :bloqueIdExcluir")
     List<BloqueHorario> findColisionesProfesor(
-        @Param("profesorId") String profesorId,
+        @Param("profesorId") UUID profesorId,
         @Param("diaSemana") Integer diaSemana,
         @Param("horaInicio") LocalTime horaInicio,
         @Param("horaFin") LocalTime horaFin,
-        @Param("anoEscolarId") String anoEscolarId,
-        @Param("bloqueIdExcluir") String bloqueIdExcluir
+        @Param("anoEscolarId") UUID anoEscolarId,
+        @Param("bloqueIdExcluir") UUID bloqueIdExcluir
     );
 
     @Modifying
     @Query("UPDATE BloqueHorario b SET b.activo = false, b.updatedAt = CURRENT_TIMESTAMP " +
         "WHERE b.curso.id = :cursoId AND b.diaSemana = :diaSemana AND b.activo = true")
-    int desactivarBloquesDia(@Param("cursoId") String cursoId, @Param("diaSemana") Integer diaSemana);
+    int desactivarBloquesDia(@Param("cursoId") UUID cursoId, @Param("diaSemana") Integer diaSemana);
 
     @Query("SELECT DISTINCT b.diaSemana FROM BloqueHorario b " +
         "WHERE b.curso.id = :cursoId AND b.activo = true ORDER BY b.diaSemana")
-    List<Integer> findDiasConfigurados(@Param("cursoId") String cursoId);
+    List<Integer> findDiasConfigurados(@Param("cursoId") UUID cursoId);
 }

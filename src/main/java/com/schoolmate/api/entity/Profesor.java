@@ -6,6 +6,7 @@ import lombok.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "profesor")
@@ -16,7 +17,8 @@ import java.util.List;
 public class Profesor {
 
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
 
     @Column(nullable = false, unique = true, length = 20)
     private String rut;
@@ -60,9 +62,6 @@ public class Profesor {
     protected void onCreate() {
         createdAt = TimeContext.now();
         updatedAt = TimeContext.now();
-        if (id == null) {
-            id = java.util.UUID.randomUUID().toString();
-        }
     }
 
     @PreUpdate

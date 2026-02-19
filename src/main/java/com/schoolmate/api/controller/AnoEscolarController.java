@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.AnoEscolarRequest;
@@ -41,7 +42,7 @@ public class AnoEscolarController {
     // GET /api/anos-escolares/{id}
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<AnoEscolarResponse> obtener(@PathVariable String id) {
+    public ResponseEntity<AnoEscolarResponse> obtener(@PathVariable UUID id) {
         AnoEscolar ano = repository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
         return ResponseEntity.ok(AnoEscolarResponse.fromEntity(ano, ano.calcularEstado(clockProvider.today())));
@@ -107,7 +108,7 @@ public class AnoEscolarController {
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<AnoEscolarResponse> actualizar(
-            @PathVariable String id,
+            @PathVariable UUID id,
             @Valid @RequestBody AnoEscolarRequest request) {
         AnoEscolar ano = repository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));

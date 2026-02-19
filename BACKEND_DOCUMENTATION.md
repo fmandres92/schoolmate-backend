@@ -48,6 +48,24 @@ Fuente: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-a
 | Ownership por profesor/apoderado | ⚠️ parcial (profesor + apoderado en dominios acotados) |
 | Asistencia, reportes, dashboards | ⚠️ parcial (asistencia operativa + consulta apoderado; reportes/dashboards pendientes) |
 
+### Actualización técnica reciente (V19 + V20)
+
+Aplicado en Java sobre migraciones ya ejecutadas en BD:
+
+- V19:
+  - `Materia` incluye `activo` (`Boolean`, default `true`, `nullable = false`).
+  - `RegistroAsistencia` incluye `observacion` (`String`, largo máximo 500).
+  - `EstadoAsistencia` ahora soporta: `PRESENTE`, `AUSENTE`, `TARDANZA`, `JUSTIFICADO`.
+  - `RegistroAlumnoRequest` ahora recibe `observacion` opcional (`@Size(max = 500)`).
+  - Flujo de asistencia (`GuardarAsistenciaClase` y `ObtenerAsistenciaClase`) persiste y retorna `observacion` en `RegistroAsistenciaResponse`.
+
+- V20:
+  - Migración global de IDs a `UUID` en entidades, DTOs, repositories, controllers, use cases y `UserPrincipal`.
+  - PKs JPA usan `@GeneratedValue(strategy = GenerationType.UUID)` (ya no se usa generación manual en `@PrePersist` para IDs).
+  - FKs planas (`Usuario.profesorId`, `Usuario.apoderadoId`) migradas a `UUID`.
+  - Repositorios JPA migrados a `JpaRepository<Entidad, UUID>` (excepto claves naturales como `SeccionCatalogo.letra`).
+  - Endpoints y filtros que reciben IDs ahora usan tipo `UUID` (path/query/body).
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -93,7 +111,7 @@ Ejemplos reales:
 
 - No existe capa `Service` genérica transversal.
 - No hay interfaces de caso de uso innecesarias (use cases concretos como clases).
-- IDs en entidades: `String` (normalmente UUID generado en `@PrePersist`, aunque también hay IDs semánticos seed como `p1`, `c1`, `mc-...`).
+- IDs en entidades: `UUID` nativo (Hibernate/JPA con `GenerationType.UUID`).
 - Borrado lógico en algunos dominios (`activo=false`): malla curricular y bloques de jornada.
 - Tiempo centralizado: `ClockProvider` + `TimeContext` permiten controlar `today/now` en entorno `dev` sin afectar `prod`.
 
@@ -163,7 +181,7 @@ Clase: `ApiErrorResponse`
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway V1..V18
+    └── db/migration          # migraciones Flyway V1..V20
 ```
 
 ### TODAS las clases por paquete

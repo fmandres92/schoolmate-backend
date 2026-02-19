@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -27,12 +28,12 @@ public class ObtenerMateriasDisponibles {
     private final CursoRepository cursoRepository;
     private final MallaCurricularRepository mallaCurricularRepository;
 
-    public MateriasDisponiblesResponse execute(String cursoId, String bloqueId) {
+    public MateriasDisponiblesResponse execute(UUID cursoId, UUID bloqueId) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
-        String gradoId = curso.getGrado().getId();
-        String anoEscolarId = curso.getAnoEscolar().getId();
+        UUID gradoId = curso.getGrado().getId();
+        UUID anoEscolarId = curso.getAnoEscolar().getId();
 
         BloqueHorario bloque = bloqueHorarioRepository.findById(bloqueId)
             .orElseThrow(() -> new ResourceNotFoundException("Bloque no encontrado"));
@@ -56,7 +57,7 @@ public class ObtenerMateriasDisponibles {
         List<MateriaDisponibleResponse> materias = new ArrayList<>();
 
         for (MallaCurricular mallaCurricular : malla) {
-            String materiaId = mallaCurricular.getMateria().getId();
+            UUID materiaId = mallaCurricular.getMateria().getId();
             int minutosPermitidos = mallaCurricular.getHorasPedagogicas() * 45;
 
             int minutosAsignados = todosBloquesClase.stream()

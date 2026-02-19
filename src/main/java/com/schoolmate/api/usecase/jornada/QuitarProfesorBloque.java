@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -27,7 +28,7 @@ public class QuitarProfesorBloque {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public BloqueHorarioResponse execute(String cursoId, String bloqueId) {
+    public BloqueHorarioResponse execute(UUID cursoId, UUID bloqueId) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 

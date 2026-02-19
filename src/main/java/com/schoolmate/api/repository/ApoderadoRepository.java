@@ -4,8 +4,9 @@ import com.schoolmate.api.entity.Apoderado;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
+import java.util.UUID;
 
-public interface ApoderadoRepository extends JpaRepository<Apoderado, String> {
+public interface ApoderadoRepository extends JpaRepository<Apoderado, UUID> {
 
     Optional<Apoderado> findByEmail(String email);
 

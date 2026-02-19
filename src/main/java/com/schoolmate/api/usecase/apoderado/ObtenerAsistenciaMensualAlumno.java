@@ -19,6 +19,7 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Component
@@ -29,7 +30,7 @@ public class ObtenerAsistenciaMensualAlumno {
     private final RegistroAsistenciaRepository registroAsistenciaRepo;
     private final AlumnoRepository alumnoRepo;
 
-    public AsistenciaMensualResponse execute(String alumnoId, int mes, int anio, String apoderadoId) {
+    public AsistenciaMensualResponse execute(UUID alumnoId, int mes, int anio, UUID apoderadoId) {
         if (!apoderadoAlumnoRepo.existsByApoderadoIdAndAlumnoId(apoderadoId, alumnoId)) {
             throw new AccessDeniedException("No tienes acceso a este alumno");
         }

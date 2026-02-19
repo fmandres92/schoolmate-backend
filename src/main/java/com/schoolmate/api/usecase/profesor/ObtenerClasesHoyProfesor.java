@@ -19,10 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -39,8 +39,8 @@ public class ObtenerClasesHoyProfesor {
 
     @Transactional(readOnly = true)
     public ClasesHoyResponse execute(UserPrincipal principal) {
-        String profesorId = principal != null ? principal.getProfesorId() : null;
-        if (profesorId == null || profesorId.isBlank()) {
+        UUID profesorId = principal != null ? principal.getProfesorId() : null;
+        if (profesorId == null) {
             throw new AccessDeniedException("No se pudo resolver el profesor autenticado");
         }
 

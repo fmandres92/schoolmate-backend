@@ -1,4 +1,5 @@
 package com.schoolmate.api.controller;
+import java.util.UUID;
 
 import com.schoolmate.api.dto.AlumnoApoderadoResponse;
 import com.schoolmate.api.dto.AsistenciaMensualResponse;
@@ -44,7 +45,7 @@ public class ApoderadoPortalController {
     @GetMapping("/alumnos/{alumnoId}/asistencia/mensual")
     @PreAuthorize("hasRole('APODERADO')")
     public ResponseEntity<AsistenciaMensualResponse> asistenciaMensual(
-            @PathVariable String alumnoId,
+            @PathVariable UUID alumnoId,
             @RequestParam int mes,
             @RequestParam int anio,
             @AuthenticationPrincipal UserPrincipal user) {
@@ -57,19 +58,19 @@ public class ApoderadoPortalController {
     @PreAuthorize("hasRole('APODERADO')")
     public ResponseEntity<ResumenAsistenciaResponse> resumenAsistencia(
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
-            @PathVariable String alumnoId,
-            @RequestParam(required = false) String anoEscolarId,
+            @PathVariable UUID alumnoId,
+            @RequestParam(required = false) UUID anoEscolarId,
             @AuthenticationPrincipal UserPrincipal user) {
-        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
         ResumenAsistenciaResponse resultado = obtenerResumenAsistenciaAlumno.execute(
                 alumnoId, resolvedAnoEscolarId, user.getApoderadoId());
         return ResponseEntity.ok(resultado);
     }
 
-    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId) {
-        String resolvedAnoEscolarId = anoEscolarHeader != null
+    private UUID resolveAnoEscolarId(AnoEscolar anoEscolarHeader, UUID anoEscolarId) {
+        UUID resolvedAnoEscolarId = anoEscolarHeader != null
                 ? anoEscolarHeader.getId()
-                : (anoEscolarId == null || anoEscolarId.isBlank() ? null : anoEscolarId.trim());
+                : anoEscolarId;
 
         if (resolvedAnoEscolarId == null) {
             throw new ApiException(
