@@ -77,6 +77,10 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - Guard defensivo en controller para responder `401` si principal nulo.
 - Correcciones N+1 en curso/jornada mediante `@EntityGraph` y queries con `JOIN FETCH` en `CursoRepository`, `MallaCurricularRepository`, `BloqueHorarioRepository`, y ajuste de consumo en use cases/controladores de jornada.
 - `AlumnoController.getMatriculaMap` ahora consulta solo matrículas de alumnos de la página (`alumno_id IN (...)`) vía `MatriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(...)`.
+- Caching HTTP:
+  - `CacheConfig` registra `ShallowEtagHeaderFilter` para `/api/*` (ETag automático por body en GET).
+  - `CacheControlInterceptor` aplica `Cache-Control` por grupo de rutas (catálogos/configuración vs transaccional/sensible).
+  - `SecurityConfig` deshabilita headers cache por defecto de Spring Security (`headers.cacheControl(...disable())`) para no sobrescribir la política del interceptor.
 
 ---
 
@@ -203,6 +207,8 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.config`
   - `AnoEscolarArgumentResolver`
   - `AnoEscolarHeaderInterceptor`
+  - `CacheConfig`
+  - `CacheControlInterceptor`
   - `CorsConfig`
   - `SecurityConfig`
   - `WebMvcConfig`
@@ -772,6 +778,22 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
   - `/h2-console/**`
   - `/error`
 - Resto: autenticado (incluye `/api/auth/me`).
+- Headers de cache de Spring Security deshabilitados (`headers.cacheControl(cache -> cache.disable())`) para delegar `Cache-Control` al interceptor de aplicación.
+
+### Caching HTTP (ETag + Cache-Control)
+
+Configuración activa en código:
+
+- `CacheConfig`:
+  - registra `ShallowEtagHeaderFilter` en patrón `/api/*`.
+  - comportamiento efectivo: en `GET` con status `2xx`, genera `ETag` sobre el body y soporta revalidación `If-None-Match` -> `304 Not Modified` cuando coincide.
+- `CacheControlInterceptor` (registrado en `WebMvcConfig`):
+  - aplica solo en `GET` con status `200`.
+  - reglas:
+    - Grupo A/B (`/api/grados`, `/api/materias`, `/api/anos-escolares/**`, `/api/cursos/**`, `/api/malla-curricular`, `/api/profesores`) -> `Cache-Control: no-cache`.
+    - Grupo C transaccional (`/api/matriculas/**`, `/api/asistencia/**`, `/api/alumnos/**`) -> `Cache-Control: no-store`.
+    - Grupo C sensible (`/api/apoderado/**`, `/api/profesor/**`, `/api/auth/**`) -> `Cache-Control: no-store, private`.
+    - default `GET` restante -> `Cache-Control: no-cache`.
 
 ### Resolución de año escolar por header (`X-Ano-Escolar-Id`)
 
@@ -1752,6 +1774,15 @@ Regla práctica actual:
 - En alumnos, el año escolar activa la resolución de matrícula y permite filtrar por curso/grado.
 - Sin año escolar, el backend devuelve solo ficha personal del alumno.
 
+### Contrato de caching HTTP en GET
+
+- Respuestas `GET /api/*` incluyen `ETag` calculado por backend.
+- Si el cliente envía `If-None-Match` con el mismo valor, la API responde `304 Not Modified` (sin body).
+- `Cache-Control` depende del grupo de endpoint:
+  - `no-cache` para catálogos/configuración (revalidación siempre con servidor).
+  - `no-store` para datos transaccionales.
+  - `no-store, private` para datos sensibles de usuario.
+
 ---
 
 ## SECCIÓN 13: CONFIGURACIÓN
@@ -1761,6 +1792,8 @@ Archivos:
 - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/resources/application.yml`
 - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/resources/application-dev.yml`
 - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/resources/application-prod.yml`
+- `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/java/com/schoolmate/api/config/CacheConfig.java`
+- `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/java/com/schoolmate/api/config/CacheControlInterceptor.java`
 
 ### Propiedades relevantes
 
@@ -1798,6 +1831,12 @@ Headers permitidos: `*` (incluye `X-Ano-Escolar-Id`).
 
 No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos están hardcodeados en archivos de configuración.
 
+### Caching HTTP operativo
+
+- `ETag` automático en `GET /api/*` mediante `ShallowEtagHeaderFilter`.
+- `Cache-Control` asignado por `CacheControlInterceptor` según patrón de ruta.
+- Seguridad no fuerza `Cache-Control` global (se deshabilitó el header default de Spring Security).
+
 ---
 
 ## SECCIÓN 14: ÍNDICES Y PERFORMANCE
@@ -1832,6 +1871,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - Cargas explícitas de relaciones en curso/jornada con `@EntityGraph` y `JOIN FETCH` para reducir N+1.
 - `AlumnoController.getMatriculaMap` ahora consulta por `alumno_id IN (...)` (IDs de la página actual) en vez de traer todas las matrículas activas del año.
 - Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
+- Revalidación HTTP en GET con `ETag` + `If-None-Match` (`304`) y políticas `Cache-Control` por endpoint.
 
 ---
 

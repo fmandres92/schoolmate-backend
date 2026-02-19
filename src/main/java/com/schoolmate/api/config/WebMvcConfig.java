@@ -12,11 +12,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WebMvcConfig implements WebMvcConfigurer {
 
+    private final CacheControlInterceptor cacheControlInterceptor;
     private final AnoEscolarHeaderInterceptor anoEscolarHeaderInterceptor;
     private final AnoEscolarArgumentResolver anoEscolarArgumentResolver;
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(cacheControlInterceptor);
+
         registry.addInterceptor(anoEscolarHeaderInterceptor)
                 .addPathPatterns("/api/**")
                 .excludePathPatterns(
