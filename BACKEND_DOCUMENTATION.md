@@ -139,7 +139,7 @@ Clase: `ApiErrorResponse`
 ├── pom.xml
 ├── src/main/java/com/schoolmate/api
 │   ├── config                # seguridad HTTP y CORS
-│   ├── common/rut            # utilidades de normalización de RUT
+│   ├── common/rut            # normalización y validación de RUT
 │   ├── common/time           # proveedor centralizado de fecha/hora
 │   ├── controller            # endpoints REST
 │   ├── dto                   # DTOs de portal apoderado y proyecciones
@@ -178,6 +178,7 @@ Clase: `ApiErrorResponse`
   - `TimeContext`
 - `com.schoolmate.api.common.rut`
   - `RutNormalizer`
+  - `RutValidationService`
 - `com.schoolmate.api.controller`
   - `AlumnoController`
   - `AnoEscolarController`
@@ -276,6 +277,7 @@ Clase: `ApiErrorResponse`
   - `EstadoMatricula`
   - `Rol`
   - `TipoBloque`
+  - `TipoPersona`
   - `VinculoApoderado`
 - `com.schoolmate.api.exception`
   - `ApiException`
@@ -797,7 +799,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/apoderados` | Crea apoderado + usuario `ROL=APODERADO`, o vincula un apoderado existente por RUT | `ADMIN` | Body JSON | `ApoderadoRequest` | `ApoderadoResponse` (`201`) | `CrearApoderadoConUsuario` | `RESOURCE_NOT_FOUND`, `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `POST /api/apoderados` | Crea apoderado + usuario `ROL=APODERADO`, o vincula un apoderado existente por RUT; valida formato/DV de RUT y cross-tabla solo si es persona nueva | `ADMIN` | Body JSON | `ApoderadoRequest` | `ApoderadoResponse` (`201`) | `CrearApoderadoConUsuario` | `RESOURCE_NOT_FOUND`, `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/apoderados/buscar-por-rut?rut=...` | Busca apoderado por RUT normalizado e incluye lista de alumnos vinculados (`cursoNombre` cuando existe matrícula activa) | `ADMIN` | Query `rut` | - | `ApoderadoBuscarResponse` | directo repository | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 | `GET /api/apoderados/por-alumno/{alumnoId}` | Retorna apoderado vinculado al alumno (MVP: primer vínculo) | `ADMIN` | Path `alumnoId` | - | `ApoderadoResponse` o `204` | directo repository | `RESOURCE_NOT_FOUND` |
 
@@ -871,8 +873,8 @@ Implementación actual:
 |---|---|---|---|---|---|---|---|
 | `GET /api/profesores` | Lista profesores ordenados por apellido | `ADMIN` | - | - | `List<ProfesorResponse>` | directo | - |
 | `GET /api/profesores/{id}` | Obtiene profesor con contrato y horas asignadas del año ACTIVO (si existe) | `ADMIN` | Path | - | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `POST /api/profesores` | Crea profesor con materias, horas de contrato y usuario asociado (`ROL=PROFESOR`) | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | `CrearProfesorConUsuario` | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `PUT /api/profesores/{id}` | Actualiza profesor; RUT inmutable; permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `VALIDATION_FAILED` |
+| `POST /api/profesores` | Crea profesor con materias, horas de contrato y usuario asociado (`ROL=PROFESOR`); valida formato/DV de RUT y disponibilidad cross-tabla | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | `CrearProfesorConUsuario` | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `PUT /api/profesores/{id}` | Actualiza profesor; valida formato de RUT, mantiene RUT inmutable y permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/profesores/{profesorId}/horario?anoEscolarId=...` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Query `anoEscolarId` | - | `ProfesorHorarioResponse` | directo | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
 | `GET /api/profesor/mis-clases-hoy` | Clases del día para el profesor autenticado (`estado` por ventana de 15 min, `asistenciaTomada` real por bloque+fecha) | `PROFESOR` | `Authorization` (usa `profesorId` del JWT) | - | `ClasesHoyResponse` | `ObtenerClasesHoyProfesor` | `ACCESS_DENIED` |
 
@@ -883,15 +885,15 @@ Implementación actual:
 | `GET /api/alumnos` | Lista paginada con búsqueda y enriquecimiento opcional por matrícula | `ADMIN` | Query: `page,size,sortBy,sortDir,anoEscolarId,cursoId,gradoId,q` | - | `AlumnoPageResponse` | directo + `AlumnoSpecifications` | - |
 | `GET /api/alumnos/{id}` | Obtiene alumno; opcional matrícula activa por año y apoderado principal vinculado (si existe) | `ADMIN` | Path + Query opcional `anoEscolarId` | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
 | `GET /api/alumnos/buscar-por-rut` | Búsqueda exacta por RUT (normaliza con/sin puntos y guion) + matrícula opcional por año | `ADMIN` | Query: `rut` (obligatorio), `anoEscolarId` (opcional) | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `POST /api/alumnos` | Crea alumno | `ADMIN` | Body | `AlumnoRequest` | `AlumnoResponse` | directo | `409` (RUT duplicado vía `ResponseStatusException`), `VALIDATION_FAILED` |
-| `POST /api/alumnos/con-apoderado` | Crea alumno y vincula/crea apoderado en una transacción | `ADMIN` | Body | `CrearAlumnoConApoderadoRequest` | `AlumnoResponse` (`201`) | `CrearAlumnoConApoderado` | `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `PUT /api/alumnos/{id}` | Actualiza alumno | `ADMIN` | Path + Body | `AlumnoRequest` | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND`, `409` (RUT duplicado), `VALIDATION_FAILED` |
+| `POST /api/alumnos` | Crea alumno; valida formato/DV de RUT y disponibilidad cross-tabla antes de la unicidad interna de alumno | `ADMIN` | Body | `AlumnoRequest` | `AlumnoResponse` | directo | `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `POST /api/alumnos/con-apoderado` | Crea alumno y vincula/crea apoderado en una transacción; valida formato de ambos RUT y cross-tabla (apoderado solo si es nuevo) | `ADMIN` | Body | `CrearAlumnoConApoderadoRequest` | `AlumnoResponse` (`201`) | `CrearAlumnoConApoderado` | `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `PUT /api/alumnos/{id}` | Actualiza alumno; valida formato/DV de RUT y disponibilidad cross-tabla antes de la unicidad interna | `ADMIN` | Path + Body | `AlumnoRequest` | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND`, `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 
 ### Dominio: Matrículas
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/matriculas` | Matricula alumno en curso/año | `ADMIN` | Body | `MatriculaRequest {alumnoId,cursoId,anoEscolarId,fechaMatricula?}` | `MatriculaResponse` | `MatricularAlumno` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `POST /api/matriculas` | Matricula alumno en curso/año; bloquea creación si el año escolar está `CERRADO` | `ADMIN` | Body | `MatriculaRequest {alumnoId,cursoId,anoEscolarId,fechaMatricula?}` | `MatriculaResponse` | `MatricularAlumno` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/matriculas/curso/{cursoId}` | Matrículas activas por curso | `ADMIN`,`PROFESOR` (ownership por curso en año activo) | Path `cursoId` | - | `List<MatriculaResponse>` | directo + `ValidarAccesoMatriculasCursoProfesor` | `ACCESS_DENIED` |
 | `GET /api/matriculas/alumno/{alumnoId}` | Historial de matrículas por alumno | `ADMIN` | Path `alumnoId` | - | `List<MatriculaResponse>` | directo | - |
 | `PATCH /api/matriculas/{id}/estado` | Cambia estado (`ACTIVA/RETIRADO/TRASLADADO`) | `ADMIN` | Path + body map `{estado}` | `Map<String,String>` | `MatriculaResponse` | `CambiarEstadoMatricula` | `400` por body inválido, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
@@ -900,7 +902,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/asistencia/clase` | Registra o edita (reemplaza registros) la asistencia de HOY para un bloque CLASE dentro de ventana ±15 min | `PROFESOR` (ownership por bloque) | Body | `GuardarAsistenciaRequest {bloqueHorarioId,fecha,registros[]}` | `AsistenciaClaseResponse` (`201 Created`) | `GuardarAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `POST /api/asistencia/clase` | Registra o edita asistencia de un bloque CLASE para una fecha no futura y válida del año escolar; ventana ±15 min solo cuando la fecha es hoy | `PROFESOR` (ownership por bloque) | Body | `GuardarAsistenciaRequest {bloqueHorarioId,fecha,registros[]}` | `AsistenciaClaseResponse` (`201 Created`) | `GuardarAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/asistencia/clase?bloqueHorarioId=...&fecha=...` | Obtiene asistencia registrada para un bloque y fecha | `PROFESOR` (ownership por bloque) | Query `bloqueHorarioId`,`fecha` | - | `AsistenciaClaseResponse` | `ObtenerAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
 
 ### Dominio: Jornada
@@ -927,19 +929,22 @@ Implementación actual:
 
 ### `com.schoolmate.api.usecase.asistencia.GuardarAsistenciaClase`
 
-- Función: registrar o editar asistencia de una clase para la fecha actual.
+- Función: registrar o editar asistencia de una clase para una fecha no futura del año escolar del bloque.
 - Repositorios/dependencias:
   - `BloqueHorarioRepository`, `MatriculaRepository`, `AsistenciaClaseRepository`, `RegistroAsistenciaRepository`, `ClockProvider`
 - Validaciones:
   - bloque existe y es tipo `CLASE`
-  - ownership: bloque debe pertenecer al profesor autenticado
-  - fecha del request debe ser `clockProvider.today()`
+  - fecha no puede ser futura
+  - no permite sábados ni domingos
   - fecha debe corresponder al `diaSemana` del bloque
-  - ventana horaria permitida: `horaInicio-15min` a `horaFin+15min`
+  - el año escolar del curso no puede estar `CERRADO`
+  - la fecha debe estar dentro de `[fechaInicio, fechaFin]` del año escolar
+  - ownership: bloque debe pertenecer al profesor autenticado
+  - ventana horaria permitida (`horaInicio-15min` a `horaFin+15min`) solo cuando `fechaRequest == hoy`
   - todos los alumnos del request deben estar con matrícula `ACTIVA` en el curso
   - no se aceptan alumnos duplicados en el request
 - Comportamiento de persistencia:
-  - si no existe asistencia para `(bloque,fecha)`, crea `asistencia_clase` + registros
+  - si no existe asistencia para `(bloque,fechaRequest)`, crea `asistencia_clase` + registros
   - si ya existe, actualiza `updatedAt`, borra registros previos y vuelve a insertar los registros enviados
 - Manejo de concurrencia:
   - ante carrera al crear cabecera (`asistencia_clase`), recupera la existente y continúa como edición
@@ -985,11 +990,12 @@ Implementación actual:
 
 - Función: crear apoderado + usuario `ROL=APODERADO` o vincular apoderado existente por RUT a un alumno.
 - Repositorios/dependencias:
-  - `ApoderadoRepository`, `ApoderadoAlumnoRepository`, `UsuarioRepository`, `AlumnoRepository`, `PasswordEncoder`
+  - `ApoderadoRepository`, `ApoderadoAlumnoRepository`, `UsuarioRepository`, `AlumnoRepository`, `PasswordEncoder`, `RutValidationService`
 - Reglas:
   - alumno debe existir
   - MVP: un alumno no puede tener más de un apoderado vinculado
-  - RUT se normaliza (`RutNormalizer`)
+  - RUT se normaliza (`RutNormalizer`) y siempre se valida formato + dígito verificador
+  - si el apoderado no existe por RUT, valida disponibilidad cross-tabla (no debe existir como alumno o profesor)
   - si el apoderado no existe por RUT, valida unicidad de email en `usuario` y `apoderado`
   - al crear usuario, password inicial = RUT normalizado con BCrypt
   - crea vínculo `apoderado_alumno`
@@ -1045,10 +1051,13 @@ Implementación actual:
 
 - Función: crear alumno y gestionar su apoderado principal en una sola transacción.
 - Repositorios/dependencias:
-  - `AlumnoRepository`, `ApoderadoRepository`, `ApoderadoAlumnoRepository`, `UsuarioRepository`, `PasswordEncoder`
+  - `AlumnoRepository`, `ApoderadoRepository`, `ApoderadoAlumnoRepository`, `UsuarioRepository`, `PasswordEncoder`, `RutValidationService`
 - Reglas:
-  - valida RUT de alumno único (`existsByRut`)
   - normaliza RUT de alumno/apoderado con `RutNormalizer`
+  - valida formato + dígito verificador en ambos RUT
+  - valida disponibilidad cross-tabla del RUT alumno
+  - valida disponibilidad cross-tabla del RUT apoderado solo cuando es apoderado nuevo
+  - valida RUT de alumno único (`existsByRut`)
   - si apoderado no existe por RUT:
     - valida unicidad de email en `usuario` y `apoderado`
     - crea `Apoderado`
@@ -1065,8 +1074,10 @@ Implementación actual:
 
 - Función: creación transaccional de profesor + usuario (`ROL=PROFESOR`) con password inicial igual al RUT normalizado.
 - Repositorios/dependencias:
-  - `ProfesorRepository`, `MateriaRepository`, `UsuarioRepository`, `PasswordEncoder`
+  - `ProfesorRepository`, `MateriaRepository`, `UsuarioRepository`, `PasswordEncoder`, `RutValidationService`
 - Reglas:
+  - normaliza RUT y valida formato + dígito verificador
+  - valida disponibilidad cross-tabla del RUT (no debe existir como alumno o apoderado)
   - mantiene validaciones de duplicados de `Profesor` (rut/email/teléfono)
   - valida duplicados en `Usuario` por email y RUT normalizado
   - si falla creación de usuario, rollback completo de profesor
@@ -1079,14 +1090,16 @@ Implementación actual:
   - `AlumnoRepository`, `CursoRepository`, `AnoEscolarRepository`, `MatriculaRepository`
 - Validaciones:
   - alumno/curso/año existen
+  - año escolar no puede estar `CERRADO` (`anoEscolar.calcularEstado(clockProvider.today())`)
   - curso pertenece al año indicado
   - alumno no tiene matrícula activa en ese año
 - Flujo:
   1. carga entidades
-  2. valida pertenencia curso-año
-  3. valida unicidad de matrícula activa
-  4. define fecha (`request.fechaMatricula` o `clockProvider.today()`)
-  5. guarda `Matricula(estado=ACTIVA)`
+  2. valida estado del año escolar (`!= CERRADO`)
+  3. valida pertenencia curso-año
+  4. valida unicidad de matrícula activa
+  5. define fecha (`request.fechaMatricula` o `clockProvider.today()`)
+  6. guarda `Matricula(estado=ACTIVA)`
 - Errores:
   - `ResourceNotFoundException`
   - `BusinessException`
@@ -1482,12 +1495,16 @@ Reglas adicionales en controller:
 
 ### Validaciones de RUT, email, teléfono duplicados
 
-Implementadas explícitamente en `ProfesorController`:
+Implementadas con validación transversal en `RutValidationService` + reglas específicas por flujo:
 
-- RUT duplicado en create/update
-- Email duplicado en create/update
-- Teléfono duplicado (si informado) en create/update
-- RUT inmutable en update (`PROFESOR_RUT_INMUTABLE`)
+- `RutValidationService` (paquete `common.rut`) centraliza:
+  - validación de formato de RUT chileno (`7-8 dígitos + guion + DV 0-9/K`)
+  - validación de dígito verificador (módulo 11)
+  - validación de disponibilidad cross-tabla entre `alumno`, `profesor` y `apoderado`
+- `TipoPersona` define contexto de validación (`ALUMNO`, `PROFESOR`, `APODERADO`)
+- En profesores:
+  - `POST /api/profesores`: valida formato/DV + cross-tabla y mantiene duplicados rut/email/teléfono
+  - `PUT /api/profesores/{id}`: valida formato de RUT y mantiene regla `PROFESOR_RUT_INMUTABLE`
 - `horasPedagogicasContrato` opcional en profesor:
   - si viene valor, rango válido `1..50`
   - en update puede enviarse `null` para limpiar
@@ -1498,10 +1515,13 @@ Implementadas explícitamente en `ProfesorController`:
 
 Para alumnos:
 
-- `POST /api/alumnos` y `PUT /api/alumnos/{id}` validan unicidad de `rut` del alumno.
+- `POST /api/alumnos` y `PUT /api/alumnos/{id}` validan formato/DV + cross-tabla y además mantienen unicidad interna de `rut`.
 - `POST /api/alumnos/con-apoderado` agrega reglas transaccionales:
-  - RUT alumno no duplicado
   - normalización de RUT alumno/apoderado
+  - validación de formato/DV en ambos RUT
+  - validación cross-tabla para RUT de alumno
+  - validación cross-tabla para RUT de apoderado solo si es persona nueva
+  - RUT alumno no duplicado en tabla `alumno`
   - reuso de apoderado existente por RUT o creación de nuevo apoderado + usuario
   - password inicial de usuario apoderado = RUT normalizado (BCrypt)
   - creación de vínculo `apoderado_alumno` con `vinculo` (`MADRE`, `PADRE`, `TUTOR_LEGAL`, `ABUELO`, `OTRO`)
@@ -1525,12 +1545,22 @@ Para alumnos:
   - profesor debe enseñar la materia del bloque (`profesor_materia`)
   - profesor no puede tener colisión de horario (cross-curso, mismo año escolar)
 - Transiciones de matrícula restringidas (`ACTIVA<->RETIRADO/TRASLADADO`).
+- En matrícula (`MatricularAlumno`):
+  - se bloquea crear matrícula cuando `AnoEscolar.calcularEstado(clockProvider.today()) == CERRADO`
 - Gestión de apoderados (MVP):
-  - RUT de apoderado normalizado antes de crear/vincular.
+  - RUT de apoderado normalizado y validado (formato/DV) antes de crear/vincular.
+  - validación cross-tabla solo cuando el apoderado es persona nueva.
   - creación de usuario `ROL=APODERADO` con password inicial = RUT normalizado (BCrypt).
   - máximo un apoderado por alumno en flujo admin actual (`existsByAlumnoId`).
   - si el alumno ya tiene vínculo, responde conflicto (`409`).
   - `GET /api/apoderados/buscar-por-rut` retorna alumnos vinculados; incluye `cursoNombre` cuando hay matrícula activa.
+- En asistencia (`GuardarAsistenciaClase`):
+  - se permite registrar asistencia para fechas pasadas válidas (ya no solo `hoy`)
+  - se bloquean fechas futuras y fines de semana
+  - la fecha debe coincidir con el `diaSemana` del bloque
+  - la fecha debe estar dentro del rango del año escolar del curso
+  - no se permite registrar asistencia si el año escolar del curso está `CERRADO`
+  - la ventana horaria ±15 min se aplica solo cuando la fecha es `hoy`
 - Portal apoderado:
   - ownership estricto por vínculo `apoderado_alumno`.
   - asistencia mensual marca día `PARCIAL` cuando hay bloques presentes y ausentes en la misma fecha.

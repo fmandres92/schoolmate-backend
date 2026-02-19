@@ -1,6 +1,7 @@
 package com.schoolmate.api.usecase.alumno;
 
 import com.schoolmate.api.common.rut.RutNormalizer;
+import com.schoolmate.api.common.rut.RutValidationService;
 import com.schoolmate.api.dto.request.CrearAlumnoConApoderadoRequest;
 import com.schoolmate.api.dto.response.AlumnoResponse;
 import com.schoolmate.api.entity.Alumno;
@@ -9,6 +10,7 @@ import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.ApoderadoAlumnoId;
 import com.schoolmate.api.entity.Usuario;
 import com.schoolmate.api.enums.Rol;
+import com.schoolmate.api.enums.TipoPersona;
 import com.schoolmate.api.exception.BusinessException;
 import com.schoolmate.api.exception.ConflictException;
 import com.schoolmate.api.repository.AlumnoRepository;
@@ -31,6 +33,7 @@ public class CrearAlumnoConApoderado {
     private final ApoderadoAlumnoRepository apoderadoAlumnoRepository;
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RutValidationService rutValidationService;
 
     @Transactional
     public AlumnoResponse ejecutar(CrearAlumnoConApoderadoRequest request) {
@@ -38,11 +41,21 @@ public class CrearAlumnoConApoderado {
         var apoderadoData = request.getApoderado();
 
         String rutAlumnoNorm = normalizarRut(alumnoData.getRut());
+        String rutApoderadoNorm = normalizarRut(apoderadoData.getRut());
+
+        rutValidationService.validarFormatoRut(rutAlumnoNorm);
+        rutValidationService.validarFormatoRut(rutApoderadoNorm);
+        rutValidationService.validarRutDisponible(rutAlumnoNorm, TipoPersona.ALUMNO, null);
+
+        boolean apoderadoExiste = apoderadoRepository.existsByRut(rutApoderadoNorm);
+        if (!apoderadoExiste) {
+            rutValidationService.validarRutDisponible(rutApoderadoNorm, TipoPersona.APODERADO, null);
+        }
+
         if (alumnoRepository.existsByRut(rutAlumnoNorm)) {
             throw new ConflictException("Ya existe un alumno con RUT " + alumnoData.getRut());
         }
 
-        String rutApoderadoNorm = normalizarRut(apoderadoData.getRut());
         String emailApoderado = apoderadoData.getEmail().trim().toLowerCase();
         Apoderado apoderado = apoderadoRepository.findByRut(rutApoderadoNorm).orElse(null);
 

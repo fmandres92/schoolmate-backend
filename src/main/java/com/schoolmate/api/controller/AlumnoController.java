@@ -1,5 +1,7 @@
 package com.schoolmate.api.controller;
 
+import com.schoolmate.api.common.rut.RutNormalizer;
+import com.schoolmate.api.common.rut.RutValidationService;
 import com.schoolmate.api.dto.request.AlumnoRequest;
 import com.schoolmate.api.dto.request.CrearAlumnoConApoderadoRequest;
 import com.schoolmate.api.dto.response.AlumnoPageResponse;
@@ -9,6 +11,7 @@ import com.schoolmate.api.entity.Apoderado;
 import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.enums.TipoPersona;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AlumnoRepository;
 import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
@@ -46,6 +49,7 @@ public class AlumnoController {
     private final ApoderadoAlumnoRepository apoderadoAlumnoRepository;
     private final ApoderadoRepository apoderadoRepository;
     private final CrearAlumnoConApoderado crearAlumnoConApoderado;
+    private final RutValidationService rutValidationService;
 
     /**
      * Listar alumnos con paginación.
@@ -179,6 +183,10 @@ public class AlumnoController {
 
     @PostMapping
     public ResponseEntity<AlumnoResponse> crear(@Valid @RequestBody AlumnoRequest request) {
+        String rutNormalizado = RutNormalizer.normalize(request.getRut());
+        rutValidationService.validarFormatoRut(rutNormalizado);
+        rutValidationService.validarRutDisponible(rutNormalizado, TipoPersona.ALUMNO, null);
+
         if (alumnoRepository.existsByRut(request.getRut())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un alumno con ese RUT");
         }
@@ -200,6 +208,10 @@ public class AlumnoController {
     public ResponseEntity<AlumnoResponse> actualizar(
             @PathVariable String id,
             @Valid @RequestBody AlumnoRequest request) {
+
+        String rutNormalizado = RutNormalizer.normalize(request.getRut());
+        rutValidationService.validarFormatoRut(rutNormalizado);
+        rutValidationService.validarRutDisponible(rutNormalizado, TipoPersona.ALUMNO, id);
 
         Alumno alumno = alumnoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));

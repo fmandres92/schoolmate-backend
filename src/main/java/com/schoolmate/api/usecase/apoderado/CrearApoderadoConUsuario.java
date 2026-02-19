@@ -1,6 +1,7 @@
 package com.schoolmate.api.usecase.apoderado;
 
 import com.schoolmate.api.common.rut.RutNormalizer;
+import com.schoolmate.api.common.rut.RutValidationService;
 import com.schoolmate.api.dto.ApoderadoRequest;
 import com.schoolmate.api.dto.ApoderadoResponse;
 import com.schoolmate.api.entity.Alumno;
@@ -9,6 +10,7 @@ import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.ApoderadoAlumnoId;
 import com.schoolmate.api.entity.Usuario;
 import com.schoolmate.api.enums.Rol;
+import com.schoolmate.api.enums.TipoPersona;
 import com.schoolmate.api.exception.BusinessException;
 import com.schoolmate.api.exception.ConflictException;
 import com.schoolmate.api.exception.ResourceNotFoundException;
@@ -35,6 +37,7 @@ public class CrearApoderadoConUsuario {
     private final UsuarioRepository usuarioRepo;
     private final AlumnoRepository alumnoRepo;
     private final PasswordEncoder passwordEncoder;
+    private final RutValidationService rutValidationService;
 
     @Transactional
     public ApoderadoResponse execute(ApoderadoRequest request) {
@@ -46,6 +49,13 @@ public class CrearApoderadoConUsuario {
         }
 
         String rutNormalizado = normalizarRut(request.getRut());
+        rutValidationService.validarFormatoRut(rutNormalizado);
+
+        boolean apoderadoExiste = apoderadoRepo.existsByRut(rutNormalizado);
+        if (!apoderadoExiste) {
+            rutValidationService.validarRutDisponible(rutNormalizado, TipoPersona.APODERADO, null);
+        }
+
         String emailNormalizado = request.getEmail().trim().toLowerCase();
 
         Optional<Apoderado> apoderadoExistente = apoderadoRepo.findByRut(rutNormalizado);

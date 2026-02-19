@@ -6,10 +6,12 @@ import com.schoolmate.api.dto.request.RegistroAlumnoRequest;
 import com.schoolmate.api.dto.response.AsistenciaClaseResponse;
 import com.schoolmate.api.dto.response.RegistroAsistenciaResponse;
 import com.schoolmate.api.entity.Alumno;
+import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.AsistenciaClase;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.entity.RegistroAsistencia;
+import com.schoolmate.api.enums.EstadoAnoEscolar;
 import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.enums.TipoBloque;
 import com.schoolmate.api.exception.BusinessException;
@@ -24,6 +26,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -56,25 +59,44 @@ public class GuardarAsistenciaClase {
             throw new BusinessException("Solo se puede registrar asistencia en bloques de tipo CLASE");
         }
 
+        LocalDate fechaRequest = request.getFecha();
+        LocalDate hoy = clockProvider.today();
+
+        if (fechaRequest.isAfter(hoy)) {
+            throw new BusinessException("No se puede registrar asistencia para una fecha futura");
+        }
+
+        DayOfWeek diaSemanaFecha = fechaRequest.getDayOfWeek();
+        if (diaSemanaFecha == DayOfWeek.SATURDAY || diaSemanaFecha == DayOfWeek.SUNDAY) {
+            throw new BusinessException("No se puede registrar asistencia en fin de semana");
+        }
+
+        int diaSemanaBloque = bloque.getDiaSemana();
+        if (fechaRequest.getDayOfWeek().getValue() != diaSemanaBloque) {
+            throw new BusinessException("La fecha no corresponde al día del bloque horario");
+        }
+
+        AnoEscolar anoEscolar = bloque.getCurso().getAnoEscolar();
+        EstadoAnoEscolar estadoAno = anoEscolar.calcularEstado(hoy);
+        if (estadoAno == EstadoAnoEscolar.CERRADO) {
+            throw new BusinessException("No se puede registrar asistencia en un año escolar cerrado");
+        }
+
+        if (fechaRequest.isBefore(anoEscolar.getFechaInicio()) || fechaRequest.isAfter(anoEscolar.getFechaFin())) {
+            throw new BusinessException("La fecha está fuera del período del año escolar");
+        }
+
         if (bloque.getProfesor() == null || !bloque.getProfesor().getId().equals(profesorId)) {
             throw new AccessDeniedException("ACCESS_DENIED");
         }
 
-        LocalDate hoy = clockProvider.today();
-        if (!request.getFecha().equals(hoy)) {
-            throw new BusinessException("Solo se puede tomar asistencia de la fecha actual");
-        }
-
-        int diaSemana = request.getFecha().getDayOfWeek().getValue();
-        if (!bloque.getDiaSemana().equals(diaSemana)) {
-            throw new BusinessException("La fecha no corresponde al dia del bloque");
-        }
-
-        LocalTime nowTime = clockProvider.now().toLocalTime();
-        LocalTime inicioVentana = bloque.getHoraInicio().minusMinutes(VENTANA_MINUTOS);
-        LocalTime finVentana = bloque.getHoraFin().plusMinutes(VENTANA_MINUTOS);
-        if (nowTime.isBefore(inicioVentana) || nowTime.isAfter(finVentana)) {
-            throw new BusinessException("Fuera de la ventana horaria para tomar asistencia");
+        if (fechaRequest.equals(hoy)) {
+            LocalTime nowTime = clockProvider.now().toLocalTime();
+            LocalTime inicioVentana = bloque.getHoraInicio().minusMinutes(VENTANA_MINUTOS);
+            LocalTime finVentana = bloque.getHoraFin().plusMinutes(VENTANA_MINUTOS);
+            if (nowTime.isBefore(inicioVentana) || nowTime.isAfter(finVentana)) {
+                throw new BusinessException("Fuera de la ventana horaria para tomar asistencia");
+            }
         }
 
         List<Matricula> matriculasActivas = matriculaRepository.findByCursoIdAndEstado(
@@ -88,7 +110,7 @@ public class GuardarAsistenciaClase {
         LocalDateTime ahora = clockProvider.now();
         AsistenciaClase savedAsistencia;
         AsistenciaClase existente = asistenciaClaseRepository
-            .findByBloqueHorarioIdAndFecha(bloque.getId(), hoy)
+            .findByBloqueHorarioIdAndFecha(bloque.getId(), fechaRequest)
             .orElse(null);
 
         if (existente == null) {
@@ -103,7 +125,7 @@ public class GuardarAsistenciaClase {
             } catch (DataIntegrityViolationException ex) {
                 // Si hubo carrera y otro proceso creó la asistencia, editar sobre la existente.
                 savedAsistencia = asistenciaClaseRepository
-                    .findByBloqueHorarioIdAndFecha(bloque.getId(), hoy)
+                    .findByBloqueHorarioIdAndFecha(bloque.getId(), fechaRequest)
                     .orElseThrow(() -> new BusinessException("No se pudo guardar la asistencia"));
                 savedAsistencia.setUpdatedAt(ahora);
                 savedAsistencia = asistenciaClaseRepository.save(savedAsistencia);

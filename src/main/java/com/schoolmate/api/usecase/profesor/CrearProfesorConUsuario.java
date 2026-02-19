@@ -1,11 +1,13 @@
 package com.schoolmate.api.usecase.profesor;
 
 import com.schoolmate.api.common.rut.RutNormalizer;
+import com.schoolmate.api.common.rut.RutValidationService;
 import com.schoolmate.api.dto.request.ProfesorRequest;
 import com.schoolmate.api.entity.Materia;
 import com.schoolmate.api.entity.Profesor;
 import com.schoolmate.api.entity.Usuario;
 import com.schoolmate.api.enums.Rol;
+import com.schoolmate.api.enums.TipoPersona;
 import com.schoolmate.api.exception.ApiException;
 import com.schoolmate.api.exception.BusinessException;
 import com.schoolmate.api.exception.ErrorCode;
@@ -32,13 +34,17 @@ public class CrearProfesorConUsuario {
     private final MateriaRepository materiaRepository;
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RutValidationService rutValidationService;
 
     @Transactional
     public Profesor execute(ProfesorRequest request) {
+        String rutNormalizado = RutNormalizer.normalize(request.getRut());
+        rutValidationService.validarFormatoRut(rutNormalizado);
+        rutValidationService.validarRutDisponible(rutNormalizado, TipoPersona.PROFESOR, null);
+
         validarUnicidadEnCreacion(request);
         List<Materia> materias = resolverMaterias(request.getMateriaIds());
 
-        String rutNormalizado = RutNormalizer.normalize(request.getRut());
         if (Boolean.TRUE.equals(usuarioRepository.existsByEmail(request.getEmail()))) {
             throw new BusinessException("Ya existe un usuario con email " + request.getEmail());
         }

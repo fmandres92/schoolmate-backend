@@ -6,6 +6,7 @@ import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.Curso;
 import com.schoolmate.api.entity.Matricula;
+import com.schoolmate.api.enums.EstadoAnoEscolar;
 import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.exception.BusinessException;
 import com.schoolmate.api.exception.ResourceNotFoundException;
@@ -40,6 +41,11 @@ public class MatricularAlumno {
 
         AnoEscolar anoEscolar = anoEscolarRepository.findById(request.getAnoEscolarId())
                 .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
+
+        EstadoAnoEscolar estadoAno = anoEscolar.calcularEstado(clockProvider.today());
+        if (estadoAno == EstadoAnoEscolar.CERRADO) {
+            throw new BusinessException("No se pueden crear matrículas en un año escolar cerrado");
+        }
 
         // 2. Validar que el curso pertenece al año escolar indicado
         if (!curso.getAnoEscolar().getId().equals(anoEscolar.getId())) {

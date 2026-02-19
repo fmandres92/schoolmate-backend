@@ -1,5 +1,7 @@
 package com.schoolmate.api.controller;
 
+import com.schoolmate.api.common.rut.RutNormalizer;
+import com.schoolmate.api.common.rut.RutValidationService;
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.ProfesorRequest;
 import com.schoolmate.api.dto.response.ProfesorResponse;
@@ -40,6 +42,7 @@ public class ProfesorController {
     private final BloqueHorarioRepository bloqueHorarioRepository;
     private final ClockProvider clockProvider;
     private final CrearProfesorConUsuario crearProfesorConUsuario;
+    private final RutValidationService rutValidationService;
 
     @GetMapping
     public ResponseEntity<List<ProfesorResponse>> listar() {
@@ -79,6 +82,9 @@ public class ProfesorController {
     public ResponseEntity<ProfesorResponse> actualizar(
             @PathVariable String id,
             @Valid @RequestBody ProfesorRequest request) {
+
+        String rutNormalizado = RutNormalizer.normalize(request.getRut());
+        rutValidationService.validarFormatoRut(rutNormalizado);
 
         Profesor profesor = profesorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
