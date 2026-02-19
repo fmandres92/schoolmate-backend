@@ -31,11 +31,11 @@ public class ObtenerResumenAsignacionProfesores {
     private final CursoRepository cursoRepository;
 
     public AsignacionProfesoresResumenResponse execute(UUID cursoId) {
-        Curso curso = cursoRepository.findById(cursoId)
+        Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
         List<BloqueHorario> bloquesClase = bloqueHorarioRepository
-            .findByCursoIdAndActivoTrueAndTipo(cursoId, TipoBloque.CLASE);
+            .findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor(cursoId, TipoBloque.CLASE);
 
         int totalBloquesClase = bloquesClase.size();
         int bloquesConProfesor = 0;

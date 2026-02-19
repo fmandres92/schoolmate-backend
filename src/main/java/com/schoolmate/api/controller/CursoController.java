@@ -50,6 +50,7 @@ public class CursoController {
     private final ClockProvider clockProvider;
 
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<List<CursoResponse>> listar(
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @RequestParam(required = false) UUID anoEscolarId,
@@ -59,11 +60,14 @@ public class CursoController {
         List<Curso> cursos;
 
         if (resolvedAnoEscolarId != null && gradoId != null) {
-            cursos = cursoRepository.findByAnoEscolarIdAndGradoIdOrderByLetraAsc(resolvedAnoEscolarId, gradoId);
+            cursos = cursoRepository.findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones(
+                    resolvedAnoEscolarId,
+                    gradoId
+            );
         } else if (resolvedAnoEscolarId != null) {
-            cursos = cursoRepository.findByAnoEscolarIdOrderByNombreAsc(resolvedAnoEscolarId);
+            cursos = cursoRepository.findByAnoEscolarIdOrderByNombreAscWithRelaciones(resolvedAnoEscolarId);
         } else {
-            cursos = cursoRepository.findAll();
+            cursos = cursoRepository.findAllOrderByNombreAscWithRelaciones();
         }
 
         Map<UUID, Long> matriculadosPorCurso = obtenerMatriculadosPorCurso(cursos);
@@ -77,12 +81,13 @@ public class CursoController {
     }
 
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ResponseEntity<CursoResponse> obtener(@PathVariable UUID id) {
-        Curso curso = cursoRepository.findById(id)
+        Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
         long matriculados = matriculaRepository.countByCursoIdAndEstado(curso.getId(), EstadoMatricula.ACTIVA);
-        List<MallaCurricular> malla = mallaCurricularRepository.findByGradoIdAndAnoEscolarIdAndActivoTrue(
+        List<MallaCurricular> malla = mallaCurricularRepository.findActivaByGradoIdAndAnoEscolarIdWithMateria(
                 curso.getGrado().getId(),
                 curso.getAnoEscolar().getId()
         );

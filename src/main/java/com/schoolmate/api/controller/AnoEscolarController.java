@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -30,6 +31,7 @@ public class AnoEscolarController {
     // GET /api/anos-escolares — Listar todos con estado calculado
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<AnoEscolarResponse>> listar() {
         List<AnoEscolar> anos = repository.findAllByOrderByAnoDesc();
         LocalDate hoy = clockProvider.today();
@@ -42,6 +44,7 @@ public class AnoEscolarController {
     // GET /api/anos-escolares/{id}
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
     public ResponseEntity<AnoEscolarResponse> obtener(@PathVariable UUID id) {
         AnoEscolar ano = repository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
@@ -51,6 +54,7 @@ public class AnoEscolarController {
     // GET /api/anos-escolares/activo — Obtener el año escolar activo actual
     @GetMapping("/activo")
     @PreAuthorize("isAuthenticated()")
+    @Transactional(readOnly = true)
     public ResponseEntity<AnoEscolarResponse> obtenerActivo() {
         LocalDate hoy = clockProvider.today();
         AnoEscolar activo = repository.findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual(hoy, hoy)

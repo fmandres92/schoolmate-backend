@@ -2,6 +2,7 @@ package com.schoolmate.api.repository;
 
 import com.schoolmate.api.entity.MallaCurricular;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -18,6 +19,16 @@ public interface MallaCurricularRepository extends JpaRepository<MallaCurricular
     List<MallaCurricular> findByGradoIdAndAnoEscolarId(UUID gradoId, UUID anoEscolarId);
 
     List<MallaCurricular> findByGradoIdAndAnoEscolarIdAndActivoTrue(UUID gradoId, UUID anoEscolarId);
+
+    @Query("""
+        select mc
+        from MallaCurricular mc
+        join fetch mc.materia
+        where mc.grado.id = :gradoId
+          and mc.anoEscolar.id = :anoEscolarId
+          and mc.activo = true
+        """)
+    List<MallaCurricular> findActivaByGradoIdAndAnoEscolarIdWithMateria(UUID gradoId, UUID anoEscolarId);
 
     Optional<MallaCurricular> findByMateriaIdAndGradoIdAndAnoEscolarId(
         UUID materiaId,

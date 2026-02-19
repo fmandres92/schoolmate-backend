@@ -6,8 +6,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface MatriculaRepository extends JpaRepository<Matricula, UUID> {
@@ -29,10 +31,19 @@ public interface MatriculaRepository extends JpaRepository<Matricula, UUID> {
     List<Matricula> findByAnoEscolarIdAndEstado(UUID anoEscolarId, EstadoMatricula estado);
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
+    List<Matricula> findByAlumnoIdInAndAnoEscolarIdAndEstado(
+        Collection<UUID> alumnoIds,
+        UUID anoEscolarId,
+        EstadoMatricula estado
+    );
+
+    @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
     List<Matricula> findByCursoIdAndEstadoOrderByAlumnoApellidoAsc(
         UUID cursoId, EstadoMatricula estado);
 
     long countByCursoIdAndEstado(UUID cursoId, EstadoMatricula estado);
+
+    boolean existsByCursoIdAndEstadoAndAlumnoIdIn(UUID cursoId, EstadoMatricula estado, Set<UUID> alumnoIds);
 
     @Query("""
         select m.curso.id, count(m.id)

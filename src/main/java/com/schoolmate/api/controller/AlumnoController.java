@@ -31,6 +31,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -60,6 +61,7 @@ public class AlumnoController {
      * - Si NO se pasa anoEscolarId: lista solo datos personales, ignora filtros cursoId/gradoId
      */
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<AlumnoPageResponse> listar(
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @RequestParam(defaultValue = "0") Integer page,
@@ -143,6 +145,7 @@ public class AlumnoController {
     }
 
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ResponseEntity<AlumnoResponse> obtener(
             @PathVariable UUID id,
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
@@ -171,6 +174,7 @@ public class AlumnoController {
      * Ejemplo: /api/alumnos/buscar-por-rut?rut=9.057.419-9&anoEscolarId=2
      */
     @GetMapping("/buscar-por-rut")
+    @Transactional(readOnly = true)
     public ResponseEntity<AlumnoResponse> buscarPorRut(
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @RequestParam String rut,
@@ -283,10 +287,9 @@ public class AlumnoController {
         if (alumnoIds.isEmpty()) return Map.of();
 
         List<Matricula> matriculas = matriculaRepository
-                .findByAnoEscolarIdAndEstado(anoEscolarId, EstadoMatricula.ACTIVA);
+                .findByAlumnoIdInAndAnoEscolarIdAndEstado(alumnoIds, anoEscolarId, EstadoMatricula.ACTIVA);
 
         return matriculas.stream()
-                .filter(m -> alumnoIds.contains(m.getAlumno().getId()))
                 .collect(Collectors.toMap(
                         m -> m.getAlumno().getId(),
                         m -> m,

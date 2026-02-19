@@ -28,16 +28,16 @@ public class ObtenerJornadaCurso {
     private final GuardarJornadaDia guardarJornadaDia;
 
     public JornadaCursoResponse ejecutar(UUID cursoId, Integer diaSemanaFiltro) {
-        Curso curso = cursoRepository.findById(cursoId)
+        Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado: " + cursoId));
 
         List<BloqueHorario> todosBloques;
         if (diaSemanaFiltro != null) {
             todosBloques = bloqueHorarioRepository
-                .findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc(cursoId, diaSemanaFiltro);
+                .findActivosByCursoIdAndDiaSemanaWithMateriaAndProfesorOrderByNumeroBloqueAsc(cursoId, diaSemanaFiltro);
         } else {
             todosBloques = bloqueHorarioRepository
-                .findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc(cursoId);
+                .findActivosByCursoIdWithMateriaAndProfesorOrderByDiaSemanaAscNumeroBloqueAsc(cursoId);
         }
 
         Map<Integer, List<BloqueHorario>> porDia = todosBloques.stream()

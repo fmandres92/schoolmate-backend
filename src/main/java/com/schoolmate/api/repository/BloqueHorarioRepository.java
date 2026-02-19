@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -19,10 +20,63 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, UU
     List<BloqueHorario> findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc(
         UUID cursoId, Integer diaSemana);
 
+    @Query("""
+        SELECT b
+        FROM BloqueHorario b
+        LEFT JOIN FETCH b.materia
+        LEFT JOIN FETCH b.profesor
+        WHERE b.curso.id = :cursoId
+          AND b.activo = true
+        ORDER BY b.diaSemana ASC, b.numeroBloque ASC
+        """)
+    List<BloqueHorario> findActivosByCursoIdWithMateriaAndProfesorOrderByDiaSemanaAscNumeroBloqueAsc(
+        @Param("cursoId") UUID cursoId
+    );
+
+    @Query("""
+        SELECT b
+        FROM BloqueHorario b
+        LEFT JOIN FETCH b.materia
+        LEFT JOIN FETCH b.profesor
+        WHERE b.curso.id = :cursoId
+          AND b.diaSemana = :diaSemana
+          AND b.activo = true
+        ORDER BY b.numeroBloque ASC
+        """)
+    List<BloqueHorario> findActivosByCursoIdAndDiaSemanaWithMateriaAndProfesorOrderByNumeroBloqueAsc(
+        @Param("cursoId") UUID cursoId,
+        @Param("diaSemana") Integer diaSemana
+    );
+
     List<BloqueHorario> findByCursoIdAndActivoTrueAndTipoAndMateriaId(
         UUID cursoId, TipoBloque tipo, UUID materiaId);
 
     List<BloqueHorario> findByCursoIdAndActivoTrueAndTipo(UUID cursoId, TipoBloque tipo);
+
+    @Query("""
+        SELECT b
+        FROM BloqueHorario b
+        LEFT JOIN FETCH b.materia
+        LEFT JOIN FETCH b.profesor
+        WHERE b.curso.id = :cursoId
+          AND b.activo = true
+          AND b.tipo = :tipo
+        ORDER BY b.diaSemana ASC, b.numeroBloque ASC
+        """)
+    List<BloqueHorario> findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor(
+        @Param("cursoId") UUID cursoId,
+        @Param("tipo") TipoBloque tipo
+    );
+
+    @Query("""
+        SELECT b
+        FROM BloqueHorario b
+        JOIN FETCH b.curso
+        LEFT JOIN FETCH b.materia
+        LEFT JOIN FETCH b.profesor
+        WHERE b.id = :bloqueId
+        """)
+    Optional<BloqueHorario> findDetalleById(@Param("bloqueId") UUID bloqueId);
 
     @Query("""
         SELECT b
@@ -77,12 +131,13 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, UU
         SELECT b
         FROM BloqueHorario b
         JOIN FETCH b.curso c
+        JOIN FETCH b.profesor p
         WHERE b.tipo = com.schoolmate.api.enums.TipoBloque.CLASE
-          AND b.profesor.id IN :profesorIds
+          AND p.id IN :profesorIds
           AND c.anoEscolar.id = :anoEscolarId
           AND b.activo = true
         """)
-    List<BloqueHorario> findBloquesClaseProfesoresEnAnoEscolar(
+    List<BloqueHorario> findBloquesClaseProfesoresEnAnoEscolarConProfesor(
         @Param("profesorIds") Set<UUID> profesorIds,
         @Param("anoEscolarId") UUID anoEscolarId
     );
@@ -97,6 +152,28 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, UU
         "AND c.anoEscolar.id = :anoEscolarId " +
         "AND b.id <> :bloqueIdExcluir")
     List<BloqueHorario> findColisionesProfesor(
+        @Param("profesorId") UUID profesorId,
+        @Param("diaSemana") Integer diaSemana,
+        @Param("horaInicio") LocalTime horaInicio,
+        @Param("horaFin") LocalTime horaFin,
+        @Param("anoEscolarId") UUID anoEscolarId,
+        @Param("bloqueIdExcluir") UUID bloqueIdExcluir
+    );
+
+    @Query("""
+        SELECT b
+        FROM BloqueHorario b
+        JOIN FETCH b.curso c
+        LEFT JOIN FETCH b.materia
+        WHERE b.profesor.id = :profesorId
+          AND b.activo = true
+          AND b.diaSemana = :diaSemana
+          AND b.horaInicio < :horaFin
+          AND b.horaFin > :horaInicio
+          AND c.anoEscolar.id = :anoEscolarId
+          AND b.id <> :bloqueIdExcluir
+        """)
+    List<BloqueHorario> findColisionesProfesorConCursoYMateria(
         @Param("profesorId") UUID profesorId,
         @Param("diaSemana") Integer diaSemana,
         @Param("horaInicio") LocalTime horaInicio,

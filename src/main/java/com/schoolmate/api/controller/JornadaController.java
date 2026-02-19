@@ -202,8 +202,11 @@ public class JornadaController {
             throw new AccessDeniedException("No tienes acceso al horario de este curso");
         }
 
-        boolean tieneAcceso = matriculaRepo.findByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA).stream()
-                .anyMatch(m -> alumnoIds.contains(m.getAlumno().getId()));
+        boolean tieneAcceso = matriculaRepo.existsByCursoIdAndEstadoAndAlumnoIdIn(
+                cursoId,
+                EstadoMatricula.ACTIVA,
+                alumnoIds
+        );
 
         if (!tieneAcceso) {
             throw new AccessDeniedException("No tienes acceso al horario de este curso");

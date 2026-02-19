@@ -66,6 +66,18 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - Repositorios JPA migrados a `JpaRepository<Entidad, UUID>` (excepto claves naturales como `SeccionCatalogo.letra`).
   - Endpoints y filtros que reciben IDs ahora usan tipo `UUID` (path/query/body).
 
+### Actualización técnica reciente (optimización de lectura y seguridad)
+
+- `spring.jpa.open-in-view=false` en `application.yml` para evitar lazy loading implícito durante serialización de respuestas.
+- Endpoints GET de lectura directa a repository marcados con `@Transactional(readOnly = true)` en:
+  - `GradoController`, `MateriaController` (`listar`,`obtener`), `CursoController` (`listar`,`obtener`), `ProfesorController` (`listar`,`obtener`), `AlumnoController` (`listar`,`obtener`,`buscarPorRut`), `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`) y `MatriculaController` (`porCurso`,`porAlumno`).
+- Fix de autenticación en `/api/auth/me`:
+  - `SecurityConfig` limita públicos a `/api/auth/login` y `/api/auth/registro`.
+  - `/api/auth/me` queda autenticado.
+  - Guard defensivo en controller para responder `401` si principal nulo.
+- Correcciones N+1 en curso/jornada mediante `@EntityGraph` y queries con `JOIN FETCH` en `CursoRepository`, `MallaCurricularRepository`, `BloqueHorarioRepository`, y ajuste de consumo en use cases/controladores de jornada.
+- `AlumnoController.getMatriculaMap` ahora consulta solo matrículas de alumnos de la página (`alumno_id IN (...)`) vía `MatriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(...)`.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -755,10 +767,11 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 - CORS habilitado por bean.
 - Session policy: `STATELESS`.
 - `permitAll`:
-  - `/api/auth/**`
+  - `/api/auth/login`
+  - `/api/auth/registro`
   - `/h2-console/**`
   - `/error`
-- Resto: autenticado.
+- Resto: autenticado (incluye `/api/auth/me`).
 
 ### Resolución de año escolar por header (`X-Ano-Escolar-Id`)
 
@@ -845,7 +858,7 @@ Implementación actual:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `POST /api/auth/login` | Login y emisión JWT (email o RUT) | Público | Body JSON | `LoginRequest {identificador,password}` | `AuthResponse {token,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
-| `GET /api/auth/me` | Datos del usuario actual | Público por `permitAll` (intención: autenticado) | Header `Authorization` esperado | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}` | directo | sin token puede terminar en `INTERNAL_SERVER_ERROR` (NPE) |
+| `GET /api/auth/me` | Datos del usuario actual | Autenticado | Header `Authorization` requerido | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}`; si no autenticado `401 {"message":"No autenticado"}` | directo (guard defensivo) | `401` sin token, `ACCESS_DENIED` si aplica |
 
 ### Dominio: Apoderados (Admin)
 
@@ -1237,9 +1250,10 @@ Implementación actual:
   - `BloqueHorarioRepository`, `CursoRepository`
 - Flujo:
   1. valida existencia de curso
-  2. carga bloques activos (todos o por día)
-  3. agrupa por `diaSemana`
-  4. construye `JornadaCursoResponse` + `JornadaResumenResponse`
+  2. carga curso con `grado` y `anoEscolar` usando fetch explícito
+  3. carga bloques activos con `materia` y `profesor` (todos o por día) usando queries fetch dedicadas
+  4. agrupa por `diaSemana`
+  5. construye `JornadaCursoResponse` + `JornadaResumenResponse`
 - Errores:
   - `ResourceNotFoundException`
 - `@Transactional`: no.
@@ -1288,6 +1302,10 @@ Implementación actual:
   - bloque debe ser de tipo `CLASE`
   - minutos permitidos por materia: `horasPedagogicas * 45`
   - minutos asignados excluyen el bloque actual
+- Optimización aplicada:
+  - curso cargado con `grado` y `anoEscolar` por método fetch (`findByIdWithGradoAndAnoEscolar`).
+  - bloque cargado con detalle (`curso`,`materia`,`profesor`) por `findDetalleById`.
+  - malla y bloques CLASE cargados con fetch explícito de relaciones para evitar lazy N+1.
 - `@Transactional`: no.
 
 ### `com.schoolmate.api.usecase.jornada.AsignarMateriaBloque`
@@ -1331,6 +1349,9 @@ Implementación actual:
 - Cálculo:
   - agrega minutos y bloques de tipo `CLASE` por materia
   - compara contra `horasPedagogicas * 45`
+- Optimización aplicada:
+  - carga de curso con `grado` y `anoEscolar` vía fetch explícito.
+  - carga de malla con `materia` y de bloques CLASE con `materia/profesor` para evitar N+1.
 - `@Transactional`: no.
 
 ### `com.schoolmate.api.usecase.jornada.ObtenerProfesoresDisponibles`
@@ -1343,6 +1364,10 @@ Implementación actual:
   - el bloque debe tener `materia` asignada
   - profesores filtrados por materia (`profesor_materia`) y `activo=true`
   - colisión evaluada cross-curso dentro del mismo año escolar
+- Optimización aplicada:
+  - bloque consultado por método con `JOIN FETCH` (`findDetalleById`).
+  - carga de bloques de profesores con `profesor` fetch.
+  - colisiones con `curso` y `materia` fetch para construir conflicto sin lazy adicional.
 - `@Transactional`: no.
 
 ### `com.schoolmate.api.usecase.jornada.AsignarProfesorBloque`
@@ -1385,6 +1410,8 @@ Implementación actual:
   - total de bloques con/sin profesor
   - bloques con materia sin profesor
   - agrupación por profesor con minutos y bloques asignados
+- Optimización aplicada:
+  - curso y bloques `CLASE` cargados con fetch explícito de relaciones necesarias (`materia`, `profesor`).
 - `@Transactional`: no.
 
 ---
@@ -1396,12 +1423,12 @@ Implementación actual:
 | `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | `findActivoByRutNormalizado` (native SQL con `regexp_replace`) | sí, vía `JpaSpecificationExecutor` |
 | `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual`, `findActivoByFecha` (default) | no | no |
 | `AsistenciaClaseRepository` | `AsistenciaClase` | `findByBloqueHorarioIdAndFecha`, `existsByBloqueHorarioIdAndFecha` | no | no |
-| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolar`, `findClasesProfesorEnDia`, `existsBloqueActivoProfesorEnCurso` | no |
-| `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc` | `findLetrasUsadasByGradoIdAndAnoEscolarId` | no |
+| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findColisionesProfesorConCursoYMateria`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolarConProfesor`, `findClasesProfesorEnDia`, `existsBloqueActivoProfesorEnCurso`, `findDetalleById`, `findActivosByCursoIdWithMateriaAndProfesorOrderByDiaSemanaAscNumeroBloqueAsc`, `findActivosByCursoIdAndDiaSemanaWithMateriaAndProfesorOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor` | no |
+| `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc` | `findLetrasUsadasByGradoIdAndAnoEscolarId`, `findByIdWithGradoAndAnoEscolar`, `findByAnoEscolarIdOrderByNombreAscWithRelaciones`, `findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones`, `findAllOrderByNombreAscWithRelaciones` | no |
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
-| `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | no | no |
+| `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | `findActivaByGradoIdAndAnoEscolarIdWithMateria` (`JOIN FETCH materia`) | no |
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
-| `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
+| `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
 | `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |
 | `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | `findByApoderadoIdWithAlumno` (JPQL con `JOIN FETCH`) | no |
@@ -1743,6 +1770,7 @@ Archivos:
 - JPA:
   - `ddl-auto=validate`
   - dialect PostgreSQL
+  - `open-in-view=false` (OSIV desactivado)
   - `show-sql` true en dev / false en prod
 - Flyway:
   - enabled
@@ -1795,9 +1823,15 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 ### Queries potencialmente problemáticas a escala
 
-- `AlumnoController.getMatriculaMap`: carga todas las matrículas activas de un año y luego filtra en memoria por `alumnoIds`.
 - Filtrado por grado en alumnos (`getAlumnoIdsByMatriculaFilters`) hace parte en memoria tras consulta por año.
 - `CursoController.obtener`: calcula malla y agregados por request; puede crecer en costo si se vuelve endpoint masivo.
+
+### Optimizaciones aplicadas recientemente
+
+- OSIV desactivado (`spring.jpa.open-in-view=false`) para evitar lazy loading implícito en serialización.
+- Cargas explícitas de relaciones en curso/jornada con `@EntityGraph` y `JOIN FETCH` para reducir N+1.
+- `AlumnoController.getMatriculaMap` ahora consulta por `alumno_id IN (...)` (IDs de la página actual) en vez de traer todas las matrículas activas del año.
+- Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
 
 ---
 
@@ -1898,32 +1932,25 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 ### Hallazgos críticos
 
-1. Seguridad de `/api/auth/me`:
-- `SecurityConfig` tiene `permitAll("/api/auth/**")`, por lo que `/api/auth/me` queda público.
-- `AuthController.me` asume `@AuthenticationPrincipal UserPrincipal user` no nulo y usa `user.get...`; sin token puede causar `NullPointerException` y terminar en 500.
-
-2. Drift esquema/código en `ano_escolar`:
+1. Drift esquema/código en `ano_escolar`:
 - Entidad y DTO usan `fecha_inicio_planificacion`.
 - `V3` no crea esa columna y sí crea `activo` que no se usa en entidad.
 
-3. `alumno` fuera de versionado explícito:
+2. `alumno` fuera de versionado explícito:
 - `V7` y `V8` son placeholders sin DDL/DML real.
 - Dificulta bootstrap reproducible de una BD limpia solo con el repositorio.
 
 ### Hallazgos importantes
 
-4. `UnauthorizedException` existe pero no se usa en ningún flujo.
+3. `UnauthorizedException` existe pero no se usa en ningún flujo.
 
-5. Import duplicado en `CursoController` (`EstadoMatricula` importado dos veces).
-
-6. Reglas de ownership implementadas de forma parcial:
+4. Reglas de ownership implementadas de forma parcial:
 - ya existe ownership para `PROFESOR` (horario/asistencia/matrículas por curso) y `APODERADO` (portal + lectura de jornada por curso), pero faltan más dominios con permisos finos por rol.
 
-7. Secretos hardcodeados:
+5. Secretos hardcodeados:
 - datasource password y `jwt.secret` están en YAML versionado.
 
 ### Impacto operativo
 
-- Riesgo de errores 500 evitables en `/api/auth/me`.
 - Riesgo de fallas de arranque en entornos nuevos por desalineación de esquema.
 - Riesgo de seguridad por exposición de secretos en repositorio.

@@ -1,15 +1,52 @@
 package com.schoolmate.api.repository;
 
 import com.schoolmate.api.entity.Curso;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface CursoRepository extends JpaRepository<Curso, UUID> {
     List<Curso> findByAnoEscolarIdOrderByNombreAsc(UUID anoEscolarId);
     List<Curso> findByAnoEscolarIdAndGradoIdOrderByLetraAsc(UUID anoEscolarId, UUID gradoId);
     List<Curso> findByActivoTrueAndAnoEscolarIdOrderByNombreAsc(UUID anoEscolarId);
+
+    @EntityGraph(attributePaths = {"grado", "anoEscolar"})
+    @Query("""
+        select c
+        from Curso c
+        where c.anoEscolar.id = :anoEscolarId
+          and c.grado.id = :gradoId
+        order by c.letra asc
+        """)
+    List<Curso> findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones(UUID anoEscolarId, UUID gradoId);
+
+    @EntityGraph(attributePaths = {"grado", "anoEscolar"})
+    @Query("""
+        select c
+        from Curso c
+        where c.anoEscolar.id = :anoEscolarId
+        order by c.nombre asc
+        """)
+    List<Curso> findByAnoEscolarIdOrderByNombreAscWithRelaciones(UUID anoEscolarId);
+
+    @EntityGraph(attributePaths = {"grado", "anoEscolar"})
+    @Query("""
+        select c
+        from Curso c
+        order by c.nombre asc
+        """)
+    List<Curso> findAllOrderByNombreAscWithRelaciones();
+
+    @EntityGraph(attributePaths = {"grado", "anoEscolar"})
+    @Query("""
+        select c
+        from Curso c
+        where c.id = :id
+        """)
+    Optional<Curso> findByIdWithGradoAndAnoEscolar(UUID id);
 
     @Query("""
         select c.letra

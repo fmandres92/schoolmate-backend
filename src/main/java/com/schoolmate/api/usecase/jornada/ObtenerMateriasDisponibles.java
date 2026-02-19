@@ -29,13 +29,13 @@ public class ObtenerMateriasDisponibles {
     private final MallaCurricularRepository mallaCurricularRepository;
 
     public MateriasDisponiblesResponse execute(UUID cursoId, UUID bloqueId) {
-        Curso curso = cursoRepository.findById(cursoId)
+        Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
         UUID gradoId = curso.getGrado().getId();
         UUID anoEscolarId = curso.getAnoEscolar().getId();
 
-        BloqueHorario bloque = bloqueHorarioRepository.findById(bloqueId)
+        BloqueHorario bloque = bloqueHorarioRepository.findDetalleById(bloqueId)
             .orElseThrow(() -> new ResourceNotFoundException("Bloque no encontrado"));
 
         if (!bloque.getCurso().getId().equals(cursoId) || !Boolean.TRUE.equals(bloque.getActivo())) {
@@ -49,10 +49,10 @@ public class ObtenerMateriasDisponibles {
         int bloqueDuracionMinutos = (int) Duration.between(bloque.getHoraInicio(), bloque.getHoraFin()).toMinutes();
 
         List<MallaCurricular> malla = mallaCurricularRepository
-            .findByGradoIdAndAnoEscolarIdAndActivoTrue(gradoId, anoEscolarId);
+            .findActivaByGradoIdAndAnoEscolarIdWithMateria(gradoId, anoEscolarId);
 
         List<BloqueHorario> todosBloquesClase = bloqueHorarioRepository
-            .findByCursoIdAndActivoTrueAndTipo(cursoId, TipoBloque.CLASE);
+            .findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor(cursoId, TipoBloque.CLASE);
 
         List<MateriaDisponibleResponse> materias = new ArrayList<>();
 

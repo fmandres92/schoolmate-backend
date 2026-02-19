@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -57,6 +58,7 @@ public class MatriculaController {
      */
     @GetMapping("/curso/{cursoId}")
     @PreAuthorize("hasAnyRole('ADMIN','PROFESOR')")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<MatriculaResponse>> porCurso(
             @PathVariable UUID cursoId,
             @AuthenticationPrincipal UserPrincipal principal) {
@@ -76,6 +78,7 @@ public class MatriculaController {
      */
     @GetMapping("/alumno/{alumnoId}")
     @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
     public ResponseEntity<List<MatriculaResponse>> porAlumno(@PathVariable UUID alumnoId) {
         List<MatriculaResponse> matriculas = matriculaRepository
                 .findByAlumnoId(alumnoId)

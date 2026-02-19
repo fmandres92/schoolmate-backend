@@ -33,10 +33,10 @@ public class ObtenerProfesoresDisponibles {
     private final ProfesorRepository profesorRepository;
 
     public ProfesoresDisponiblesResponse execute(UUID cursoId, UUID bloqueId) {
-        Curso curso = cursoRepository.findById(cursoId)
+        Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
-        BloqueHorario bloque = bloqueHorarioRepository.findById(bloqueId)
+        BloqueHorario bloque = bloqueHorarioRepository.findDetalleById(bloqueId)
             .orElseThrow(() -> new ResourceNotFoundException("Bloque no encontrado"));
 
         if (!bloque.getCurso().getId().equals(cursoId)) {
@@ -62,7 +62,7 @@ public class ObtenerProfesoresDisponibles {
         Set<UUID> profesorIds = profesores.stream().map(Profesor::getId).collect(Collectors.toSet());
         List<BloqueHorario> bloquesProfesores = profesorIds.isEmpty()
             ? Collections.emptyList()
-            : bloqueHorarioRepository.findBloquesClaseProfesoresEnAnoEscolar(profesorIds, anoEscolarId);
+            : bloqueHorarioRepository.findBloquesClaseProfesoresEnAnoEscolarConProfesor(profesorIds, anoEscolarId);
 
         Map<UUID, Long> minutosPorProfesor = bloquesProfesores.stream()
             .collect(Collectors.groupingBy(
@@ -72,7 +72,7 @@ public class ObtenerProfesoresDisponibles {
 
         List<ProfesorDisponibleResponse> profesorResponses = profesores.stream()
             .map(profesor -> {
-                List<BloqueHorario> colisiones = bloqueHorarioRepository.findColisionesProfesor(
+                List<BloqueHorario> colisionesConDetalle = bloqueHorarioRepository.findColisionesProfesorConCursoYMateria(
                     profesor.getId(),
                     bloque.getDiaSemana(),
                     bloque.getHoraInicio(),
@@ -87,8 +87,8 @@ public class ObtenerProfesoresDisponibles {
                 ConflictoHorarioResponse conflicto = null;
                 boolean disponible = true;
 
-                if (!colisiones.isEmpty()) {
-                    BloqueHorario bloqueConflicto = colisiones.get(0);
+                if (!colisionesConDetalle.isEmpty()) {
+                    BloqueHorario bloqueConflicto = colisionesConDetalle.get(0);
                     conflicto = ConflictoHorarioResponse.builder()
                         .cursoNombre(bloqueConflicto.getCurso().getNombre())
                         .materiaNombre(bloqueConflicto.getMateria() != null

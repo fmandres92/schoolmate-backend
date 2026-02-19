@@ -23,6 +23,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -46,6 +47,7 @@ public class ProfesorController {
     private final RutValidationService rutValidationService;
 
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<List<ProfesorResponse>> listar() {
         List<ProfesorResponse> profesores = profesorRepository.findAllByOrderByApellidoAsc()
                 .stream()
@@ -55,6 +57,7 @@ public class ProfesorController {
     }
 
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ResponseEntity<ProfesorResponse> obtener(@PathVariable UUID id) {
         Profesor profesor = profesorRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));

@@ -15,6 +15,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -33,6 +34,7 @@ public class MateriaController {
     // Listar paginado
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
     public ResponseEntity<MateriaPageResponse> listar(
         @RequestParam(defaultValue = "0") Integer page,
         @RequestParam(defaultValue = "20") Integer size,
@@ -76,6 +78,7 @@ public class MateriaController {
     // Obtener una por ID
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @Transactional(readOnly = true)
     public MateriaResponse obtener(@PathVariable UUID id) {
         Materia materia = materiaRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));

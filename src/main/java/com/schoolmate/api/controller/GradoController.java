@@ -6,6 +6,7 @@ import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.GradoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/grados")
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class GradoController {
 
     private final GradoRepository gradoRepository;
