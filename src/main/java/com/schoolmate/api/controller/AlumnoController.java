@@ -7,6 +7,7 @@ import com.schoolmate.api.dto.request.CrearAlumnoConApoderadoRequest;
 import com.schoolmate.api.dto.response.AlumnoPageResponse;
 import com.schoolmate.api.dto.response.AlumnoResponse;
 import com.schoolmate.api.entity.Alumno;
+import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.Apoderado;
 import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.Matricula;
@@ -17,6 +18,7 @@ import com.schoolmate.api.repository.AlumnoRepository;
 import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
 import com.schoolmate.api.repository.ApoderadoRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.specification.AlumnoSpecifications;
 import com.schoolmate.api.usecase.alumno.CrearAlumnoConApoderado;
 import jakarta.validation.Valid;
@@ -58,6 +60,7 @@ public class AlumnoController {
      */
     @GetMapping
     public ResponseEntity<AlumnoPageResponse> listar(
+            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(defaultValue = "20") Integer size,
             @RequestParam(defaultValue = "apellido") String sortBy,
@@ -73,6 +76,7 @@ public class AlumnoController {
 
         String resolvedSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "apellido";
         Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
 
         // Construir specification base
         Specification<Alumno> spec = Specification.where(AlumnoSpecifications.activoTrue());
@@ -88,8 +92,8 @@ public class AlumnoController {
         }
 
         // Si hay filtros de curso/grado, necesitamos filtrar por matrícula
-        if (anoEscolarId != null && !anoEscolarId.isBlank()) {
-            List<String> alumnoIdsFiltrados = getAlumnoIdsByMatriculaFilters(anoEscolarId, cursoId, gradoId);
+        if (resolvedAnoEscolarId != null) {
+            List<String> alumnoIdsFiltrados = getAlumnoIdsByMatriculaFilters(resolvedAnoEscolarId, cursoId, gradoId);
             if (alumnoIdsFiltrados != null) {
                 if (alumnoIdsFiltrados.isEmpty()) {
                     // No hay alumnos que cumplan los filtros de matrícula
@@ -105,12 +109,12 @@ public class AlumnoController {
 
         // Enriquecer con matrícula si hay anoEscolarId
         List<AlumnoResponse> content;
-        if (anoEscolarId != null && !anoEscolarId.isBlank()) {
+        if (resolvedAnoEscolarId != null) {
             List<String> alumnoIds = alumnosPage.getContent().stream()
                     .map(Alumno::getId)
                     .toList();
 
-            Map<String, Matricula> matriculaMap = getMatriculaMap(alumnoIds, anoEscolarId);
+            Map<String, Matricula> matriculaMap = getMatriculaMap(alumnoIds, resolvedAnoEscolarId);
 
             content = alumnosPage.getContent().stream()
                     .map(alumno -> AlumnoResponse.fromEntityWithMatricula(
@@ -140,14 +144,16 @@ public class AlumnoController {
     @GetMapping("/{id}")
     public ResponseEntity<AlumnoResponse> obtener(
             @PathVariable String id,
+            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @RequestParam(required = false) String anoEscolarId) {
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
 
         Alumno alumno = alumnoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
 
-        if (anoEscolarId != null && !anoEscolarId.isBlank()) {
+        if (resolvedAnoEscolarId != null) {
             Matricula matricula = matriculaRepository
-                    .findByAlumnoIdAndAnoEscolarIdAndEstado(id, anoEscolarId, EstadoMatricula.ACTIVA)
+                    .findByAlumnoIdAndAnoEscolarIdAndEstado(id, resolvedAnoEscolarId, EstadoMatricula.ACTIVA)
                     .orElse(null);
             AlumnoResponse response = AlumnoResponse.fromEntityWithMatricula(alumno, matricula);
             enriquecerConApoderado(id, response);
@@ -165,15 +171,17 @@ public class AlumnoController {
      */
     @GetMapping("/buscar-por-rut")
     public ResponseEntity<AlumnoResponse> buscarPorRut(
+            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @RequestParam String rut,
             @RequestParam(required = false) String anoEscolarId) {
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
 
         Alumno alumno = alumnoRepository.findActivoByRutNormalizado(rut)
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado para RUT: " + rut));
 
-        if (anoEscolarId != null && !anoEscolarId.isBlank()) {
+        if (resolvedAnoEscolarId != null) {
             Matricula matricula = matriculaRepository
-                    .findByAlumnoIdAndAnoEscolarIdAndEstado(alumno.getId(), anoEscolarId, EstadoMatricula.ACTIVA)
+                    .findByAlumnoIdAndAnoEscolarIdAndEstado(alumno.getId(), resolvedAnoEscolarId, EstadoMatricula.ACTIVA)
                     .orElse(null);
             return ResponseEntity.ok(AlumnoResponse.fromEntityWithMatricula(alumno, matricula));
         }
@@ -302,6 +310,16 @@ public class AlumnoController {
 
     private boolean isRutSearch(String q) {
         return q.matches("^[0-9]+$") && q.length() >= 5;
+    }
+
+    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId) {
+        if (anoEscolarHeader != null) {
+            return anoEscolarHeader.getId();
+        }
+        if (anoEscolarId == null || anoEscolarId.isBlank()) {
+            return null;
+        }
+        return anoEscolarId.trim();
     }
 
     private void enriquecerConApoderado(String alumnoId, AlumnoResponse response) {

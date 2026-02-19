@@ -20,7 +20,6 @@ public class MallaCurricularBulkRequest {
     @NotBlank
     private String materiaId;
 
-    @NotBlank
     private String anoEscolarId;
 
     @Valid

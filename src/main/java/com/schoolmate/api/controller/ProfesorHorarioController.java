@@ -5,10 +5,13 @@ import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.entity.Profesor;
 import com.schoolmate.api.enums.Rol;
+import com.schoolmate.api.exception.ApiException;
+import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
 import com.schoolmate.api.repository.ProfesorRepository;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -39,18 +42,20 @@ public class ProfesorHorarioController {
     @GetMapping("/{profesorId}/horario")
     @PreAuthorize("hasAnyRole('ADMIN','PROFESOR')")
     public ResponseEntity<ProfesorHorarioResponse> getHorario(
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
         @PathVariable String profesorId,
-        @RequestParam String anoEscolarId,
+        @RequestParam(required = false) String anoEscolarId,
         @AuthenticationPrincipal UserPrincipal principal
     ) {
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
         validarOwnershipProfesor(principal, profesorId);
 
         Profesor profesor = profesorRepository.findById(profesorId)
             .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
-        AnoEscolar anoEscolar = anoEscolarRepository.findById(anoEscolarId)
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(resolvedAnoEscolarId)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
 
-        List<BloqueHorario> bloques = bloqueHorarioRepository.findHorarioProfesorEnAnoEscolar(profesorId, anoEscolarId);
+        List<BloqueHorario> bloques = bloqueHorarioRepository.findHorarioProfesorEnAnoEscolar(profesorId, resolvedAnoEscolarId);
         List<BloqueHorario> bloquesValidos = bloques.stream()
             .filter(b -> b.getMateria() != null)
             .toList();
@@ -136,5 +141,21 @@ public class ProfesorHorarioController {
             case 5 -> "Viernes";
             default -> "Desconocido";
         };
+    }
+
+    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId) {
+        String resolvedAnoEscolarId = anoEscolarHeader != null
+            ? anoEscolarHeader.getId()
+            : (anoEscolarId == null || anoEscolarId.isBlank() ? null : anoEscolarId.trim());
+
+        if (resolvedAnoEscolarId == null) {
+            throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                "Se requiere año escolar (header X-Ano-Escolar-Id o query param anoEscolarId)",
+                Map.of()
+            );
+        }
+
+        return resolvedAnoEscolarId;
     }
 }

@@ -171,8 +171,11 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api`
   - `SchoolmateApiApplication`
 - `com.schoolmate.api.config`
+  - `AnoEscolarArgumentResolver`
+  - `AnoEscolarHeaderInterceptor`
   - `CorsConfig`
   - `SecurityConfig`
+  - `WebMvcConfig`
 - `com.schoolmate.api.common.time`
   - `ClockProvider`
   - `TimeContext`
@@ -304,6 +307,7 @@ Clase: `ApiErrorResponse`
   - `SeccionCatalogoRepository`
   - `UsuarioRepository`
 - `com.schoolmate.api.security`
+  - `AnoEscolarActivo`
   - `CustomUserDetailsService`
   - `JwtAuthenticationFilter`
   - `JwtConfig`
@@ -732,6 +736,30 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
   - `/error`
 - Resto: autenticado.
 
+### Resolución de año escolar por header (`X-Ano-Escolar-Id`)
+
+Infraestructura MVC implementada:
+
+- `AnoEscolarHeaderInterceptor`:
+  - corre para `/api/**` (excepto rutas exentas configuradas en `WebMvcConfig`)
+  - lee `X-Ano-Escolar-Id` y resuelve `AnoEscolar` por `AnoEscolarRepository.findById(...)`
+  - valida acceso por rol:
+    - `ADMIN`: cualquier año
+    - `PROFESOR` y `APODERADO`: solo año cuyo estado calculado sea `ACTIVO`
+  - guarda el objeto resuelto en request attribute `anoEscolarResuelto`
+- `AnoEscolarArgumentResolver`:
+  - inyecta `AnoEscolar` en parámetros anotados con `@AnoEscolarActivo`
+  - si `required=true` y no hay valor resuelto, lanza `VALIDATION_FAILED`
+- `@AnoEscolarActivo`:
+  - anotación de parámetro para controllers (`required=true` por defecto)
+- `WebMvcConfig`:
+  - registra interceptor + argument resolver
+
+Importante:
+
+- El header usa el mismo tipo de ID real de `ano_escolar.id` (en este proyecto es `String`, p. ej. `"1"`, `"2"`, `"3"` en seed), no se exige UUID.
+- Los endpoints migrados usan estrategia gradual: prioridad `header > query/body` para mantener compatibilidad temporal con frontend anterior.
+
 ### `JwtAuthenticationFilter`
 
 - Extiende `OncePerRequestFilter`.
@@ -809,7 +837,7 @@ Implementación actual:
 |---|---|---|---|---|---|---|---|
 | `GET /api/apoderado/mis-alumnos` | Lista hijos vinculados al apoderado autenticado, con matrícula activa del año activo si existe | `APODERADO` | `Authorization` | - | `List<AlumnoApoderadoResponse>` | `ObtenerAlumnosApoderado` | `ACCESS_DENIED` (si principal inválido) |
 | `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual?mes=...&anio=...` | Asistencia diaria agregada por bloques para un mes (`PRESENTE/AUSENTE/PARCIAL`) | `APODERADO` (ownership) | Path `alumnoId`, Query `mes,anio` | - | `AsistenciaMensualResponse` | `ObtenerAsistenciaMensualAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
-| `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen?anoEscolarId=...` | Resumen anual de asistencia por bloques con porcentaje | `APODERADO` (ownership) | Path `alumnoId`, Query `anoEscolarId` | - | `ResumenAsistenciaResponse` | `ObtenerResumenAsistenciaAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND` |
+| `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen` | Resumen anual de asistencia por bloques con porcentaje (prioridad `header > query`) | `APODERADO` (ownership) | Path `alumnoId`, Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `ResumenAsistenciaResponse` | `ObtenerResumenAsistenciaAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 
 ### Dominio: DevTools (solo perfil `dev`)
 
@@ -850,22 +878,22 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/malla-curricular` | Lista malla activa por año | `ADMIN` | Query: `anoEscolarId` | - | `List<MallaCurricularResponse>` | directo | `ACCESS_DENIED` |
-| `GET /api/malla-curricular/materia/{materiaId}` | Lista malla por materia y año | `ADMIN` | Path + Query `anoEscolarId` | - | `List<MallaCurricularResponse>` | directo | - |
-| `GET /api/malla-curricular/grado/{gradoId}` | Lista malla por grado y año | `ADMIN` | Path + Query `anoEscolarId` | - | `List<MallaCurricularResponse>` | directo | - |
-| `POST /api/malla-curricular` | Crea registro malla | `ADMIN` | Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId,horasPedagogicas}` | `MallaCurricularResponse` | directo transaccional | `409` conflict (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
+| `GET /api/malla-curricular` | Lista malla activa por año (prioridad `header > query`) | `ADMIN` | Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback, obligatorio al menos uno) | - | `List<MallaCurricularResponse>` | directo | `ACCESS_DENIED`, `VALIDATION_FAILED` |
+| `GET /api/malla-curricular/materia/{materiaId}` | Lista malla por materia y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | directo | `VALIDATION_FAILED` |
+| `GET /api/malla-curricular/grado/{gradoId}` | Lista malla por grado y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | directo | `VALIDATION_FAILED` |
+| `POST /api/malla-curricular` | Crea registro malla (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId?,horasPedagogicas}` | `MallaCurricularResponse` | directo transaccional | `409` conflict (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
 | `PUT /api/malla-curricular/{id}` | Actualiza horas/activo | `ADMIN` | Path + Body | `MallaCurricularUpdateRequest {horasPedagogicas,activo}` (inner class) | `MallaCurricularResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
-| `POST /api/malla-curricular/bulk` | Upsert masivo por materia-año | `ADMIN` | Body | `MallaCurricularBulkRequest` | `List<MallaCurricularResponse>` | directo transaccional | `BAD_REQUEST` grados duplicados, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
+| `POST /api/malla-curricular/bulk` | Upsert masivo por materia-año (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularBulkRequest` | `List<MallaCurricularResponse>` | directo transaccional | `BAD_REQUEST` grados duplicados, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
 | `DELETE /api/malla-curricular/{id}` | Baja lógica (`activo=false`) | `ADMIN` | Path | - | `204` | directo transaccional | `RESOURCE_NOT_FOUND` |
 
 ### Dominio: Cursos
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/cursos` | Lista cursos (filtro opcional por año/grado) + matriculados | `ADMIN` | Query opcional: `anoEscolarId`, `gradoId` | - | `List<CursoResponse>` | directo | - |
+| `GET /api/cursos` | Lista cursos (filtro opcional por año/grado) + matriculados (prioridad `header > query`) | `ADMIN` | Header opcional `X-Ano-Escolar-Id`; Query opcional `anoEscolarId`, `gradoId` | - | `List<CursoResponse>` | directo | - |
 | `GET /api/cursos/{id}` | Detalle enriquecido (malla + conteos) | `ADMIN` | Path `id` | - | `CursoResponse` con `materias`, `cantidadMaterias`, `totalHorasPedagogicas`, `alumnosMatriculados` | directo | `RESOURCE_NOT_FOUND` |
-| `POST /api/cursos` | Crea curso con letra automática | `ADMIN` | Body | `CursoRequest {gradoId,anoEscolarId}` | `CursoResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE` |
-| `PUT /api/cursos/{id}` | Reasigna curso (recalcula letra si cambia grado/año) | `ADMIN` | Path + Body | `CursoRequest` | `CursoResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE` |
+| `POST /api/cursos` | Crea curso con letra automática (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `CursoRequest {gradoId,anoEscolarId?}` | `CursoResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `PUT /api/cursos/{id}` | Reasigna curso (recalcula letra si cambia grado/año, prioridad `header > body`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Body | `CursoRequest` | `CursoResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE`, `VALIDATION_FAILED` |
 
 ### Dominio: Profesores
 
@@ -875,16 +903,16 @@ Implementación actual:
 | `GET /api/profesores/{id}` | Obtiene profesor con contrato y horas asignadas del año ACTIVO (si existe) | `ADMIN` | Path | - | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND` |
 | `POST /api/profesores` | Crea profesor con materias, horas de contrato y usuario asociado (`ROL=PROFESOR`); valida formato/DV de RUT y disponibilidad cross-tabla | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | `CrearProfesorConUsuario` | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `PUT /api/profesores/{id}` | Actualiza profesor; valida formato de RUT, mantiene RUT inmutable y permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `GET /api/profesores/{profesorId}/horario?anoEscolarId=...` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Query `anoEscolarId` | - | `ProfesorHorarioResponse` | directo | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
+| `GET /api/profesores/{profesorId}/horario` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia, prioridad `header > query`) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `ProfesorHorarioResponse` | directo | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `VALIDATION_FAILED` |
 | `GET /api/profesor/mis-clases-hoy` | Clases del día para el profesor autenticado (`estado` por ventana de 15 min, `asistenciaTomada` real por bloque+fecha) | `PROFESOR` | `Authorization` (usa `profesorId` del JWT) | - | `ClasesHoyResponse` | `ObtenerClasesHoyProfesor` | `ACCESS_DENIED` |
 
 ### Dominio: Alumnos
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/alumnos` | Lista paginada con búsqueda y enriquecimiento opcional por matrícula | `ADMIN` | Query: `page,size,sortBy,sortDir,anoEscolarId,cursoId,gradoId,q` | - | `AlumnoPageResponse` | directo + `AlumnoSpecifications` | - |
-| `GET /api/alumnos/{id}` | Obtiene alumno; opcional matrícula activa por año y apoderado principal vinculado (si existe) | `ADMIN` | Path + Query opcional `anoEscolarId` | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `GET /api/alumnos/buscar-por-rut` | Búsqueda exacta por RUT (normaliza con/sin puntos y guion) + matrícula opcional por año | `ADMIN` | Query: `rut` (obligatorio), `anoEscolarId` (opcional) | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
+| `GET /api/alumnos` | Lista paginada con búsqueda y enriquecimiento opcional por matrícula (prioridad `header > query`) | `ADMIN` | Query: `page,size,sortBy,sortDir,anoEscolarId,cursoId,gradoId,q` + Header opcional `X-Ano-Escolar-Id` | - | `AlumnoPageResponse` | directo + `AlumnoSpecifications` | - |
+| `GET /api/alumnos/{id}` | Obtiene alumno; opcional matrícula activa por año y apoderado principal vinculado (si existe), prioridad `header > query` | `ADMIN` | Path + Header opcional `X-Ano-Escolar-Id` + Query opcional `anoEscolarId` | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
+| `GET /api/alumnos/buscar-por-rut` | Búsqueda exacta por RUT + matrícula opcional por año, prioridad `header > query` | `ADMIN` | Query: `rut` (obligatorio), `anoEscolarId` (opcional) + Header opcional `X-Ano-Escolar-Id` | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
 | `POST /api/alumnos` | Crea alumno; valida formato/DV de RUT y disponibilidad cross-tabla antes de la unicidad interna de alumno | `ADMIN` | Body | `AlumnoRequest` | `AlumnoResponse` | directo | `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `POST /api/alumnos/con-apoderado` | Crea alumno y vincula/crea apoderado en una transacción; valida formato de ambos RUT y cross-tabla (apoderado solo si es nuevo) | `ADMIN` | Body | `CrearAlumnoConApoderadoRequest` | `AlumnoResponse` (`201`) | `CrearAlumnoConApoderado` | `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `PUT /api/alumnos/{id}` | Actualiza alumno; valida formato/DV de RUT y disponibilidad cross-tabla antes de la unicidad interna | `ADMIN` | Path + Body | `AlumnoRequest` | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND`, `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
@@ -893,7 +921,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/matriculas` | Matricula alumno en curso/año; bloquea creación si el año escolar está `CERRADO` | `ADMIN` | Body | `MatriculaRequest {alumnoId,cursoId,anoEscolarId,fechaMatricula?}` | `MatriculaResponse` | `MatricularAlumno` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `POST /api/matriculas` | Matricula alumno en curso/año (prioridad `header > body`); bloquea creación si el año escolar está `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MatriculaRequest {alumnoId,cursoId,anoEscolarId?,fechaMatricula?}` | `MatriculaResponse` | `MatricularAlumno` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/matriculas/curso/{cursoId}` | Matrículas activas por curso | `ADMIN`,`PROFESOR` (ownership por curso en año activo) | Path `cursoId` | - | `List<MatriculaResponse>` | directo + `ValidarAccesoMatriculasCursoProfesor` | `ACCESS_DENIED` |
 | `GET /api/matriculas/alumno/{alumnoId}` | Historial de matrículas por alumno | `ADMIN` | Path `alumnoId` | - | `List<MatriculaResponse>` | directo | - |
 | `PATCH /api/matriculas/{id}/estado` | Cambia estado (`ACTIVA/RETIRADO/TRASLADADO`) | `ADMIN` | Path + body map `{estado}` | `Map<String,String>` | `MatriculaResponse` | `CambiarEstadoMatricula` | `400` por body inválido, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
@@ -1378,12 +1406,12 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `AnoEscolarRequest` | `ano`, `fechaInicioPlanificacion`, `fechaInicio`, `fechaFin` | `@NotNull` | `@Data` |
 | `MateriaRequest` | `nombre`, `icono` | `@NotBlank(nombre)` | `@Data` |
 | `ProfesorRequest` | `rut,nombre,apellido,email,telefono,fechaContratacion,horasPedagogicasContrato?,materiaIds` | `@NotBlank`, `@Size`, `@Email`, `@NotNull`, `@NotEmpty`, `@Min(1)`, `@Max(50)` (opcional) | `@Data` |
-| `CursoRequest` | `gradoId`, `anoEscolarId` | `@NotBlank` | `@Data` |
+| `CursoRequest` | `gradoId`, `anoEscolarId` | `@NotBlank` solo en `gradoId` (`anoEscolarId` nullable para migración header) | `@Data` |
 | `AlumnoRequest` | `rut,nombre,apellido,fechaNacimiento` | `@NotBlank`, `@Size`, `@NotNull` | `@Data @Builder` |
 | `CrearAlumnoConApoderadoRequest` | `alumno{rut,nombre,apellido,fechaNacimiento}, apoderado{rut,nombre,apellido,email,telefono}, vinculo` | `@NotNull`, `@Valid`, `@NotBlank`, `@Email`, `@Size` | `@Data` |
-| `MatriculaRequest` | `alumnoId,cursoId,anoEscolarId,fechaMatricula?` | `@NotBlank` (except fecha) | `@Data @Builder` |
-| `MallaCurricularRequest` | `materiaId,gradoId,anoEscolarId,horasPedagogicas` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(15)` | `@Data` |
-| `MallaCurricularBulkRequest` | `materiaId,anoEscolarId,grados[]` | `@NotBlank`, `@NotEmpty`, `@Valid` | `@Data` |
+| `MatriculaRequest` | `alumnoId,cursoId,anoEscolarId,fechaMatricula?` | `@NotBlank` en `alumnoId,cursoId` (`anoEscolarId` nullable para migración header) | `@Data @Builder` |
+| `MallaCurricularRequest` | `materiaId,gradoId,anoEscolarId,horasPedagogicas` | `@NotBlank` en `materiaId,gradoId`; `@NotNull`, `@Min(1)`, `@Max(15)` en `horasPedagogicas` (`anoEscolarId` nullable) | `@Data` |
+| `MallaCurricularBulkRequest` | `materiaId,anoEscolarId,grados[]` | `@NotBlank` en `materiaId`; `@NotEmpty`, `@Valid` en `grados` (`anoEscolarId` nullable) | `@Data` |
 | `MallaCurricularBulkRequest.GradoHoras` | `gradoId,horasPedagogicas` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(15)` | `@Data` |
 | `BloqueRequest` | `numeroBloque,horaInicio,horaFin,tipo` | `@NotNull`, `@Min(1)`, `@Pattern` para hora `HH:mm` y tipo | `@Getter/@Setter` |
 | `JornadaDiaRequest` | `bloques[]` | `@NotNull`, `@Size(min=1)`, `@Valid` | `@Getter/@Setter` |
@@ -1453,7 +1481,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 
 ### Estados de Año Escolar
 
-Implementado en método transiente `AnoEscolar.getEstado()`:
+Implementado en `AnoEscolar.calcularEstado(LocalDate fechaReferencia)`:
 
 ```java
 if (hoy.isBefore(fechaInicioPlanificacion)) return FUTURO;
@@ -1468,6 +1496,17 @@ Reglas adicionales en controller:
 - `ano == fechaInicio.year`
 - no solapamiento entre rangos de años
 - no editar año `CERRADO`
+
+### Resolución de año escolar en endpoints (migración gradual)
+
+- Se incorporó resolución por header `X-Ano-Escolar-Id` mediante:
+  - `AnoEscolarHeaderInterceptor`
+  - `AnoEscolarArgumentResolver`
+  - anotación `@AnoEscolarActivo`
+  - registro en `WebMvcConfig`
+- Regla de prioridad en endpoints migrados: `header > query/body`.
+- Compatibilidad temporal: se mantienen query params/campos body legacy `anoEscolarId` como fallback.
+- El ID aceptado en header es `String` (no UUID obligatorio), consistente con `ano_escolar.id` actual.
 
 ### Generación automática de curso (nombre + letra)
 
@@ -1492,6 +1531,13 @@ Reglas adicionales en controller:
 - Validación actual en API: mínimo 1, máximo 15.
 - Unicidad por combinación `(materia, grado, año)`.
 - `bulk` hace upsert y desactiva los grados omitidos para esa materia-año.
+- Escritura bloqueada cuando el año consultado está `CERRADO` (`POST /api/malla-curricular` y `POST /api/malla-curricular/bulk`).
+
+### Escritura sobre año escolar cerrado
+
+- `POST /api/matriculas`: bloquea en use case `MatricularAlumno` cuando el año está `CERRADO`.
+- `POST /api/cursos`: bloquea cuando el año está `CERRADO`.
+- `POST /api/malla-curricular` y `POST /api/malla-curricular/bulk`: bloquean cuando el año está `CERRADO`.
 
 ### Validaciones de RUT, email, teléfono duplicados
 
@@ -1587,7 +1633,7 @@ Para alumnos:
   - disponibilidad por profesor
   - detalle de conflicto horario cuando existe
   - enriquecimiento de carga docente: `horasPedagogicasContrato`, `horasAsignadas`, `excedido` (informativo, no bloqueante)
-- `GET /api/profesores/{profesorId}/horario?anoEscolarId=...` retorna:
+- `GET /api/profesores/{profesorId}/horario` retorna:
   - horario consolidado agrupado por día y ordenado por hora
   - resumen semanal (`totalBloques`, `diasConClase`)
   - `horasAsignadas` calculadas sobre el año consultado
@@ -1606,12 +1652,12 @@ Para alumnos:
   - `AlumnoResponse` con el objeto `apoderado` poblado (`id,nombre,apellido,rut,vinculo`)
 
 - `GET /api/alumnos` y `GET /api/alumnos/{id}`:
-  - si se envía `anoEscolarId`, agrega datos de matrícula activa (`curso`, `grado`, `estado`, `fechaMatricula`).
+  - si se envía año escolar (prioridad `X-Ano-Escolar-Id` sobre `anoEscolarId` query), agrega datos de matrícula activa (`curso`, `grado`, `estado`, `fechaMatricula`).
   - en `GET /api/alumnos/{id}`, además agrega `apoderado` principal si existe vínculo.
 - `GET /api/alumnos/buscar-por-rut?rut=...`:
   - endpoint dedicado para búsqueda exacta por RUT en frontend
   - acepta RUT con o sin formato (`9.057.419-9`, `9057419-9`, `90574199`)
-  - puede enriquecer con matrícula si se envía `anoEscolarId`.
+  - puede enriquecer con matrícula si se envía año escolar (header o query fallback).
 
 ### Paginación
 
@@ -1631,28 +1677,29 @@ Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`):
 
 - `GET /api/alumnos`:
   - búsqueda `q`
-  - filtros `anoEscolarId`, `cursoId`, `gradoId`
+  - filtros `cursoId`, `gradoId` y año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
 - `GET /api/cursos`:
-  - `anoEscolarId`, `gradoId`
+  - año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback), `gradoId`
 - `GET /api/malla-curricular`:
-  - `anoEscolarId` obligatorio
+  - año escolar obligatorio por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
 - `GET /api/malla-curricular/materia/{materiaId}`:
-  - `anoEscolarId`
+  - año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
 - `GET /api/malla-curricular/grado/{gradoId}`:
-  - `anoEscolarId`
+  - año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
 - `GET /api/cursos/{cursoId}/jornada`:
   - filtro opcional `diaSemana`
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual`:
   - `mes`, `anio`
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen`:
-  - `anoEscolarId`
+  - año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
 
-### Uso de `anoEscolarId` para enriquecer respuestas
+### Uso de año escolar para enriquecer respuestas
 
 Regla práctica actual:
 
-- En alumnos, `anoEscolarId` activa la resolución de matrícula y permite filtrar por curso/grado.
-- Sin `anoEscolarId`, el backend devuelve solo ficha personal del alumno.
+- Prioridad de resolución: `X-Ano-Escolar-Id` > `anoEscolarId` query/body.
+- En alumnos, el año escolar activa la resolución de matrícula y permite filtrar por curso/grado.
+- Sin año escolar, el backend devuelve solo ficha personal del alumno.
 
 ---
 
@@ -1692,6 +1739,8 @@ Archivos:
 - `http://localhost:3000`
 
 Métodos permitidos: `GET, POST, PUT, PATCH, DELETE, OPTIONS`.
+
+Headers permitidos: `*` (incluye `X-Ano-Escolar-Id`).
 
 ### Variables de entorno necesarias
 
@@ -1753,6 +1802,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 ### Qué falta para que frontend deje DataContext completamente
 
+- Completar la segunda fase de migración de `anoEscolarId`: eliminar parámetros/body legacy cuando frontend use 100% `X-Ano-Escolar-Id`.
 - Completar ownership en backend para más dominios (`principal.profesorId/apoderadoId`) fuera de los ya cubiertos.
 - Extender capacidades de `APODERADO` a más vistas académicas (más allá de asistencia y jornada).
 - Endpoints de agregación operacional (dashboard, indicadores) si frontend hoy los calcula localmente.

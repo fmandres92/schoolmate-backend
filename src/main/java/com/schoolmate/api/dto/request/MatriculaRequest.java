@@ -18,7 +18,6 @@ public class MatriculaRequest {
     @NotBlank(message = "El curso es obligatorio")
     private String cursoId;
 
-    @NotBlank(message = "El año escolar es obligatorio")
     private String anoEscolarId;
 
     private String fechaMatricula; // Opcional, si no se envía usa fecha actual

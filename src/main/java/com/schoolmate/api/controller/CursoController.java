@@ -1,5 +1,6 @@
 package com.schoolmate.api.controller;
 
+import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.CursoRequest;
 import com.schoolmate.api.dto.response.CursoResponse;
 import com.schoolmate.api.entity.AnoEscolar;
@@ -7,6 +8,7 @@ import com.schoolmate.api.entity.Curso;
 import com.schoolmate.api.entity.Grado;
 import com.schoolmate.api.entity.MallaCurricular;
 import com.schoolmate.api.entity.SeccionCatalogo;
+import com.schoolmate.api.enums.EstadoAnoEscolar;
 import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.exception.ApiException;
 import com.schoolmate.api.exception.ErrorCode;
@@ -17,7 +19,7 @@ import com.schoolmate.api.repository.GradoRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.repository.MallaCurricularRepository;
 import com.schoolmate.api.repository.SeccionCatalogoRepository;
-import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -44,18 +46,21 @@ public class CursoController {
     private final SeccionCatalogoRepository seccionCatalogoRepository;
     private final MatriculaRepository matriculaRepository;
     private final MallaCurricularRepository mallaCurricularRepository;
+    private final ClockProvider clockProvider;
 
     @GetMapping
     public ResponseEntity<List<CursoResponse>> listar(
+            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @RequestParam(required = false) String anoEscolarId,
             @RequestParam(required = false) String gradoId) {
 
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId, false);
         List<Curso> cursos;
 
-        if (anoEscolarId != null && gradoId != null) {
-            cursos = cursoRepository.findByAnoEscolarIdAndGradoIdOrderByLetraAsc(anoEscolarId, gradoId);
-        } else if (anoEscolarId != null) {
-            cursos = cursoRepository.findByAnoEscolarIdOrderByNombreAsc(anoEscolarId);
+        if (resolvedAnoEscolarId != null && gradoId != null) {
+            cursos = cursoRepository.findByAnoEscolarIdAndGradoIdOrderByLetraAsc(resolvedAnoEscolarId, gradoId);
+        } else if (resolvedAnoEscolarId != null) {
+            cursos = cursoRepository.findByAnoEscolarIdOrderByNombreAsc(resolvedAnoEscolarId);
         } else {
             cursos = cursoRepository.findAll();
         }
@@ -108,11 +113,17 @@ public class CursoController {
 
     @PostMapping
     @Transactional
-    public ResponseEntity<CursoResponse> crear(@Valid @RequestBody CursoRequest request) {
+    public ResponseEntity<CursoResponse> crear(
+            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+            @Valid @RequestBody CursoRequest request) {
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId(), true);
+
         Grado grado = gradoRepository.findById(request.getGradoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Grado no encontrado"));
-        AnoEscolar anoEscolar = anoEscolarRepository.findById(request.getAnoEscolarId())
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(resolvedAnoEscolarId)
                 .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
+        validarAnoEscolarEscribible(anoEscolar);
+
         String letraAsignada = resolverLetraDisponible(grado.getId(), anoEscolar.getId());
 
         Curso curso = Curso.builder()
@@ -131,14 +142,16 @@ public class CursoController {
     @Transactional
     public ResponseEntity<CursoResponse> actualizar(
             @PathVariable String id,
+            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @Valid @RequestBody CursoRequest request) {
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId(), true);
 
         Curso curso = cursoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
         Grado grado = gradoRepository.findById(request.getGradoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Grado no encontrado"));
-        AnoEscolar anoEscolar = anoEscolarRepository.findById(request.getAnoEscolarId())
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(resolvedAnoEscolarId)
                 .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
 
         String letraAsignada;
@@ -158,6 +171,32 @@ public class CursoController {
 
         Curso saved = cursoRepository.save(curso);
         return ResponseEntity.ok(CursoResponse.fromEntity(saved));
+    }
+
+    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId, boolean required) {
+        String resolvedAnoEscolarId = anoEscolarHeader != null
+                ? anoEscolarHeader.getId()
+                : (anoEscolarId == null || anoEscolarId.isBlank() ? null : anoEscolarId.trim());
+
+        if (required && resolvedAnoEscolarId == null) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "Se requiere año escolar (header X-Ano-Escolar-Id o campo anoEscolarId)",
+                    Map.of()
+            );
+        }
+
+        return resolvedAnoEscolarId;
+    }
+
+    private void validarAnoEscolarEscribible(AnoEscolar anoEscolar) {
+        if (anoEscolar.calcularEstado(clockProvider.today()) == EstadoAnoEscolar.CERRADO) {
+            throw new ApiException(
+                    ErrorCode.BUSINESS_RULE,
+                    "El año escolar está cerrado, no se permiten modificaciones",
+                    Map.of()
+            );
+        }
     }
 
     private String resolverLetraDisponible(String gradoId, String anoEscolarId) {

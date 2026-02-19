@@ -1,5 +1,6 @@
 package com.schoolmate.api.controller;
 
+import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.MallaCurricularBulkRequest;
 import com.schoolmate.api.dto.request.MallaCurricularRequest;
 import com.schoolmate.api.dto.response.MallaCurricularResponse;
@@ -7,11 +8,15 @@ import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.Grado;
 import com.schoolmate.api.entity.MallaCurricular;
 import com.schoolmate.api.entity.Materia;
+import com.schoolmate.api.enums.EstadoAnoEscolar;
+import com.schoolmate.api.exception.ApiException;
+import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.GradoRepository;
 import com.schoolmate.api.repository.MallaCurricularRepository;
 import com.schoolmate.api.repository.MateriaRepository;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -54,11 +59,16 @@ public class MallaCurricularController {
     private final MateriaRepository materiaRepository;
     private final GradoRepository gradoRepository;
     private final AnoEscolarRepository anoEscolarRepository;
+    private final ClockProvider clockProvider;
 
     @GetMapping
     @Transactional(readOnly = true)
-    public List<MallaCurricularResponse> listarPorAnoEscolar(@RequestParam String anoEscolarId) {
-        return mallaCurricularRepository.findByAnoEscolarIdAndActivoTrue(anoEscolarId).stream()
+    public List<MallaCurricularResponse> listarPorAnoEscolar(
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestParam(required = false) String anoEscolarId
+    ) {
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId, true);
+        return mallaCurricularRepository.findByAnoEscolarIdAndActivoTrue(resolvedAnoEscolarId).stream()
             .map(this::toResponse)
             .sorted(Comparator
                 .comparing(MallaCurricularResponse::getGradoNivel, Comparator.nullsLast(Integer::compareTo))
@@ -69,10 +79,12 @@ public class MallaCurricularController {
     @GetMapping("/materia/{materiaId}")
     @Transactional(readOnly = true)
     public List<MallaCurricularResponse> listarPorMateria(
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
         @PathVariable String materiaId,
-        @RequestParam String anoEscolarId
+        @RequestParam(required = false) String anoEscolarId
     ) {
-        return mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(materiaId, anoEscolarId).stream()
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId, true);
+        return mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(materiaId, resolvedAnoEscolarId).stream()
             .map(this::toResponse)
             .sorted(Comparator.comparing(MallaCurricularResponse::getGradoNivel, Comparator.nullsLast(Integer::compareTo)))
             .toList();
@@ -81,10 +93,12 @@ public class MallaCurricularController {
     @GetMapping("/grado/{gradoId}")
     @Transactional(readOnly = true)
     public List<MallaCurricularResponse> listarPorGrado(
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
         @PathVariable String gradoId,
-        @RequestParam String anoEscolarId
+        @RequestParam(required = false) String anoEscolarId
     ) {
-        return mallaCurricularRepository.findByGradoIdAndAnoEscolarId(gradoId, anoEscolarId).stream()
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId, true);
+        return mallaCurricularRepository.findByGradoIdAndAnoEscolarId(gradoId, resolvedAnoEscolarId).stream()
             .map(this::toResponse)
             .sorted(Comparator.comparing(MallaCurricularResponse::getMateriaNombre, Comparator.nullsLast(String::compareToIgnoreCase)))
             .toList();
@@ -92,11 +106,17 @@ public class MallaCurricularController {
 
     @PostMapping
     @Transactional
-    public ResponseEntity<MallaCurricularResponse> crear(@Valid @RequestBody MallaCurricularRequest request) {
+    public ResponseEntity<MallaCurricularResponse> crear(
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @Valid @RequestBody MallaCurricularRequest request
+    ) {
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId(), true);
+        request.setAnoEscolarId(resolvedAnoEscolarId);
+
         if (mallaCurricularRepository.existsByMateriaIdAndGradoIdAndAnoEscolarId(
             request.getMateriaId(),
             request.getGradoId(),
-            request.getAnoEscolarId()
+            resolvedAnoEscolarId
         )) {
             throw new ResponseStatusException(
                 HttpStatus.CONFLICT,
@@ -108,8 +128,9 @@ public class MallaCurricularController {
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
         Grado grado = gradoRepository.findById(request.getGradoId())
             .orElseThrow(() -> new ResourceNotFoundException("Grado no encontrado"));
-        AnoEscolar anoEscolar = anoEscolarRepository.findById(request.getAnoEscolarId())
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(resolvedAnoEscolarId)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
+        validarAnoEscolarEscribible(anoEscolar);
 
         MallaCurricular nueva = MallaCurricular.builder()
             .id(generarIdMalla(materia.getId(), grado.getId(), anoEscolar.getId()))
@@ -139,11 +160,18 @@ public class MallaCurricularController {
 
     @PostMapping("/bulk")
     @Transactional
-    public List<MallaCurricularResponse> guardarMallaCompleta(@Valid @RequestBody MallaCurricularBulkRequest request) {
+    public List<MallaCurricularResponse> guardarMallaCompleta(
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @Valid @RequestBody MallaCurricularBulkRequest request
+    ) {
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId(), true);
+        request.setAnoEscolarId(resolvedAnoEscolarId);
+
         Materia materia = materiaRepository.findById(request.getMateriaId())
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
-        AnoEscolar anoEscolar = anoEscolarRepository.findById(request.getAnoEscolarId())
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(resolvedAnoEscolarId)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
+        validarAnoEscolarEscribible(anoEscolar);
 
         Set<String> gradoIdsEntrada = new HashSet<>();
         for (MallaCurricularBulkRequest.GradoHoras gradoHoras : request.getGrados()) {
@@ -161,7 +189,7 @@ public class MallaCurricularController {
 
         List<MallaCurricular> existentes = mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(
             request.getMateriaId(),
-            request.getAnoEscolarId()
+            resolvedAnoEscolarId
         );
 
         Map<String, MallaCurricular> existentesPorGrado = new HashMap<>();
@@ -197,7 +225,7 @@ public class MallaCurricularController {
             }
         }
 
-        return mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(request.getMateriaId(), request.getAnoEscolarId()).stream()
+        return mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(request.getMateriaId(), resolvedAnoEscolarId).stream()
             .map(this::toResponse)
             .sorted(Comparator.comparing(MallaCurricularResponse::getGradoNivel, Comparator.nullsLast(Integer::compareTo)))
             .toList();
@@ -213,6 +241,32 @@ public class MallaCurricularController {
         mallaCurricularRepository.save(existente);
 
         return ResponseEntity.noContent().build();
+    }
+
+    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId, boolean required) {
+        String resolvedAnoEscolarId = anoEscolarHeader != null
+            ? anoEscolarHeader.getId()
+            : (anoEscolarId == null || anoEscolarId.isBlank() ? null : anoEscolarId.trim());
+
+        if (required && resolvedAnoEscolarId == null) {
+            throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                "Se requiere año escolar (header X-Ano-Escolar-Id o campo anoEscolarId)",
+                Map.of()
+            );
+        }
+
+        return resolvedAnoEscolarId;
+    }
+
+    private void validarAnoEscolarEscribible(AnoEscolar anoEscolar) {
+        if (anoEscolar.calcularEstado(clockProvider.today()) == EstadoAnoEscolar.CERRADO) {
+            throw new ApiException(
+                ErrorCode.BUSINESS_RULE,
+                "El año escolar está cerrado, no se permiten modificaciones",
+                Map.of()
+            );
+        }
     }
 
     private String generarIdMalla(String materiaId, String gradoId, String anoEscolarId) {

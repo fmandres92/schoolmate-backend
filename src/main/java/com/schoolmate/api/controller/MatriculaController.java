@@ -2,9 +2,13 @@ package com.schoolmate.api.controller;
 
 import com.schoolmate.api.dto.request.MatriculaRequest;
 import com.schoolmate.api.dto.response.MatriculaResponse;
+import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.exception.ApiException;
+import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.repository.MatriculaRepository;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.usecase.matricula.CambiarEstadoMatricula;
 import com.schoolmate.api.usecase.matricula.MatricularAlumno;
 import com.schoolmate.api.usecase.matricula.ValidarAccesoMatriculasCursoProfesor;
@@ -36,7 +40,12 @@ public class MatriculaController {
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<MatriculaResponse> matricular(@Valid @RequestBody MatriculaRequest request) {
+    public ResponseEntity<MatriculaResponse> matricular(
+            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+            @Valid @RequestBody MatriculaRequest request) {
+        String resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId());
+        request.setAnoEscolarId(resolvedAnoEscolarId);
+
         Matricula matricula = matricularAlumno.execute(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(MatriculaResponse.fromEntity(matricula));
@@ -99,5 +108,21 @@ public class MatriculaController {
 
         Matricula matricula = cambiarEstadoMatricula.execute(id, nuevoEstado);
         return ResponseEntity.ok(MatriculaResponse.fromEntity(matricula));
+    }
+
+    private String resolveAnoEscolarId(AnoEscolar anoEscolarHeader, String anoEscolarId) {
+        String resolvedAnoEscolarId = anoEscolarHeader != null
+                ? anoEscolarHeader.getId()
+                : (anoEscolarId == null || anoEscolarId.isBlank() ? null : anoEscolarId.trim());
+
+        if (resolvedAnoEscolarId == null) {
+            throw new ApiException(
+                    ErrorCode.VALIDATION_FAILED,
+                    "Se requiere año escolar (header X-Ano-Escolar-Id o campo anoEscolarId)",
+                    Map.of()
+            );
+        }
+
+        return resolvedAnoEscolarId;
     }
 }

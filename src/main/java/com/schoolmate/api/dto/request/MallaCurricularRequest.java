@@ -19,7 +19,6 @@ public class MallaCurricularRequest {
     @NotBlank
     private String gradoId;
 
-    @NotBlank
     private String anoEscolarId;
 
     @NotNull
