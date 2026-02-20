@@ -8,6 +8,7 @@ import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.security.UserPrincipal;
 import com.schoolmate.api.usecase.auth.LoginUsuario;
 import com.schoolmate.api.usecase.auth.RefrescarToken;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -23,8 +24,11 @@ public class AuthController {
     private final RefrescarToken refrescarToken;
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        AuthResponse response = loginUsuario.execute(request);
+    public ResponseEntity<AuthResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        AuthResponse response = loginUsuario.execute(request, httpRequest);
         return ResponseEntity.ok(response);
     }
 

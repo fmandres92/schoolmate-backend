@@ -16,5 +16,6 @@ public class AsistenciaClaseResponse {
     private UUID bloqueHorarioId;
     private LocalDate fecha;
     private LocalDateTime tomadaEn;
+    private String registradoPorNombre;
     private List<RegistroAsistenciaResponse> registros;
 }

@@ -36,7 +36,8 @@ public class AsistenciaController {
         @AuthenticationPrincipal UserPrincipal user,
         @Valid @RequestBody GuardarAsistenciaRequest request
     ) {
-        AsistenciaClaseResponse response = guardarAsistenciaClase.execute(request, user.getProfesorId());
+        AsistenciaClaseResponse response = guardarAsistenciaClase.execute(
+            request, user.getProfesorId(), user.getId());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

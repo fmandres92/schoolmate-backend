@@ -11,6 +11,7 @@ import com.schoolmate.api.entity.AsistenciaClase;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.entity.RegistroAsistencia;
+import com.schoolmate.api.entity.Usuario;
 import com.schoolmate.api.enums.EstadoAnoEscolar;
 import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.enums.TipoBloque;
@@ -20,6 +21,7 @@ import com.schoolmate.api.repository.AsistenciaClaseRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.repository.RegistroAsistenciaRepository;
+import com.schoolmate.api.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
@@ -49,10 +51,11 @@ public class GuardarAsistenciaClase {
     private final MatriculaRepository matriculaRepository;
     private final AsistenciaClaseRepository asistenciaClaseRepository;
     private final RegistroAsistenciaRepository registroAsistenciaRepository;
+    private final UsuarioRepository usuarioRepository;
     private final ClockProvider clockProvider;
 
     @Transactional
-    public AsistenciaClaseResponse execute(GuardarAsistenciaRequest request, UUID profesorId) {
+    public AsistenciaClaseResponse execute(GuardarAsistenciaRequest request, UUID profesorId, UUID usuarioId) {
         BloqueHorario bloque = bloqueHorarioRepository.findById(request.getBloqueHorarioId())
             .orElseThrow(() -> new ResourceNotFoundException("Bloque horario no encontrado"));
 
@@ -117,6 +120,7 @@ public class GuardarAsistenciaClase {
         if (existente == null) {
             AsistenciaClase nuevaAsistencia = AsistenciaClase.builder()
                 .bloqueHorario(bloque)
+                .registradoPor(usuarioRepository.getReferenceById(usuarioId))
                 .fecha(request.getFecha())
                 .createdAt(ahora)
                 .updatedAt(ahora)
@@ -128,10 +132,12 @@ public class GuardarAsistenciaClase {
                 savedAsistencia = asistenciaClaseRepository
                     .findByBloqueHorarioIdAndFecha(bloque.getId(), fechaRequest)
                     .orElseThrow(() -> new BusinessException("No se pudo guardar la asistencia"));
+                savedAsistencia.setRegistradoPor(usuarioRepository.getReferenceById(usuarioId));
                 savedAsistencia.setUpdatedAt(ahora);
                 savedAsistencia = asistenciaClaseRepository.save(savedAsistencia);
             }
         } else {
+            existente.setRegistradoPor(usuarioRepository.getReferenceById(usuarioId));
             existente.setUpdatedAt(ahora);
             savedAsistencia = asistenciaClaseRepository.save(existente);
         }
@@ -206,7 +212,15 @@ public class GuardarAsistenciaClase {
             .bloqueHorarioId(asistenciaClase.getBloqueHorario().getId())
             .fecha(asistenciaClase.getFecha())
             .tomadaEn(asistenciaClase.getCreatedAt())
+            .registradoPorNombre(obtenerNombreRegistrador(asistenciaClase.getRegistradoPor()))
             .registros(registrosResponse)
             .build();
+    }
+
+    private String obtenerNombreRegistrador(Usuario registradoPor) {
+        if (registradoPor == null) {
+            return null;
+        }
+        return registradoPor.getNombre() + " " + registradoPor.getApellido();
     }
 }

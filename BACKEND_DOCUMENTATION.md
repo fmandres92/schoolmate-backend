@@ -99,6 +99,19 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `TOKEN_EXPIRED` (401), `UNAUTHORIZED` (401), `SESSION_REVOKED` (401), `ACCESS_DENIED` (403).
   - `SecurityConfig` usa `ApiAuthenticationEntryPoint` y `ApiAccessDeniedHandler`.
 
+### Actualización técnica reciente (REQ-A sesiones y trazabilidad)
+
+- Registro de sesiones de login en nueva entidad `SesionUsuario`:
+  - guarda `usuario`, `ipAddress`, `latitud`, `longitud`, `precisionMetros`, `userAgent`, `createdAt`.
+  - se registra solo en login exitoso (`POST /api/auth/login`), no en refresh ni en login fallido.
+- `LoginRequest` ahora acepta geolocalización opcional (`latitud`, `longitud`, `precisionMetros`) sin romper clientes legacy.
+- Trazabilidad de asistencia:
+  - `AsistenciaClase` incorpora `registradoPor` (`usuario_id` nullable para históricos).
+  - `GuardarAsistenciaClase` setea siempre el usuario autenticado que registra/edita.
+  - `AsistenciaClaseResponse` expone `registradoPorNombre`.
+- Nuevo endpoint admin: `GET /api/profesores/{profesorId}/sesiones` con filtros `desde/hasta` y paginación.
+- Cache-control ajustado: `/api/profesores/{profesorId}/sesiones` usa `Cache-Control: no-store, private`.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -214,7 +227,7 @@ Clase: `ApiErrorResponse`
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway versionadas en repo: V1..V18
+    └── db/migration          # migraciones Flyway versionadas en repo: V1..V21
 ```
 
 ### TODAS las clases por paquete
@@ -261,6 +274,8 @@ Clase: `ApiErrorResponse`
   - `AsistenciaMensualResponse`
   - `RegistroConFecha`
   - `ResumenAsistenciaResponse`
+  - `SesionProfesorPageResponse`
+  - `SesionProfesorResponse`
 - `com.schoolmate.api.dto.request`
   - `AlumnoRequest`
   - `AsignarMateriaRequest`
@@ -326,6 +341,7 @@ Clase: `ApiErrorResponse`
   - `Profesor`
   - `RegistroAsistencia`
   - `SeccionCatalogo`
+  - `SesionUsuario`
   - `Usuario`
 - `com.schoolmate.api.enums`
   - `EstadoAnoEscolar`
@@ -357,6 +373,7 @@ Clase: `ApiErrorResponse`
   - `MatriculaRepository`
   - `ProfesorRepository`
   - `RegistroAsistenciaRepository`
+  - `SesionUsuarioRepository`
   - `SeccionCatalogoRepository`
   - `UsuarioRepository`
 - `com.schoolmate.api.security`
@@ -375,6 +392,7 @@ Clase: `ApiErrorResponse`
   - `ObtenerResumenAsistenciaAlumno`
 - `com.schoolmate.api.usecase.auth`
   - `LoginUsuario`
+  - `RefrescarToken`
 - `com.schoolmate.api.usecase.alumno`
   - `CrearAlumnoConApoderado`
 - `com.schoolmate.api.usecase.asistencia`
@@ -420,6 +438,7 @@ Clase: `ApiErrorResponse`
 | `rol` | `Rol` | `rol` | `VARCHAR(20)` | NOT NULL |
 | `profesorId` | `UUID` | `profesor_id` | `UUID` | nullable |
 | `apoderadoId` | `UUID` | `apoderado_id` | `UUID` | nullable |
+| `refreshToken` | `String` | `refresh_token` | `VARCHAR(255)` | nullable, UNIQUE parcial (`refresh_token IS NOT NULL`) |
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
@@ -639,12 +658,45 @@ Constraints DB adicionales:
 - jornada modelada por día (`dia_semana`) y secuencia (`numero_bloque`).
 - `materia_id` y `profesor_id` se mantienen null al configurar estructura base.
 
+### `AsistenciaClase` (`asistencia_clase`)
+
+| Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
+|---|---|---|---|---|
+| `id` | `UUID` | `id` | `UUID` | PK |
+| `bloqueHorario` | `BloqueHorario` | `bloque_horario_id` | `UUID` | FK NOT NULL |
+| `fecha` | `LocalDate` | `fecha` | `DATE` | NOT NULL |
+| `registradoPor` | `Usuario` | `registrado_por_usuario_id` | `UUID` | FK nullable (históricos pre-REQ-A) |
+| `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
+| `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
+
+Relaciones:
+
+- `@ManyToOne` -> `BloqueHorario`
+- `@ManyToOne` -> `Usuario` (`registradoPor`, lazy)
+
+### `SesionUsuario` (`sesion_usuario`)
+
+| Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
+|---|---|---|---|---|
+| `id` | `UUID` | `id` | `UUID` | PK |
+| `usuario` | `Usuario` | `usuario_id` | `UUID` | FK NOT NULL |
+| `ipAddress` | `String` | `ip_address` | `VARCHAR(45)` | nullable |
+| `latitud` | `BigDecimal` | `latitud` | `NUMERIC(10,7)` | nullable |
+| `longitud` | `BigDecimal` | `longitud` | `NUMERIC(10,7)` | nullable |
+| `precisionMetros` | `BigDecimal` | `precision_metros` | `NUMERIC(8,2)` | nullable |
+| `userAgent` | `String` | `user_agent` | `VARCHAR(500)` | nullable |
+| `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
+
+Relaciones:
+
+- `@ManyToOne` -> `Usuario`
+
 ### Campos de auditoría
 
 Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 
 - `created_at` + `updated_at`: `Usuario`, `AnoEscolar`, `Grado`, `Materia`, `Profesor`, `Curso`, `Alumno`, `Matricula`, `MallaCurricular`, `BloqueHorario`, `AsistenciaClase`, `RegistroAsistencia`, `Apoderado`.
-- Solo `created_at`: `SeccionCatalogo`.
+- Solo `created_at`: `SeccionCatalogo`, `SesionUsuario`.
 
 ### Enums usados y valores
 
@@ -659,6 +711,8 @@ Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 ```text
 usuario
   (profesor_id, apoderado_id como UUID sin FK JPA)
+   |
+   *---1 sesion_usuario
 
 apoderado 1---* apoderado_alumno *---1 alumno
 
@@ -680,6 +734,8 @@ curso 1---* bloque_horario *---0..1 profesor
                         |
                         0..1
                       materia
+
+bloque_horario 1---* asistencia_clase *---0..1 usuario (registrado_por_usuario_id)
 
 seccion_catalogo 1---* curso (por letra)
 ```
@@ -710,6 +766,7 @@ seccion_catalogo 1---* curso (por letra)
 18. `V18__req04_alumno_con_apoderado.sql`
 19. `V19__add_refresh_token_to_usuario.sql`
 20. `V20__migracion_uuid_nativo.sql` *(aplicada en BD, no versionada en este repo)*
+21. `V21__registro_sesiones_y_trazabilidad_asistencia.sql`
 
 ### Qué hace cada migración
 
@@ -735,10 +792,11 @@ seccion_catalogo 1---* curso (por letra)
 | `V18` | Migración marcador REQ-04: documenta `ALTER TABLE apoderado_alumno ADD COLUMN vinculo VARCHAR(20) NOT NULL DEFAULT 'OTRO'` ejecutado directamente en Supabase |
 | `V19` | Agrega `usuario.refresh_token` (`varchar(255)`) e índice único parcial `ux_usuario_refresh_token_not_null` |
 | `V20` | Migración global a UUID nativo en BD (`id`/FKs) para entidades de negocio |
+| `V21` | Migración marcador (DDL ejecutado en Supabase): `sesion_usuario` + `asistencia_clase.registrado_por_usuario_id` + índices de trazabilidad |
 
 ### Estado resultante del esquema (según migraciones + código)
 
-- Modelo oficial en código y queries usa: `usuario`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
+- Modelo oficial en código y queries usa: `usuario`, `sesion_usuario`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
 - `apoderado_alumno` incorpora columna `vinculo` en el modelo actual (REQ-04) y es tratada como enum `VinculoApoderado` en JPA.
 - IDs/FKs operativos en modelo actual: `UUID` (alineado con V20).
 - Riesgo de drift:
@@ -758,7 +816,7 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V20+` para cualquier ajuste de esquema (V19 ya versionada en repo y V20 aplicada en BD).
+2. Crear nueva `V22+` para cualquier ajuste de esquema (V21 ya versionada en repo).
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
@@ -767,7 +825,7 @@ Recomendación alineada al proyecto:
 
 ### Flujo Access Token + Refresh Token
 
-1. `POST /api/auth/login` recibe `LoginRequest(identificador,password)`.
+1. `POST /api/auth/login` recibe `LoginRequest(identificador,password,latitud?,longitud?,precisionMetros?)`.
 2. `LoginUsuario`:
    - resuelve usuario por email o RUT normalizado.
    - valida `activo=true`.
@@ -775,12 +833,17 @@ Recomendación alineada al proyecto:
    - genera `accessToken` (JWT corto, `jwt.expiration=900000`).
    - genera `refreshToken` aleatorio (`UUID`), lo persiste en `usuario.refresh_token` y sobrescribe el anterior.
 3. Respuesta `AuthResponse` con `accessToken`, `refreshToken`, `token` (alias legacy) y metadata de usuario.
-4. `POST /api/auth/refresh`:
+4. En login exitoso se registra `SesionUsuario` con:
+   - `usuario_id`, `created_at`
+   - `ipAddress` (prioridad `X-Forwarded-For` -> `X-Real-IP` -> `remoteAddr`)
+   - `userAgent`
+   - `latitud/longitud/precisionMetros` (opcionales del request)
+5. `POST /api/auth/refresh`:
    - recibe `RefreshTokenRequest {refreshToken}`.
    - busca usuario por `refreshToken`.
    - si no existe: `SESSION_REVOKED` (401).
    - si existe: rota refresh token y retorna nuevo `accessToken` + nuevo `refreshToken`.
-5. En cada request autenticada:
+6. En cada request autenticada:
    - `JwtAuthenticationFilter` toma `Authorization: Bearer <accessToken>`.
    - valida firma/claims del JWT de forma stateless.
    - construye `UserPrincipal` desde claims del token (sin lookup a BD).
@@ -817,7 +880,7 @@ Configuración activa en código:
   - reglas:
     - Grupo A/B (`/api/grados`, `/api/materias`, `/api/anos-escolares/**`, `/api/cursos/**`, `/api/malla-curricular`, `/api/profesores`) -> `Cache-Control: no-cache`.
     - Grupo C transaccional (`/api/matriculas/**`, `/api/asistencia/**`, `/api/alumnos/**`) -> `Cache-Control: no-store`.
-    - Grupo C sensible (`/api/apoderado/**`, `/api/profesor/**`, `/api/auth/**`) -> `Cache-Control: no-store, private`.
+    - Grupo C sensible (`/api/apoderado/**`, `/api/profesor/**`, `/api/auth/**`, `/api/profesores/{id}/sesiones`) -> `Cache-Control: no-store, private`.
     - default `GET` restante -> `Cache-Control: no-cache`.
 
 ### Resolución de año escolar por header (`X-Ano-Escolar-Id`)
@@ -905,7 +968,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/auth/login` | Login y emisión de sesión (`accessToken` + `refreshToken`) por email o RUT | Público | Body JSON | `LoginRequest {identificador,password}` | `AuthResponse {token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
+| `POST /api/auth/login` | Login y emisión de sesión (`accessToken` + `refreshToken`) por email o RUT; registra sesión de acceso | Público | Body JSON | `LoginRequest {identificador,password,latitud?,longitud?,precisionMetros?}` | `AuthResponse {token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
 | `POST /api/auth/refresh` | Refresca sesión usando refresh token persistido (con rotación) | Público | Body JSON | `RefreshTokenRequest {refreshToken}` | `AuthResponse {token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `RefrescarToken` | `SESSION_REVOKED`, `VALIDATION_FAILED` |
 | `GET /api/auth/me` | Datos del usuario actual | Autenticado | Header `Authorization` requerido | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}` | directo (guard defensivo) | `UNAUTHORIZED`, `ACCESS_DENIED` |
 
@@ -987,6 +1050,7 @@ Implementación actual:
 |---|---|---|---|---|---|---|---|
 | `GET /api/profesores` | Lista profesores ordenados por apellido | `ADMIN` | - | - | `List<ProfesorResponse>` | directo | - |
 | `GET /api/profesores/{id}` | Obtiene profesor con contrato y horas asignadas del año ACTIVO (si existe) | `ADMIN` | Path | - | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND` |
+| `GET /api/profesores/{profesorId}/sesiones` | Lista sesiones de login del usuario asociado al profesor (paginado, filtro por fechas) | `ADMIN` | Path `profesorId`; Query opcional `desde`,`hasta`,`page`,`size` | - | `SesionProfesorPageResponse` | directo | `RESOURCE_NOT_FOUND` |
 | `POST /api/profesores` | Crea profesor con materias, horas de contrato y usuario asociado (`ROL=PROFESOR`); valida formato/DV de RUT y disponibilidad cross-tabla | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | `CrearProfesorConUsuario` | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `PUT /api/profesores/{id}` | Actualiza profesor; valida formato de RUT, mantiene RUT inmutable y permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/profesores/{profesorId}/horario` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia, prioridad `header > query`) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `ProfesorHorarioResponse` | directo | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `VALIDATION_FAILED` |
@@ -1045,7 +1109,7 @@ Implementación actual:
 
 - Función: registrar o editar asistencia de una clase para una fecha no futura del año escolar del bloque.
 - Repositorios/dependencias:
-  - `BloqueHorarioRepository`, `MatriculaRepository`, `AsistenciaClaseRepository`, `RegistroAsistenciaRepository`, `ClockProvider`
+  - `BloqueHorarioRepository`, `MatriculaRepository`, `AsistenciaClaseRepository`, `RegistroAsistenciaRepository`, `UsuarioRepository`, `ClockProvider`
 - Validaciones:
   - bloque existe y es tipo `CLASE`
   - fecha no puede ser futura
@@ -1060,6 +1124,7 @@ Implementación actual:
 - Comportamiento de persistencia:
   - si no existe asistencia para `(bloque,fechaRequest)`, crea `asistencia_clase` + registros
   - si ya existe, actualiza `updatedAt`, borra registros previos y vuelve a insertar los registros enviados
+  - siempre setea `registrado_por_usuario_id` con el usuario autenticado que registra/edita
 - Manejo de concurrencia:
   - ante carrera al crear cabecera (`asistencia_clase`), recupera la existente y continúa como edición
 - `@Transactional`: sí.
@@ -1073,6 +1138,7 @@ Implementación actual:
   - bloque debe existir
   - ownership por profesor del bloque
   - debe existir asistencia para `(bloque,fecha)`
+  - response incluye `registradoPorNombre` (nullable para históricos)
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.auth.LoginUsuario`
@@ -1081,13 +1147,16 @@ Implementación actual:
 - Función: autenticar usuario y emitir sesión (`accessToken` + `refreshToken` persistido).
 - Repositorios/dependencias:
   - `UsuarioRepository`
+  - `SesionUsuarioRepository`
   - `PasswordEncoder`
   - `JwtTokenProvider`
+  - `ClockProvider`
 - Validaciones:
   - usuario existe por `identificador` (email o RUT normalizado)
   - usuario activo
   - password BCrypt coincide
 - Flujo `execute()`:
+  - Firma actual: `execute(LoginRequest request, HttpServletRequest httpRequest)`
   1. resuelve usuario por `identificador`:
      - email (`findByEmail`) o
      - RUT (`RutNormalizer.normalize` + `findByRut`)
@@ -1096,7 +1165,8 @@ Implementación actual:
   4. construye `UserPrincipal`
   5. genera `accessToken` (JWT)
   6. genera `refreshToken` (`UUID`) y persiste en `usuario.refreshToken`
-  7. retorna `AuthResponse` con `token` (alias), `accessToken` y `refreshToken`
+  7. registra `SesionUsuario` con ip/user-agent/geolocalización opcional
+  8. retorna `AuthResponse` con `token` (alias), `accessToken` y `refreshToken`
 - Errores:
   - `BadCredentialsException` (credenciales inválidas / usuario desactivado)
 - `@Transactional`: sí.
@@ -1496,11 +1566,12 @@ Implementación actual:
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
 | `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
 | `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
+| `SesionUsuarioRepository` | `SesionUsuario` | `findByUsuarioIdAndFechas` (paginado, orden desc por `createdAt`) | JPQL con filtros opcionales por rango (`desde`/`hasta`) | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |
 | `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | `findByApoderadoIdWithAlumno` (JPQL con `JOIN FETCH`) | no |
 | `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId`, `findByAlumnoIdAndFechaEntre`, `countByAlumnoIdAndEstadoAndAnoEscolarId` | `DELETE` por `asistenciaClase.id`; JPQL para mensual por fecha y resumen por año escolar vía joins `asistencia_clase -> bloque_horario -> curso` | no |
 | `SeccionCatalogoRepository` | `SeccionCatalogo` | `findByActivoTrueOrderByOrdenAsc` | no | no |
-| `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `findByApoderadoId`, `findByRefreshToken`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
+| `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `findByApoderadoId`, `findByProfesorId`, `findByRefreshToken`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
 
 ### Specifications existentes
 
@@ -1519,7 +1590,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 
 | DTO | Campos | Validaciones | Lombok |
 |---|---|---|---|
-| `LoginRequest` | `identificador`, `password` | `@NotBlank` en ambos (sin `@Email` para soportar RUT) | `@Data` |
+| `LoginRequest` | `identificador`, `password`, `latitud?`, `longitud?`, `precisionMetros?` | `@NotBlank` en `identificador/password` (geolocalización opcional) | `@Data` |
 | `RefreshTokenRequest` | `refreshToken` | `@NotBlank` | `@Data` |
 | `AnoEscolarRequest` | `ano`, `fechaInicioPlanificacion`, `fechaInicio`, `fechaFin` | `@NotNull` | `@Data` |
 | `MateriaRequest` | `nombre`, `icono` | `@NotBlank(nombre)` | `@Data` |
@@ -1553,6 +1624,8 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `AsistenciaDiaResponse` | `fecha,totalBloques,bloquesPresente,bloquesAusente,estado` | `@Getter/@Setter @Builder` |
 | `ResumenAsistenciaResponse` | `alumnoId,alumnoNombre,totalClases,totalPresente,totalAusente,porcentajeAsistencia` | `@Getter/@Setter @Builder` |
 | `RegistroConFecha` | `registroId,alumnoId,estado,fecha` (proyección interna para query) | `@Getter/@Setter` |
+| `SesionProfesorResponse` | `id,fechaHora,ipAddress,latitud,longitud,precisionMetros,userAgent` | `@Data @Builder` |
+| `SesionProfesorPageResponse` | `profesorId,profesorNombre,sesiones[],totalElements,totalPages,currentPage` | `@Data @Builder` |
 
 ### Response DTOs
 
@@ -1583,7 +1656,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `EstadoClaseHoy` | `PENDIENTE,DISPONIBLE,EXPIRADA` | `enum` |
 | `ClaseHoyResponse` | `bloqueId,numeroBloque,horaInicio,horaFin,cursoId,cursoNombre,materiaId,materiaNombre,materiaIcono,cantidadAlumnos,estado,asistenciaTomada` | `@Data @Builder` |
 | `ClasesHoyResponse` | `fecha,diaSemana,nombreDia,clases[]` | `@Data @Builder` |
-| `AsistenciaClaseResponse` | `asistenciaClaseId,bloqueHorarioId,fecha,tomadaEn,registros[]` | `@Data @Builder` |
+| `AsistenciaClaseResponse` | `asistenciaClaseId,bloqueHorarioId,fecha,tomadaEn,registradoPorNombre,registros[]` | `@Data @Builder` |
 | `RegistroAsistenciaResponse` | `alumnoId,alumnoNombre,alumnoApellido,estado` | `@Data @Builder` |
 | `ProfesorDisponibleResponse` | `profesorId,profesorNombre,profesorApellido,horasPedagogicasContrato,horasAsignadas,excedido,disponible,asignadoEnEsteBloque,conflicto` | `@Data @Builder` |
 | `ProfesoresDisponiblesResponse` | bloque + materia + `profesores[]` | `@Data @Builder` |
@@ -1889,12 +1962,14 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 ### Índices existentes (migraciones)
 
 - `usuario`: `idx_usuario_email`, `idx_usuario_rol`
+- `sesion_usuario`: `idx_sesion_usuario_usuario`, `idx_sesion_usuario_created`, `idx_sesion_usuario_usuario_created`
 - `ano_escolar`: `idx_ano_escolar_activo`, `idx_ano_escolar_ano`
 - `grado`: `idx_grado_nivel`
 - `profesor`: `idx_profesor_email`, `idx_profesor_activo`
 - `curso`: `idx_curso_grado`, `idx_curso_ano_escolar`, `idx_curso_activo`, `uq_curso_grado_ano_letra`
 - `malla_curricular`: `idx_malla_curricular_ano_escolar`, `idx_malla_curricular_materia_ano`, `idx_malla_curricular_grado_ano`, `idx_malla_curricular_activo`
 - `matricula`: `idx_matricula_alumno`, `idx_matricula_curso`, `idx_matricula_ano_escolar`, `idx_matricula_estado`, `uq_matricula_alumno_ano_activa`
+- `asistencia_clase`: índice de trazabilidad `idx_asistencia_clase_registrado_por`
 - `bloque_horario`: tabla existente en Supabase; índices/constraints no versionados en migraciones del repo
 
 ### Índices recomendados pendientes
@@ -1932,7 +2007,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 | Materias | ✅ | list/get/create/update/delete |
 | Malla Curricular | ✅ | list por año, por materia, por grado, create, update, bulk, delete lógico |
 | Cursos | ✅ | list/get/create/update |
-| Profesores | ✅ | list/get/create/update |
+| Profesores | ✅ | list/get/create/update + sesiones de login por profesor |
 | Apoderados (admin) | ✅ | create/vincular, buscar por RUT, obtener por alumno |
 | Portal Apoderado | ✅ parcial | mis-alumnos, asistencia mensual, resumen asistencia |
 | Alumnos | ✅ | list/get/create/update + `POST /api/alumnos/con-apoderado` |

@@ -4,6 +4,8 @@ import java.util.UUID;
 import com.schoolmate.api.common.rut.RutNormalizer;
 import com.schoolmate.api.common.rut.RutValidationService;
 import com.schoolmate.api.common.time.ClockProvider;
+import com.schoolmate.api.dto.SesionProfesorPageResponse;
+import com.schoolmate.api.dto.SesionProfesorResponse;
 import com.schoolmate.api.dto.request.ProfesorRequest;
 import com.schoolmate.api.dto.response.ProfesorResponse;
 import com.schoolmate.api.entity.AnoEscolar;
@@ -18,15 +20,20 @@ import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
 import com.schoolmate.api.repository.MateriaRepository;
 import com.schoolmate.api.repository.ProfesorRepository;
+import com.schoolmate.api.repository.SesionUsuarioRepository;
+import com.schoolmate.api.repository.UsuarioRepository;
 import com.schoolmate.api.usecase.profesor.CrearProfesorConUsuario;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
@@ -42,6 +49,8 @@ public class ProfesorController {
     private final MateriaRepository materiaRepository;
     private final AnoEscolarRepository anoEscolarRepository;
     private final BloqueHorarioRepository bloqueHorarioRepository;
+    private final SesionUsuarioRepository sesionUsuarioRepository;
+    private final UsuarioRepository usuarioRepository;
     private final ClockProvider clockProvider;
     private final CrearProfesorConUsuario crearProfesorConUsuario;
     private final RutValidationService rutValidationService;
@@ -111,6 +120,55 @@ public class ProfesorController {
 
         Profesor saved = profesorRepository.save(profesor);
         return ResponseEntity.ok(ProfesorResponse.fromEntity(saved));
+    }
+
+    @GetMapping("/{profesorId}/sesiones")
+    @Transactional(readOnly = true)
+    public ResponseEntity<SesionProfesorPageResponse> obtenerSesiones(
+            @PathVariable UUID profesorId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        Profesor profesor = profesorRepository.findById(profesorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
+
+        var usuario = usuarioRepository.findByProfesorId(profesorId)
+                .orElseThrow(() -> new ResourceNotFoundException("El profesor no tiene usuario asociado"));
+
+        LocalDateTime desdeDateTime = desde != null ? desde.atStartOfDay() : null;
+        LocalDateTime hastaDateTime = hasta != null ? hasta.plusDays(1).atStartOfDay() : null;
+
+        var sesionesPage = sesionUsuarioRepository.findByUsuarioIdAndFechas(
+                usuario.getId(),
+                desdeDateTime,
+                hastaDateTime,
+                PageRequest.of(page, size)
+        );
+
+        var sesiones = sesionesPage.getContent().stream()
+                .map(s -> SesionProfesorResponse.builder()
+                        .id(s.getId())
+                        .fechaHora(s.getCreatedAt())
+                        .ipAddress(s.getIpAddress())
+                        .latitud(s.getLatitud())
+                        .longitud(s.getLongitud())
+                        .precisionMetros(s.getPrecisionMetros())
+                        .userAgent(s.getUserAgent())
+                        .build())
+                .toList();
+
+        var response = SesionProfesorPageResponse.builder()
+                .profesorId(profesorId)
+                .profesorNombre(profesor.getNombre() + " " + profesor.getApellido())
+                .sesiones(sesiones)
+                .totalElements(sesionesPage.getTotalElements())
+                .totalPages(sesionesPage.getTotalPages())
+                .currentPage(page)
+                .build();
+
+        return ResponseEntity.ok(response);
     }
 
     private void validarUnicidadEnActualizacion(ProfesorRequest request, UUID profesorId) {

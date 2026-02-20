@@ -5,6 +5,7 @@ import com.schoolmate.api.dto.response.RegistroAsistenciaResponse;
 import com.schoolmate.api.entity.AsistenciaClase;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.entity.RegistroAsistencia;
+import com.schoolmate.api.entity.Usuario;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AsistenciaClaseRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
@@ -58,7 +59,15 @@ public class ObtenerAsistenciaClase {
             .bloqueHorarioId(asistenciaClase.getBloqueHorario().getId())
             .fecha(asistenciaClase.getFecha())
             .tomadaEn(asistenciaClase.getCreatedAt())
+            .registradoPorNombre(obtenerNombreRegistrador(asistenciaClase.getRegistradoPor()))
             .registros(registrosResponse)
             .build();
+    }
+
+    private String obtenerNombreRegistrador(Usuario registradoPor) {
+        if (registradoPor == null) {
+            return null;
+        }
+        return registradoPor.getNombre() + " " + registradoPor.getApellido();
     }
 }
