@@ -12,6 +12,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
     Optional<Usuario> findByEmail(String email);
     Optional<Usuario> findByRut(String rut);
     Optional<Usuario> findByApoderadoId(UUID apoderadoId);
+    Optional<Usuario> findByRefreshToken(String refreshToken);
     Boolean existsByEmail(String email);
     Boolean existsByRut(String rut);
     boolean existsByProfesorId(UUID profesorId);

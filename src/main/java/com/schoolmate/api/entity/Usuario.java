@@ -48,6 +48,9 @@ public class Usuario {
     @Column(name = "apoderado_id")
     private UUID apoderadoId;
 
+    @Column(name = "refresh_token", length = 255)
+    private String refreshToken;
+
     @Column(nullable = false)
     private Boolean activo = true;
 

@@ -82,6 +82,23 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `CacheControlInterceptor` aplica `Cache-Control` por grupo de rutas (catálogos/configuración vs transaccional/sensible).
   - `SecurityConfig` deshabilita headers cache por defecto de Spring Security (`headers.cacheControl(...disable())`) para no sobrescribir la política del interceptor.
 
+### Actualización técnica reciente (auth con refresh token persistido)
+
+- Migración Flyway `V19__add_refresh_token_to_usuario.sql`:
+  - agrega `usuario.refresh_token` (`varchar(255)`, nullable).
+  - agrega índice único parcial `ux_usuario_refresh_token_not_null`.
+- Login ahora emite `accessToken` + `refreshToken` y persiste el refresh token en `usuario` (un solo refresh token activo por usuario/dispositivo).
+- Nuevo endpoint público `POST /api/auth/refresh` para renovar sesión:
+  - busca usuario por `refreshToken`.
+  - rota refresh token en cada refresh.
+  - retorna nuevo `accessToken` y nuevo `refreshToken`.
+- `JwtAuthenticationFilter` quedó stateless:
+  - valida firma/claims del JWT y construye `UserPrincipal` directo desde claims.
+  - ya no consulta BD por request autenticada.
+- Manejo de errores auth/seguridad estandarizado en formato `ApiErrorResponse`:
+  - `TOKEN_EXPIRED` (401), `UNAUTHORIZED` (401), `SESSION_REVOKED` (401), `ACCESS_DENIED` (403).
+  - `SecurityConfig` usa `ApiAuthenticationEntryPoint` y `ApiAccessDeniedHandler`.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -691,7 +708,7 @@ seccion_catalogo 1---* curso (por letra)
 16. `V16__create_asistencia.sql`
 17. `V17__apoderado_entity.sql`
 18. `V18__req04_alumno_con_apoderado.sql`
-19. `V19__consolidacion_integridad_y_performance.sql` *(aplicada en BD, no versionada en este repo)*
+19. `V19__add_refresh_token_to_usuario.sql`
 20. `V20__migracion_uuid_nativo.sql` *(aplicada en BD, no versionada en este repo)*
 
 ### Qué hace cada migración
@@ -716,7 +733,7 @@ seccion_catalogo 1---* curso (por letra)
 | `V16` | Crea `asistencia_clase` y `registro_asistencia` con FKs, índices y unicidad por bloque/fecha y por alumno en una clase |
 | `V17` | Migración marcador: documenta refactor de apoderado ejecutado directamente en Supabase (`apoderado`, `apoderado_alumno`, `usuario.apoderado_id`) sin DDL en Flyway |
 | `V18` | Migración marcador REQ-04: documenta `ALTER TABLE apoderado_alumno ADD COLUMN vinculo VARCHAR(20) NOT NULL DEFAULT 'OTRO'` ejecutado directamente en Supabase |
-| `V19` | Consolidación de integridad/performance en BD y base para nuevos campos de dominio (incluye soporte para `materia.activo` y `registro_asistencia.observacion`) |
+| `V19` | Agrega `usuario.refresh_token` (`varchar(255)`) e índice único parcial `ux_usuario_refresh_token_not_null` |
 | `V20` | Migración global a UUID nativo en BD (`id`/FKs) para entidades de negocio |
 
 ### Estado resultante del esquema (según migraciones + código)
@@ -741,28 +758,32 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V21+` para cualquier ajuste de esquema (V19/V20 ya aplicadas en BD).
+2. Crear nueva `V20+` para cualquier ajuste de esquema (V19 ya versionada en repo y V20 aplicada en BD).
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
 
 ## SECCIÓN 6: SEGURIDAD Y AUTENTICACIÓN
 
-### Flujo JWT completo
+### Flujo Access Token + Refresh Token
 
 1. `POST /api/auth/login` recibe `LoginRequest(identificador,password)`.
 2. `LoginUsuario`:
-   - si `identificador` contiene `@`, busca por email (`UsuarioRepository.findByEmail`).
-   - si no contiene `@`, normaliza RUT y busca por `UsuarioRepository.findByRut`.
+   - resuelve usuario por email o RUT normalizado.
    - valida `activo=true`.
-   - valida password con `PasswordEncoder` BCrypt.
-   - construye `UserPrincipal` y genera JWT (`JwtTokenProvider`).
-3. Respuesta `AuthResponse` con `token`, `tipo=Bearer` y datos de usuario.
-4. En cada request:
-   - `JwtAuthenticationFilter` toma header `Authorization: Bearer <token>`.
-   - valida token (`validateToken`).
-   - extrae `email` del claim `subject`.
-   - carga usuario por email (`CustomUserDetailsService`).
+   - valida password BCrypt.
+   - genera `accessToken` (JWT corto, `jwt.expiration=900000`).
+   - genera `refreshToken` aleatorio (`UUID`), lo persiste en `usuario.refresh_token` y sobrescribe el anterior.
+3. Respuesta `AuthResponse` con `accessToken`, `refreshToken`, `token` (alias legacy) y metadata de usuario.
+4. `POST /api/auth/refresh`:
+   - recibe `RefreshTokenRequest {refreshToken}`.
+   - busca usuario por `refreshToken`.
+   - si no existe: `SESSION_REVOKED` (401).
+   - si existe: rota refresh token y retorna nuevo `accessToken` + nuevo `refreshToken`.
+5. En cada request autenticada:
+   - `JwtAuthenticationFilter` toma `Authorization: Bearer <accessToken>`.
+   - valida firma/claims del JWT de forma stateless.
+   - construye `UserPrincipal` desde claims del token (sin lookup a BD).
    - setea `SecurityContext` con authorities `ROLE_*`.
 
 ### `SecurityConfig`
@@ -775,10 +796,14 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 - `permitAll`:
   - `/api/auth/login`
   - `/api/auth/registro`
+  - `/api/auth/refresh`
   - `/h2-console/**`
   - `/error`
 - Resto: autenticado (incluye `/api/auth/me`).
 - Headers de cache de Spring Security deshabilitados (`headers.cacheControl(cache -> cache.disable())`) para delegar `Cache-Control` al interceptor de aplicación.
+- Manejo explícito de excepciones de seguridad:
+  - `ApiAuthenticationEntryPoint` -> `UNAUTHORIZED` (401) en JSON.
+  - `ApiAccessDeniedHandler` -> `ACCESS_DENIED` (403) en JSON.
 
 ### Caching HTTP (ETag + Cache-Control)
 
@@ -822,8 +847,9 @@ Importante:
 ### `JwtAuthenticationFilter`
 
 - Extiende `OncePerRequestFilter`.
-- Si token inválido o excepción, solo logea error y continúa cadena.
-- No corta explícitamente con 401 en filter; la autorización posterior decide.
+- Token válido: construye `UserPrincipal` desde claims JWT y autentica en contexto sin consultar repositorio.
+- `ExpiredJwtException`: responde `401` con `ApiErrorResponse {code: TOKEN_EXPIRED}` y corta la cadena.
+- `JwtException`/token mal formado o firma inválida: responde `401` con `ApiErrorResponse {code: UNAUTHORIZED}` y corta la cadena.
 
 ### `UserPrincipal`
 
@@ -879,8 +905,9 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/auth/login` | Login y emisión JWT (email o RUT) | Público | Body JSON | `LoginRequest {identificador,password}` | `AuthResponse {token,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
-| `GET /api/auth/me` | Datos del usuario actual | Autenticado | Header `Authorization` requerido | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}`; si no autenticado `401 {"message":"No autenticado"}` | directo (guard defensivo) | `401` sin token, `ACCESS_DENIED` si aplica |
+| `POST /api/auth/login` | Login y emisión de sesión (`accessToken` + `refreshToken`) por email o RUT | Público | Body JSON | `LoginRequest {identificador,password}` | `AuthResponse {token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
+| `POST /api/auth/refresh` | Refresca sesión usando refresh token persistido (con rotación) | Público | Body JSON | `RefreshTokenRequest {refreshToken}` | `AuthResponse {token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `RefrescarToken` | `SESSION_REVOKED`, `VALIDATION_FAILED` |
+| `GET /api/auth/me` | Datos del usuario actual | Autenticado | Header `Authorization` requerido | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}` | directo (guard defensivo) | `UNAUTHORIZED`, `ACCESS_DENIED` |
 
 ### Dominio: Apoderados (Admin)
 
@@ -1051,7 +1078,7 @@ Implementación actual:
 ### `com.schoolmate.api.usecase.auth.LoginUsuario`
 
 - Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/java/com/schoolmate/api/usecase/auth/LoginUsuario.java`
-- Función: autenticar usuario y emitir JWT.
+- Función: autenticar usuario y emitir sesión (`accessToken` + `refreshToken` persistido).
 - Repositorios/dependencias:
   - `UsuarioRepository`
   - `PasswordEncoder`
@@ -1067,11 +1094,28 @@ Implementación actual:
   2. valida `activo`
   3. valida password
   4. construye `UserPrincipal`
-  5. genera token
-  6. retorna `AuthResponse`
+  5. genera `accessToken` (JWT)
+  6. genera `refreshToken` (`UUID`) y persiste en `usuario.refreshToken`
+  7. retorna `AuthResponse` con `token` (alias), `accessToken` y `refreshToken`
 - Errores:
   - `BadCredentialsException` (credenciales inválidas / usuario desactivado)
-- `@Transactional`: no.
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.auth.RefrescarToken`
+
+- Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/java/com/schoolmate/api/usecase/auth/RefrescarToken.java`
+- Función: renovar sesión usando refresh token persistido con rotación.
+- Repositorios/dependencias:
+  - `UsuarioRepository`
+  - `JwtTokenProvider`
+- Flujo `execute()`:
+  1. busca usuario por `refreshToken` (`findByRefreshToken`)
+  2. si no existe o usuario inactivo, lanza `ApiException(SESSION_REVOKED)`
+  3. rota refresh token (`UUID`) y persiste usuario
+  4. genera nuevo `accessToken` JWT y retorna `AuthResponse`
+- Errores:
+  - `ApiException(SESSION_REVOKED)`
+- `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.apoderado.CrearApoderadoConUsuario`
 
@@ -1456,7 +1500,7 @@ Implementación actual:
 | `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | `findByApoderadoIdWithAlumno` (JPQL con `JOIN FETCH`) | no |
 | `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId`, `findByAlumnoIdAndFechaEntre`, `countByAlumnoIdAndEstadoAndAnoEscolarId` | `DELETE` por `asistenciaClase.id`; JPQL para mensual por fecha y resumen por año escolar vía joins `asistencia_clase -> bloque_horario -> curso` | no |
 | `SeccionCatalogoRepository` | `SeccionCatalogo` | `findByActivoTrueOrderByOrdenAsc` | no | no |
-| `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `findByApoderadoId`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
+| `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `findByApoderadoId`, `findByRefreshToken`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
 
 ### Specifications existentes
 
@@ -1476,6 +1520,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | DTO | Campos | Validaciones | Lombok |
 |---|---|---|---|
 | `LoginRequest` | `identificador`, `password` | `@NotBlank` en ambos (sin `@Email` para soportar RUT) | `@Data` |
+| `RefreshTokenRequest` | `refreshToken` | `@NotBlank` | `@Data` |
 | `AnoEscolarRequest` | `ano`, `fechaInicioPlanificacion`, `fechaInicio`, `fechaFin` | `@NotNull` | `@Data` |
 | `MateriaRequest` | `nombre`, `icono` | `@NotBlank(nombre)` | `@Data` |
 | `ProfesorRequest` | `rut,nombre,apellido,email,telefono,fechaContratacion,horasPedagogicasContrato?,materiaIds` | `@NotBlank`, `@Size`, `@Email`, `@NotNull`, `@NotEmpty`, `@Min(1)`, `@Max(50)` (opcional) | `@Data` |
@@ -1513,7 +1558,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 
 | DTO | Campos principales | Builder/Lombok |
 |---|---|---|
-| `AuthResponse` | `token,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId` | `@Data @Builder` |
+| `AuthResponse` | `token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId` | `@Data @Builder` |
 | `ApiErrorResponse` | `code,message,status,field,path,timestamp,details` | `@Data @Builder` |
 | `AnoEscolarResponse` | `id,ano,fechaInicioPlanificacion,fechaInicio,fechaFin,estado,createdAt,updatedAt` | `@Data @Builder` |
 | `MateriaResponse` | `id,nombre,icono,createdAt,updatedAt` | `@Data @Builder` |
@@ -1813,7 +1858,7 @@ Archivos:
 ### JWT
 
 - `jwt.secret`
-- `jwt.expiration=86400000` (24h)
+- `jwt.expiration=900000` (15 min para access token)
 
 ### CORS
 
@@ -1881,7 +1926,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 | Módulo | Estado | Endpoints implementados |
 |---|---|---|
-| Auth | ✅ | `/api/auth/login`, `/api/auth/me` |
+| Auth | ✅ | `/api/auth/login`, `/api/auth/refresh`, `/api/auth/me` |
 | Años Escolares | ✅ | list/get/get activo/create/update |
 | Grados | ✅ | list/get |
 | Materias | ✅ | list/get/create/update/delete |

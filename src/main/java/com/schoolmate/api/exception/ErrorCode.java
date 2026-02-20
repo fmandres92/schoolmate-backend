@@ -7,6 +7,9 @@ import org.springframework.http.HttpStatus;
 public enum ErrorCode {
 
     AUTH_BAD_CREDENTIALS(HttpStatus.UNAUTHORIZED, "error.auth.bad_credentials"),
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "error.auth.unauthorized"),
+    TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED, "error.auth.token_expired"),
+    SESSION_REVOKED(HttpStatus.UNAUTHORIZED, "error.auth.session_revoked"),
     ACCESS_DENIED(HttpStatus.FORBIDDEN, "error.access.denied"),
 
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, "error.resource.not_found"),

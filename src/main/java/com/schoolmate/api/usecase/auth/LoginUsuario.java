@@ -11,6 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -20,6 +23,7 @@ public class LoginUsuario {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
 
+    @Transactional
     public AuthResponse execute(LoginRequest request) {
         String identificador = request.getIdentificador() != null ? request.getIdentificador().trim() : "";
         Usuario usuario = resolverUsuarioPorIdentificador(identificador)
@@ -34,10 +38,16 @@ public class LoginUsuario {
         }
 
         UserPrincipal principal = UserPrincipal.fromUsuario(usuario);
-        String token = tokenProvider.generateToken(principal);
+        String accessToken = tokenProvider.generateToken(principal);
+        String refreshToken = UUID.randomUUID().toString();
+
+        usuario.setRefreshToken(refreshToken);
+        usuarioRepository.save(usuario);
 
         return AuthResponse.builder()
-                .token(token)
+                .token(accessToken)
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
                 .tipo("Bearer")
                 .id(usuario.getId())
                 .email(usuario.getEmail())
