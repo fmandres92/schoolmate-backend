@@ -1,0 +1,5 @@
+/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/test/java/com/schoolmate/api/SchoolmateApiApplicationTests.java
+/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/test/java/com/schoolmate/api/security/ApiSecurityHandlersTest.java
+/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/test/java/com/schoolmate/api/security/JwtAuthenticationFilterTest.java
+/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/test/java/com/schoolmate/api/usecase/auth/LoginUsuarioTest.java
+/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/test/java/com/schoolmate/api/usecase/auth/RefrescarTokenTest.java

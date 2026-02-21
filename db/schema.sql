@@ -1,5 +1,5 @@
 -- Auto-generated schema snapshot from live PostgreSQL
--- Generated at: 2026-02-19T14:54:36.304616-03:00
+-- Generated at: 2026-02-21T10:31:56.002998-03:00
 
 -- Table: auth.audit_log_entries
 CREATE TABLE "auth"."audit_log_entries" (
@@ -516,15 +516,18 @@ CREATE TABLE "public"."asistencia_clase" (
     "bloque_horario_id" uuid NOT NULL,
     "fecha" date NOT NULL,
     "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "registrado_por_usuario_id" uuid
 );
 
 ALTER TABLE ONLY "public"."asistencia_clase" ADD CONSTRAINT "asistencia_clase_pkey" PRIMARY KEY (id);
 ALTER TABLE ONLY "public"."asistencia_clase" ADD CONSTRAINT "uk_asistencia_clase_bloque_fecha" UNIQUE (bloque_horario_id, fecha);
 ALTER TABLE ONLY "public"."asistencia_clase" ADD CONSTRAINT "fk_asistencia_clase_bloque_horario" FOREIGN KEY (bloque_horario_id) REFERENCES bloque_horario(id);
+ALTER TABLE ONLY "public"."asistencia_clase" ADD CONSTRAINT "fk_asistencia_clase_registrado_por" FOREIGN KEY (registrado_por_usuario_id) REFERENCES usuario(id);
 
 CREATE INDEX idx_asistencia_clase_bloque ON public.asistencia_clase USING btree (bloque_horario_id);
 CREATE INDEX idx_asistencia_clase_fecha ON public.asistencia_clase USING btree (fecha);
+CREATE INDEX idx_asistencia_clase_registrado_por ON public.asistencia_clase USING btree (registrado_por_usuario_id);
 CREATE UNIQUE INDEX uk_asistencia_clase_bloque_fecha ON public.asistencia_clase USING btree (bloque_horario_id, fecha);
 
 -- Table: public.bloque_horario
@@ -581,6 +584,31 @@ CREATE INDEX idx_curso_activo ON public.curso USING btree (activo);
 CREATE INDEX idx_curso_ano_escolar ON public.curso USING btree (ano_escolar_id);
 CREATE INDEX idx_curso_grado ON public.curso USING btree (grado_id);
 CREATE UNIQUE INDEX uq_curso_grado_ano_letra ON public.curso USING btree (grado_id, ano_escolar_id, letra);
+
+-- Table: public.evento_auditoria
+CREATE TABLE "public"."evento_auditoria" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+    "usuario_id" uuid NOT NULL,
+    "usuario_email" character varying(255) NOT NULL,
+    "usuario_rol" character varying(20) NOT NULL,
+    "metodo_http" character varying(10) NOT NULL,
+    "endpoint" character varying(500) NOT NULL,
+    "request_body" jsonb,
+    "response_status" integer NOT NULL,
+    "ip_address" character varying(45),
+    "ano_escolar_id" uuid,
+    "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+ALTER TABLE ONLY "public"."evento_auditoria" ADD CONSTRAINT "evento_auditoria_pkey" PRIMARY KEY (id);
+ALTER TABLE ONLY "public"."evento_auditoria" ADD CONSTRAINT "fk_evento_auditoria_usuario" FOREIGN KEY (usuario_id) REFERENCES usuario(id);
+
+CREATE INDEX idx_evento_auditoria_created ON public.evento_auditoria USING btree (created_at DESC);
+CREATE INDEX idx_evento_auditoria_endpoint ON public.evento_auditoria USING btree (endpoint);
+CREATE INDEX idx_evento_auditoria_metodo ON public.evento_auditoria USING btree (metodo_http);
+CREATE INDEX idx_evento_auditoria_request_body ON public.evento_auditoria USING gin (request_body);
+CREATE INDEX idx_evento_auditoria_usuario ON public.evento_auditoria USING btree (usuario_id);
+CREATE INDEX idx_evento_auditoria_usuario_created ON public.evento_auditoria USING btree (usuario_id, created_at DESC);
 
 -- Table: public.grado
 CREATE TABLE "public"."grado" (
@@ -737,6 +765,25 @@ ALTER TABLE ONLY "public"."seccion_catalogo" ADD CONSTRAINT "seccion_catalogo_or
 
 CREATE UNIQUE INDEX seccion_catalogo_orden_key ON public.seccion_catalogo USING btree (orden);
 
+-- Table: public.sesion_usuario
+CREATE TABLE "public"."sesion_usuario" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+    "usuario_id" uuid NOT NULL,
+    "ip_address" character varying(45),
+    "latitud" numeric(10,7),
+    "longitud" numeric(10,7),
+    "precision_metros" numeric(8,2),
+    "user_agent" character varying(500),
+    "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+ALTER TABLE ONLY "public"."sesion_usuario" ADD CONSTRAINT "sesion_usuario_pkey" PRIMARY KEY (id);
+ALTER TABLE ONLY "public"."sesion_usuario" ADD CONSTRAINT "fk_sesion_usuario_usuario" FOREIGN KEY (usuario_id) REFERENCES usuario(id);
+
+CREATE INDEX idx_sesion_usuario_created ON public.sesion_usuario USING btree (created_at DESC);
+CREATE INDEX idx_sesion_usuario_usuario ON public.sesion_usuario USING btree (usuario_id);
+CREATE INDEX idx_sesion_usuario_usuario_created ON public.sesion_usuario USING btree (usuario_id, created_at DESC);
+
 -- Table: public.usuario
 CREATE TABLE "public"."usuario" (
     "id" uuid DEFAULT gen_random_uuid() NOT NULL,
@@ -750,7 +797,8 @@ CREATE TABLE "public"."usuario" (
     "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     "rut" character varying(20),
-    "apoderado_id" uuid
+    "apoderado_id" uuid,
+    "refresh_token" character varying(255)
 );
 
 ALTER TABLE ONLY "public"."usuario" ADD CONSTRAINT "usuario_pkey" PRIMARY KEY (id);
@@ -763,6 +811,7 @@ CREATE INDEX idx_usuario_apoderado ON public.usuario USING btree (apoderado_id);
 CREATE INDEX idx_usuario_profesor ON public.usuario USING btree (profesor_id) WHERE (profesor_id IS NOT NULL);
 CREATE INDEX idx_usuario_rol ON public.usuario USING btree (rol);
 CREATE UNIQUE INDEX usuario_email_key ON public.usuario USING btree (email);
+CREATE UNIQUE INDEX ux_usuario_refresh_token_not_null ON public.usuario USING btree (refresh_token) WHERE (refresh_token IS NOT NULL);
 CREATE UNIQUE INDEX ux_usuario_rut_not_null ON public.usuario USING btree (rut) WHERE (rut IS NOT NULL);
 
 -- Table: realtime.schema_migrations

@@ -1,14 +1,14 @@
 # Database Structure Inventory
 
-Generated at: `2026-02-19T14:54:36.313856-03:00`  
+Generated at: `2026-02-21T10:31:56.014811-03:00`  
 Source: live PostgreSQL catalog (`information_schema` + `pg_catalog`)  
 Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres?sslmode=require`
 
 ## Summary
 
 - Schemas: **5**
-- Tables: **47**
-- Foreign Keys: **42**
+- Tables: **49**
+- Foreign Keys: **45**
 
 ## Relationships (Foreign Keys)
 
@@ -31,12 +31,14 @@ Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres
 - `public.apoderado_alumno` -> `apoderado_alumno_alumno_id_fkey`: `FOREIGN KEY (alumno_id) REFERENCES alumno(id)`
 - `public.apoderado_alumno` -> `apoderado_alumno_apoderado_id_fkey`: `FOREIGN KEY (apoderado_id) REFERENCES apoderado(id)`
 - `public.asistencia_clase` -> `fk_asistencia_clase_bloque_horario`: `FOREIGN KEY (bloque_horario_id) REFERENCES bloque_horario(id)`
+- `public.asistencia_clase` -> `fk_asistencia_clase_registrado_por`: `FOREIGN KEY (registrado_por_usuario_id) REFERENCES usuario(id)`
 - `public.bloque_horario` -> `bloque_horario_curso_id_fkey`: `FOREIGN KEY (curso_id) REFERENCES curso(id)`
 - `public.bloque_horario` -> `bloque_horario_materia_id_fkey`: `FOREIGN KEY (materia_id) REFERENCES materia(id)`
 - `public.bloque_horario` -> `bloque_horario_profesor_id_fkey`: `FOREIGN KEY (profesor_id) REFERENCES profesor(id)`
 - `public.curso` -> `curso_ano_escolar_id_fkey`: `FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id)`
 - `public.curso` -> `curso_grado_id_fkey`: `FOREIGN KEY (grado_id) REFERENCES grado(id)`
 - `public.curso` -> `fk_curso_seccion_catalogo`: `FOREIGN KEY (letra) REFERENCES seccion_catalogo(letra)`
+- `public.evento_auditoria` -> `fk_evento_auditoria_usuario`: `FOREIGN KEY (usuario_id) REFERENCES usuario(id)`
 - `public.malla_curricular` -> `malla_curricular_ano_escolar_id_fkey`: `FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id)`
 - `public.malla_curricular` -> `malla_curricular_grado_id_fkey`: `FOREIGN KEY (grado_id) REFERENCES grado(id)`
 - `public.malla_curricular` -> `malla_curricular_materia_id_fkey`: `FOREIGN KEY (materia_id) REFERENCES materia(id)`
@@ -47,6 +49,7 @@ Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres
 - `public.profesor_materia` -> `profesor_materia_profesor_id_fkey`: `FOREIGN KEY (profesor_id) REFERENCES profesor(id)`
 - `public.registro_asistencia` -> `fk_registro_asistencia_alumno`: `FOREIGN KEY (alumno_id) REFERENCES alumno(id)`
 - `public.registro_asistencia` -> `fk_registro_asistencia_clase`: `FOREIGN KEY (asistencia_clase_id) REFERENCES asistencia_clase(id) ON DELETE CASCADE`
+- `public.sesion_usuario` -> `fk_sesion_usuario_usuario`: `FOREIGN KEY (usuario_id) REFERENCES usuario(id)`
 - `public.usuario` -> `fk_usuario_profesor`: `FOREIGN KEY (profesor_id) REFERENCES profesor(id)`
 - `public.usuario` -> `usuario_apoderado_id_fkey`: `FOREIGN KEY (apoderado_id) REFERENCES apoderado(id)`
 - `storage.objects` -> `objects_bucketId_fkey`: `FOREIGN KEY (bucket_id) REFERENCES storage.buckets(id)`
@@ -769,18 +772,21 @@ Columns:
 | `fecha` | `date` | NO | `` |
 | `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
 | `updated_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
+| `registrado_por_usuario_id` | `uuid` | YES | `` |
 
 Constraints:
 
 - [PK] `asistencia_clase_pkey`: `PRIMARY KEY (id)`
 - [UNIQUE] `uk_asistencia_clase_bloque_fecha`: `UNIQUE (bloque_horario_id, fecha)`
 - [FK] `fk_asistencia_clase_bloque_horario`: `FOREIGN KEY (bloque_horario_id) REFERENCES bloque_horario(id)`
+- [FK] `fk_asistencia_clase_registrado_por`: `FOREIGN KEY (registrado_por_usuario_id) REFERENCES usuario(id)`
 
 Indexes:
 
 - [PK-INDEX] `asistencia_clase_pkey`: `CREATE UNIQUE INDEX asistencia_clase_pkey ON public.asistencia_clase USING btree (id)`
 - [INDEX] `idx_asistencia_clase_bloque`: `CREATE INDEX idx_asistencia_clase_bloque ON public.asistencia_clase USING btree (bloque_horario_id)`
 - [INDEX] `idx_asistencia_clase_fecha`: `CREATE INDEX idx_asistencia_clase_fecha ON public.asistencia_clase USING btree (fecha)`
+- [INDEX] `idx_asistencia_clase_registrado_por`: `CREATE INDEX idx_asistencia_clase_registrado_por ON public.asistencia_clase USING btree (registrado_por_usuario_id)`
 - [INDEX] `uk_asistencia_clase_bloque_fecha`: `CREATE UNIQUE INDEX uk_asistencia_clase_bloque_fecha ON public.asistencia_clase USING btree (bloque_horario_id, fecha)`
 
 ### `public.bloque_horario`
@@ -853,6 +859,39 @@ Indexes:
 - [INDEX] `idx_curso_ano_escolar`: `CREATE INDEX idx_curso_ano_escolar ON public.curso USING btree (ano_escolar_id)`
 - [INDEX] `idx_curso_grado`: `CREATE INDEX idx_curso_grado ON public.curso USING btree (grado_id)`
 - [INDEX] `uq_curso_grado_ano_letra`: `CREATE UNIQUE INDEX uq_curso_grado_ano_letra ON public.curso USING btree (grado_id, ano_escolar_id, letra)`
+
+### `public.evento_auditoria`
+
+Columns:
+
+| Name | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | `uuid` | NO | `gen_random_uuid()` |
+| `usuario_id` | `uuid` | NO | `` |
+| `usuario_email` | `character varying(255)` | NO | `` |
+| `usuario_rol` | `character varying(20)` | NO | `` |
+| `metodo_http` | `character varying(10)` | NO | `` |
+| `endpoint` | `character varying(500)` | NO | `` |
+| `request_body` | `jsonb` | YES | `` |
+| `response_status` | `integer` | NO | `` |
+| `ip_address` | `character varying(45)` | YES | `` |
+| `ano_escolar_id` | `uuid` | YES | `` |
+| `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
+
+Constraints:
+
+- [PK] `evento_auditoria_pkey`: `PRIMARY KEY (id)`
+- [FK] `fk_evento_auditoria_usuario`: `FOREIGN KEY (usuario_id) REFERENCES usuario(id)`
+
+Indexes:
+
+- [PK-INDEX] `evento_auditoria_pkey`: `CREATE UNIQUE INDEX evento_auditoria_pkey ON public.evento_auditoria USING btree (id)`
+- [INDEX] `idx_evento_auditoria_created`: `CREATE INDEX idx_evento_auditoria_created ON public.evento_auditoria USING btree (created_at DESC)`
+- [INDEX] `idx_evento_auditoria_endpoint`: `CREATE INDEX idx_evento_auditoria_endpoint ON public.evento_auditoria USING btree (endpoint)`
+- [INDEX] `idx_evento_auditoria_metodo`: `CREATE INDEX idx_evento_auditoria_metodo ON public.evento_auditoria USING btree (metodo_http)`
+- [INDEX] `idx_evento_auditoria_request_body`: `CREATE INDEX idx_evento_auditoria_request_body ON public.evento_auditoria USING gin (request_body)`
+- [INDEX] `idx_evento_auditoria_usuario`: `CREATE INDEX idx_evento_auditoria_usuario ON public.evento_auditoria USING btree (usuario_id)`
+- [INDEX] `idx_evento_auditoria_usuario_created`: `CREATE INDEX idx_evento_auditoria_usuario_created ON public.evento_auditoria USING btree (usuario_id, created_at DESC)`
 
 ### `public.grado`
 
@@ -1073,6 +1112,33 @@ Indexes:
 - [INDEX] `seccion_catalogo_orden_key`: `CREATE UNIQUE INDEX seccion_catalogo_orden_key ON public.seccion_catalogo USING btree (orden)`
 - [PK-INDEX] `seccion_catalogo_pkey`: `CREATE UNIQUE INDEX seccion_catalogo_pkey ON public.seccion_catalogo USING btree (letra)`
 
+### `public.sesion_usuario`
+
+Columns:
+
+| Name | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | `uuid` | NO | `gen_random_uuid()` |
+| `usuario_id` | `uuid` | NO | `` |
+| `ip_address` | `character varying(45)` | YES | `` |
+| `latitud` | `numeric(10,7)` | YES | `` |
+| `longitud` | `numeric(10,7)` | YES | `` |
+| `precision_metros` | `numeric(8,2)` | YES | `` |
+| `user_agent` | `character varying(500)` | YES | `` |
+| `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
+
+Constraints:
+
+- [PK] `sesion_usuario_pkey`: `PRIMARY KEY (id)`
+- [FK] `fk_sesion_usuario_usuario`: `FOREIGN KEY (usuario_id) REFERENCES usuario(id)`
+
+Indexes:
+
+- [INDEX] `idx_sesion_usuario_created`: `CREATE INDEX idx_sesion_usuario_created ON public.sesion_usuario USING btree (created_at DESC)`
+- [INDEX] `idx_sesion_usuario_usuario`: `CREATE INDEX idx_sesion_usuario_usuario ON public.sesion_usuario USING btree (usuario_id)`
+- [INDEX] `idx_sesion_usuario_usuario_created`: `CREATE INDEX idx_sesion_usuario_usuario_created ON public.sesion_usuario USING btree (usuario_id, created_at DESC)`
+- [PK-INDEX] `sesion_usuario_pkey`: `CREATE UNIQUE INDEX sesion_usuario_pkey ON public.sesion_usuario USING btree (id)`
+
 ### `public.usuario`
 
 Columns:
@@ -1091,6 +1157,7 @@ Columns:
 | `updated_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
 | `rut` | `character varying(20)` | YES | `` |
 | `apoderado_id` | `uuid` | YES | `` |
+| `refresh_token` | `character varying(255)` | YES | `` |
 
 Constraints:
 
@@ -1107,6 +1174,7 @@ Indexes:
 - [INDEX] `idx_usuario_rol`: `CREATE INDEX idx_usuario_rol ON public.usuario USING btree (rol)`
 - [INDEX] `usuario_email_key`: `CREATE UNIQUE INDEX usuario_email_key ON public.usuario USING btree (email)`
 - [PK-INDEX] `usuario_pkey`: `CREATE UNIQUE INDEX usuario_pkey ON public.usuario USING btree (id)`
+- [INDEX] `ux_usuario_refresh_token_not_null`: `CREATE UNIQUE INDEX ux_usuario_refresh_token_not_null ON public.usuario USING btree (refresh_token) WHERE (refresh_token IS NOT NULL)`
 - [INDEX] `ux_usuario_rut_not_null`: `CREATE UNIQUE INDEX ux_usuario_rut_not_null ON public.usuario USING btree (rut) WHERE (rut IS NOT NULL)`
 
 ### `realtime.schema_migrations`

@@ -1,0 +1,5 @@
+-- V18: REQ-04 Crear alumno con apoderado
+-- Cambios ejecutados directamente en Supabase:
+-- 1. ALTER TABLE apoderado_alumno ADD COLUMN vinculo VARCHAR(20) NOT NULL DEFAULT 'OTRO'
+-- Este archivo es solo un marcador para mantener la numeración de Flyway.
+-- No ejecutar DDL aquí.

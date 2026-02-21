@@ -1,0 +1,5 @@
+-- V17: Apoderado entity refactoring
+-- DDL ejecutado directamente en Supabase.
+-- Tablas creadas: apoderado, apoderado_alumno
+-- Columna apoderado_id agregada a usuario, alumno_id eliminada de usuario.
+-- Este archivo existe para mantener la secuencia de versiones Flyway.

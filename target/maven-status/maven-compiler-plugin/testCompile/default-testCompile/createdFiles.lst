@@ -1,0 +1,5 @@
+com/schoolmate/api/usecase/auth/LoginUsuarioTest.class
+com/schoolmate/api/security/JwtAuthenticationFilterTest.class
+com/schoolmate/api/security/ApiSecurityHandlersTest.class
+com/schoolmate/api/SchoolmateApiApplicationTests.class
+com/schoolmate/api/usecase/auth/RefrescarTokenTest.class

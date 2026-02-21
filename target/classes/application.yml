@@ -3,6 +3,8 @@ spring:
     name: schoolmate-hub-api
   profiles:
     active: dev
+  jpa:
+    open-in-view: false
 
 server:
   port: 8080

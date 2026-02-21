@@ -37,6 +37,7 @@ public class CacheControlInterceptor implements HandlerInterceptor {
         if (isProfesoresSesionesPath(path)
                 || isPathOrSubpath(path, "/api/apoderado")
                 || isPathOrSubpath(path, "/api/profesor")
+                || isPathOrSubpath(path, "/api/auditoria")
                 || isPathOrSubpath(path, "/api/auth")) {
             return NO_STORE_PRIVATE;
         }

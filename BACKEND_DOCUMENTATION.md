@@ -14,6 +14,8 @@ Fuente: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-a
 | Spring Boot | 4.0.2 |
 | Spring Framework | 7.0.3 (transitivo) |
 | Spring Security | 7.0.2 (transitivo) |
+| Spring AOP | 7.0.3 |
+| AspectJ Weaver | 1.9.25.1 |
 | Spring Data JPA | 4.0.2 (starter de Boot 4.0.2) |
 | Hibernate ORM | 7.2.1.Final |
 | PostgreSQL JDBC Driver | 42.7.9 |
@@ -112,6 +114,20 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - Nuevo endpoint admin: `GET /api/profesores/{profesorId}/sesiones` con filtros `desde/hasta` y paginación.
 - Cache-control ajustado: `/api/profesores/{profesorId}/sesiones` usa `Cache-Control: no-store, private`.
 
+### Actualización técnica reciente (REQ-B auditoría automática)
+
+- Se incorporó auditoría automática de mutaciones HTTP con AOP:
+  - `AuditoriaAspect` intercepta `@PostMapping/@PutMapping/@PatchMapping/@DeleteMapping` en `@RestController`.
+  - excluye `/api/auth/**` y `/api/dev/**`.
+  - persiste evento en `evento_auditoria` con transacción independiente (`REQUIRES_NEW`) y sin bloquear la operación principal ante fallas de auditoría.
+- Nueva entidad `EventoAuditoria` + `EventoAuditoriaRepository`:
+  - captura snapshot de usuario (`usuarioEmail`, `usuarioRol`), método, endpoint, `requestBody` (JSONB), status, IP, `anoEscolarId`, fecha/hora.
+- Nuevo endpoint admin de consulta:
+  - `GET /api/auditoria` con filtros por `usuarioId`, `metodoHttp`, `endpoint` parcial y rango `desde/hasta`.
+  - response paginado `EventoAuditoriaPageResponse` con `requestBody` deserializado como JSON estructurado.
+- `CacheControlInterceptor` clasifica `/api/auditoria/**` como sensible: `Cache-Control: no-store, private`.
+- Migración marcador agregada: `V22__audit_trail_operaciones.sql` (DDL ejecutado en Supabase).
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -160,6 +176,7 @@ Ejemplos reales:
 - IDs en entidades: `UUID` nativo (Hibernate/JPA con `GenerationType.UUID`).
 - Borrado lógico en algunos dominios (`activo=false`): malla curricular y bloques de jornada.
 - Tiempo centralizado: `ClockProvider` + `TimeContext` permiten controlar `today/now` en entorno `dev` sin afectar `prod`.
+- Auditoría de mutaciones desacoplada del flujo funcional vía AOP (`@AfterReturning`) y transacción separada (`REQUIRES_NEW`).
 
 ### Manejo centralizado de excepciones (`GlobalExceptionHandler`)
 
@@ -227,7 +244,7 @@ Clase: `ApiErrorResponse`
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway versionadas en repo: V1..V21
+    └── db/migration          # migraciones Flyway versionadas en repo: V1..V22
 ```
 
 ### TODAS las clases por paquete
@@ -237,9 +254,11 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.config`
   - `AnoEscolarArgumentResolver`
   - `AnoEscolarHeaderInterceptor`
+  - `AuditoriaAspect`
   - `CacheConfig`
   - `CacheControlInterceptor`
   - `CorsConfig`
+  - `JacksonConfig`
   - `SecurityConfig`
   - `WebMvcConfig`
 - `com.schoolmate.api.common.time`
@@ -253,6 +272,7 @@ Clase: `ApiErrorResponse`
   - `AnoEscolarController`
   - `ApoderadoController`
   - `ApoderadoPortalController`
+  - `AuditoriaController`
   - `AuthController`
   - `CursoController`
   - `DevToolsController` (solo perfil `dev`)
@@ -272,6 +292,8 @@ Clase: `ApiErrorResponse`
   - `ApoderadoResponse`
   - `AsistenciaDiaResponse`
   - `AsistenciaMensualResponse`
+  - `EventoAuditoriaPageResponse`
+  - `EventoAuditoriaResponse`
   - `RegistroConFecha`
   - `ResumenAsistenciaResponse`
   - `SesionProfesorPageResponse`
@@ -334,6 +356,7 @@ Clase: `ApiErrorResponse`
   - `AsistenciaClase`
   - `BloqueHorario`
   - `Curso`
+  - `EventoAuditoria`
   - `Grado`
   - `MallaCurricular`
   - `Materia`
@@ -367,6 +390,7 @@ Clase: `ApiErrorResponse`
   - `AsistenciaClaseRepository`
   - `BloqueHorarioRepository`
   - `CursoRepository`
+  - `EventoAuditoriaRepository`
   - `GradoRepository`
   - `MallaCurricularRepository`
   - `MateriaRepository`
@@ -691,12 +715,33 @@ Relaciones:
 
 - `@ManyToOne` -> `Usuario`
 
+### `EventoAuditoria` (`evento_auditoria`)
+
+| Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
+|---|---|---|---|---|
+| `id` | `UUID` | `id` | `UUID` | PK |
+| `usuario` | `Usuario` | `usuario_id` | `UUID` | FK NOT NULL |
+| `usuarioEmail` | `String` | `usuario_email` | `VARCHAR(255)` | NOT NULL (snapshot) |
+| `usuarioRol` | `String` | `usuario_rol` | `VARCHAR(20)` | NOT NULL (snapshot) |
+| `metodoHttp` | `String` | `metodo_http` | `VARCHAR(10)` | NOT NULL |
+| `endpoint` | `String` | `endpoint` | `VARCHAR(500)` | NOT NULL |
+| `requestBody` | `String` | `request_body` | `JSONB` | nullable |
+| `responseStatus` | `Integer` | `response_status` | `INTEGER` | NOT NULL |
+| `ipAddress` | `String` | `ip_address` | `VARCHAR(45)` | nullable |
+| `anoEscolarId` | `UUID` | `ano_escolar_id` | `UUID` | nullable (sin FK) |
+| `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
+
+Relaciones:
+
+- `@ManyToOne` -> `Usuario` (`LAZY`)
+- `requestBody` mapeado como JSONB con `@JdbcTypeCode(SqlTypes.JSON)`.
+
 ### Campos de auditoría
 
 Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 
 - `created_at` + `updated_at`: `Usuario`, `AnoEscolar`, `Grado`, `Materia`, `Profesor`, `Curso`, `Alumno`, `Matricula`, `MallaCurricular`, `BloqueHorario`, `AsistenciaClase`, `RegistroAsistencia`, `Apoderado`.
-- Solo `created_at`: `SeccionCatalogo`, `SesionUsuario`.
+- Solo `created_at`: `SeccionCatalogo`, `SesionUsuario`, `EventoAuditoria`.
 
 ### Enums usados y valores
 
@@ -713,6 +758,8 @@ usuario
   (profesor_id, apoderado_id como UUID sin FK JPA)
    |
    *---1 sesion_usuario
+   |
+   *---1 evento_auditoria
 
 apoderado 1---* apoderado_alumno *---1 alumno
 
@@ -767,6 +814,7 @@ seccion_catalogo 1---* curso (por letra)
 19. `V19__add_refresh_token_to_usuario.sql`
 20. `V20__migracion_uuid_nativo.sql` *(aplicada en BD, no versionada en este repo)*
 21. `V21__registro_sesiones_y_trazabilidad_asistencia.sql`
+22. `V22__audit_trail_operaciones.sql`
 
 ### Qué hace cada migración
 
@@ -793,10 +841,11 @@ seccion_catalogo 1---* curso (por letra)
 | `V19` | Agrega `usuario.refresh_token` (`varchar(255)`) e índice único parcial `ux_usuario_refresh_token_not_null` |
 | `V20` | Migración global a UUID nativo en BD (`id`/FKs) para entidades de negocio |
 | `V21` | Migración marcador (DDL ejecutado en Supabase): `sesion_usuario` + `asistencia_clase.registrado_por_usuario_id` + índices de trazabilidad |
+| `V22` | Migración marcador (DDL ejecutado en Supabase): `evento_auditoria` + FK a `usuario` + índices BTREE/GIN |
 
 ### Estado resultante del esquema (según migraciones + código)
 
-- Modelo oficial en código y queries usa: `usuario`, `sesion_usuario`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
+- Modelo oficial en código y queries usa: `usuario`, `sesion_usuario`, `evento_auditoria`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
 - `apoderado_alumno` incorpora columna `vinculo` en el modelo actual (REQ-04) y es tratada como enum `VinculoApoderado` en JPA.
 - IDs/FKs operativos en modelo actual: `UUID` (alineado con V20).
 - Riesgo de drift:
@@ -816,7 +865,7 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V22+` para cualquier ajuste de esquema (V21 ya versionada en repo).
+2. Crear nueva `V23+` para cualquier ajuste de esquema (V22 ya versionada en repo).
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
@@ -880,8 +929,17 @@ Configuración activa en código:
   - reglas:
     - Grupo A/B (`/api/grados`, `/api/materias`, `/api/anos-escolares/**`, `/api/cursos/**`, `/api/malla-curricular`, `/api/profesores`) -> `Cache-Control: no-cache`.
     - Grupo C transaccional (`/api/matriculas/**`, `/api/asistencia/**`, `/api/alumnos/**`) -> `Cache-Control: no-store`.
-    - Grupo C sensible (`/api/apoderado/**`, `/api/profesor/**`, `/api/auth/**`, `/api/profesores/{id}/sesiones`) -> `Cache-Control: no-store, private`.
+    - Grupo C sensible (`/api/apoderado/**`, `/api/profesor/**`, `/api/auth/**`, `/api/profesores/{id}/sesiones`, `/api/auditoria/**`) -> `Cache-Control: no-store, private`.
     - default `GET` restante -> `Cache-Control: no-cache`.
+
+### Auditoría automática de operaciones (AOP)
+
+- `AuditoriaAspect` registra eventos de mutación en `evento_auditoria` para respuestas exitosas:
+  - pointcut: métodos en `@RestController` anotados con `@PostMapping`, `@PutMapping`, `@PatchMapping`, `@DeleteMapping`.
+  - exclusions por URI: `/api/auth/**`, `/api/dev/**`.
+  - datos capturados: usuario autenticado (`UserPrincipal`), método HTTP, endpoint, status response, IP, header `X-Ano-Escolar-Id`, request body (`@RequestBody` serializado JSON).
+- Persistencia en transacción separada (`@Transactional(REQUIRES_NEW)`) y manejo defensivo:
+  - si falla serialización o guardado, se loguea warning y no se interrumpe la request original.
 
 ### Resolución de año escolar por header (`X-Ano-Escolar-Id`)
 
@@ -971,6 +1029,12 @@ Implementación actual:
 | `POST /api/auth/login` | Login y emisión de sesión (`accessToken` + `refreshToken`) por email o RUT; registra sesión de acceso | Público | Body JSON | `LoginRequest {identificador,password,latitud?,longitud?,precisionMetros?}` | `AuthResponse {token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
 | `POST /api/auth/refresh` | Refresca sesión usando refresh token persistido (con rotación) | Público | Body JSON | `RefreshTokenRequest {refreshToken}` | `AuthResponse {token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `RefrescarToken` | `SESSION_REVOKED`, `VALIDATION_FAILED` |
 | `GET /api/auth/me` | Datos del usuario actual | Autenticado | Header `Authorization` requerido | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}` | directo (guard defensivo) | `UNAUTHORIZED`, `ACCESS_DENIED` |
+
+### Dominio: Auditoría
+
+| Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
+|---|---|---|---|---|---|---|---|
+| `GET /api/auditoria` | Consulta paginada de eventos auditados con filtros opcionales por usuario, método, endpoint y rango de fechas | `ADMIN` | Query opcional `usuarioId,metodoHttp,endpoint,desde,hasta,page,size` | - | `EventoAuditoriaPageResponse` | directo repository | `ACCESS_DENIED` |
 
 ### Dominio: Apoderados (Admin)
 
@@ -1567,6 +1631,7 @@ Implementación actual:
 | `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
 | `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
 | `SesionUsuarioRepository` | `SesionUsuario` | `findByUsuarioIdAndFechas` (paginado, orden desc por `createdAt`) | JPQL con filtros opcionales por rango (`desde`/`hasta`) | no |
+| `EventoAuditoriaRepository` | `EventoAuditoria` | `findByFiltros` (paginado por `createdAt DESC`) | JPQL con filtros opcionales por `usuarioId`, `metodoHttp`, `endpoint LIKE`, `desde/hasta` | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |
 | `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | `findByApoderadoIdWithAlumno` (JPQL con `JOIN FETCH`) | no |
 | `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId`, `findByAlumnoIdAndFechaEntre`, `countByAlumnoIdAndEstadoAndAnoEscolarId` | `DELETE` por `asistenciaClase.id`; JPQL para mensual por fecha y resumen por año escolar vía joins `asistencia_clase -> bloque_horario -> curso` | no |
@@ -1626,6 +1691,8 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `RegistroConFecha` | `registroId,alumnoId,estado,fecha` (proyección interna para query) | `@Getter/@Setter` |
 | `SesionProfesorResponse` | `id,fechaHora,ipAddress,latitud,longitud,precisionMetros,userAgent` | `@Data @Builder` |
 | `SesionProfesorPageResponse` | `profesorId,profesorNombre,sesiones[],totalElements,totalPages,currentPage` | `@Data @Builder` |
+| `EventoAuditoriaResponse` | `id,usuarioEmail,usuarioRol,metodoHttp,endpoint,requestBody,responseStatus,ipAddress,anoEscolarId,fechaHora` | `@Data @Builder` |
+| `EventoAuditoriaPageResponse` | `eventos[],totalElements,totalPages,currentPage` | `@Data @Builder` |
 
 ### Response DTOs
 
@@ -1910,8 +1977,10 @@ Archivos:
 - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/resources/application.yml`
 - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/resources/application-dev.yml`
 - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/resources/application-prod.yml`
+- `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/java/com/schoolmate/api/config/AuditoriaAspect.java`
 - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/java/com/schoolmate/api/config/CacheConfig.java`
 - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/java/com/schoolmate/api/config/CacheControlInterceptor.java`
+- `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/src/main/java/com/schoolmate/api/config/JacksonConfig.java`
 
 ### Propiedades relevantes
 
@@ -1963,6 +2032,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 - `usuario`: `idx_usuario_email`, `idx_usuario_rol`
 - `sesion_usuario`: `idx_sesion_usuario_usuario`, `idx_sesion_usuario_created`, `idx_sesion_usuario_usuario_created`
+- `evento_auditoria`: `idx_evento_auditoria_usuario`, `idx_evento_auditoria_created`, `idx_evento_auditoria_endpoint`, `idx_evento_auditoria_usuario_created`, `idx_evento_auditoria_metodo`, `idx_evento_auditoria_request_body (GIN)`
 - `ano_escolar`: `idx_ano_escolar_activo`, `idx_ano_escolar_ano`
 - `grado`: `idx_grado_nivel`
 - `profesor`: `idx_profesor_email`, `idx_profesor_activo`
@@ -1992,6 +2062,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - `AlumnoController.getMatriculaMap` ahora consulta por `alumno_id IN (...)` (IDs de la página actual) en vez de traer todas las matrículas activas del año.
 - Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
 - Revalidación HTTP en GET con `ETag` + `If-None-Match` (`304`) y políticas `Cache-Control` por endpoint.
+- Auditoría automática de mutaciones HTTP con persistencia desacoplada (AOP + `REQUIRES_NEW`) para trazabilidad operativa.
 
 ---
 
@@ -2008,6 +2079,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 | Malla Curricular | ✅ | list por año, por materia, por grado, create, update, bulk, delete lógico |
 | Cursos | ✅ | list/get/create/update |
 | Profesores | ✅ | list/get/create/update + sesiones de login por profesor |
+| Auditoría | ✅ | `GET /api/auditoria` (consulta paginada con filtros) + captura automática en mutaciones HTTP |
 | Apoderados (admin) | ✅ | create/vincular, buscar por RUT, obtener por alumno |
 | Portal Apoderado | ✅ parcial | mis-alumnos, asistencia mensual, resumen asistencia |
 | Alumnos | ✅ | list/get/create/update + `POST /api/alumnos/con-apoderado` |
