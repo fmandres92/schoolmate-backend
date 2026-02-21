@@ -3,13 +3,16 @@ package com.schoolmate.api.usecase.profesor;
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.response.ClaseHoyResponse;
 import com.schoolmate.api.dto.response.ClasesHoyResponse;
+import com.schoolmate.api.dto.response.DiaNoLectivoResponse;
 import com.schoolmate.api.dto.response.EstadoClaseHoy;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.BloqueHorario;
+import com.schoolmate.api.entity.DiaNoLectivo;
 import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.repository.AsistenciaClaseRepository;
 import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
+import com.schoolmate.api.repository.DiaNoLectivoRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +39,7 @@ public class ObtenerClasesHoyProfesor {
     private final BloqueHorarioRepository bloqueHorarioRepository;
     private final MatriculaRepository matriculaRepository;
     private final AsistenciaClaseRepository asistenciaClaseRepository;
+    private final DiaNoLectivoRepository diaNoLectivoRepository;
 
     @Transactional(readOnly = true)
     public ClasesHoyResponse execute(UserPrincipal principal) {
@@ -55,6 +59,11 @@ public class ObtenerClasesHoyProfesor {
         if (anoActivo == null) {
             return buildVacio(today, diaSemana);
         }
+
+        DiaNoLectivoResponse diaNoLectivo = diaNoLectivoRepository
+            .findByAnoEscolarIdAndFecha(anoActivo.getId(), today)
+            .map(this::mapDiaNoLectivo)
+            .orElse(null);
 
         List<BloqueHorario> bloques = bloqueHorarioRepository.findClasesProfesorEnDia(
             profesorId, diaSemana, anoActivo.getId());
@@ -88,6 +97,7 @@ public class ObtenerClasesHoyProfesor {
             .fecha(today)
             .diaSemana(diaSemana)
             .nombreDia(nombreDia(diaSemana))
+            .diaNoLectivo(diaNoLectivo)
             .clases(clases)
             .build();
     }
@@ -98,6 +108,15 @@ public class ObtenerClasesHoyProfesor {
             .diaSemana(diaSemana)
             .nombreDia(nombreDia(diaSemana))
             .clases(List.of())
+            .build();
+    }
+
+    private DiaNoLectivoResponse mapDiaNoLectivo(DiaNoLectivo diaNoLectivo) {
+        return DiaNoLectivoResponse.builder()
+            .id(diaNoLectivo.getId())
+            .fecha(diaNoLectivo.getFecha())
+            .tipo(diaNoLectivo.getTipo().name())
+            .descripcion(diaNoLectivo.getDescripcion())
             .build();
     }
 

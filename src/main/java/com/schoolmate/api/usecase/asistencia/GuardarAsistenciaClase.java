@@ -22,6 +22,7 @@ import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AsistenciaClaseRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
+import com.schoolmate.api.repository.DiaNoLectivoRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.repository.RegistroAsistenciaRepository;
 import com.schoolmate.api.repository.UsuarioRepository;
@@ -54,6 +55,7 @@ public class GuardarAsistenciaClase {
     private final MatriculaRepository matriculaRepository;
     private final AsistenciaClaseRepository asistenciaClaseRepository;
     private final RegistroAsistenciaRepository registroAsistenciaRepository;
+    private final DiaNoLectivoRepository diaNoLectivoRepository;
     private final UsuarioRepository usuarioRepository;
     private final ClockProvider clockProvider;
 
@@ -89,6 +91,11 @@ public class GuardarAsistenciaClase {
         }
 
         AnoEscolar anoEscolar = bloque.getCurso().getAnoEscolar();
+
+        if (diaNoLectivoRepository.existsByAnoEscolarIdAndFecha(anoEscolar.getId(), fechaRequest)) {
+            throw new BusinessException("No se puede registrar asistencia. El día es no lectivo.");
+        }
+
         EstadoAnoEscolar estadoAno = anoEscolar.calcularEstado(hoy);
         if (estadoAno == EstadoAnoEscolar.CERRADO) {
             throw new BusinessException("No se puede registrar asistencia en un año escolar cerrado");

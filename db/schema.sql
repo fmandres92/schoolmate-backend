@@ -1,5 +1,5 @@
 -- Auto-generated schema snapshot from live PostgreSQL
--- Generated at: 2026-02-21T10:31:56.002998-03:00
+-- Generated at: 2026-02-21T13:18:01.262757-03:00
 
 -- Table: auth.audit_log_entries
 CREATE TABLE "auth"."audit_log_entries" (
@@ -584,6 +584,26 @@ CREATE INDEX idx_curso_activo ON public.curso USING btree (activo);
 CREATE INDEX idx_curso_ano_escolar ON public.curso USING btree (ano_escolar_id);
 CREATE INDEX idx_curso_grado ON public.curso USING btree (grado_id);
 CREATE UNIQUE INDEX uq_curso_grado_ano_letra ON public.curso USING btree (grado_id, ano_escolar_id, letra);
+
+-- Table: public.dia_no_lectivo
+CREATE TABLE "public"."dia_no_lectivo" (
+    "id" uuid DEFAULT gen_random_uuid() NOT NULL,
+    "ano_escolar_id" uuid NOT NULL,
+    "fecha" date NOT NULL,
+    "tipo" character varying(30) NOT NULL,
+    "descripcion" character varying(200),
+    "created_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    "updated_at" timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+ALTER TABLE ONLY "public"."dia_no_lectivo" ADD CONSTRAINT "dia_no_lectivo_pkey" PRIMARY KEY (id);
+ALTER TABLE ONLY "public"."dia_no_lectivo" ADD CONSTRAINT "uq_dia_no_lectivo_ano_fecha" UNIQUE (ano_escolar_id, fecha);
+ALTER TABLE ONLY "public"."dia_no_lectivo" ADD CONSTRAINT "fk_dia_no_lectivo_ano_escolar" FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id);
+ALTER TABLE ONLY "public"."dia_no_lectivo" ADD CONSTRAINT "chk_dia_no_lectivo_tipo" CHECK (tipo::text = ANY (ARRAY['FERIADO_LEGAL'::text, 'VACACIONES'::text, 'SUSPENSION'::text, 'INTERFERIADO'::text, 'ADMINISTRATIVO'::text]));
+
+CREATE INDEX idx_dia_no_lectivo_ano_escolar ON public.dia_no_lectivo USING btree (ano_escolar_id);
+CREATE INDEX idx_dia_no_lectivo_fecha ON public.dia_no_lectivo USING btree (fecha);
+CREATE UNIQUE INDEX uq_dia_no_lectivo_ano_fecha ON public.dia_no_lectivo USING btree (ano_escolar_id, fecha);
 
 -- Table: public.evento_auditoria
 CREATE TABLE "public"."evento_auditoria" (

@@ -147,6 +147,23 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `ADMIN`: bypass de cierre temporal y ownership de bloque para gestión excepcional.
 - Nuevo código de error de negocio: `ASISTENCIA_CERRADA` (`400`) para violaciones de ventana temporal en profesor.
 
+### Actualización técnica reciente (REQ-05 días no lectivos)
+
+- Se incorporó calendario de excepciones académicas (`dia_no_lectivo`) por año escolar:
+  - tipos soportados: `FERIADO_LEGAL`, `VACACIONES`, `SUSPENSION`, `INTERFERIADO`, `ADMINISTRATIVO`.
+  - create/delete bloqueados cuando el año escolar está `CERRADO`.
+  - creación por rango con reglas: máximo 60 días, exclusión de sábados/domingo, y validación de rango del año escolar.
+- Nuevo dominio API:
+  - `GET /api/dias-no-lectivos` (autenticado) con filtro opcional `mes` + `anio`.
+  - `POST /api/dias-no-lectivos` (ADMIN) para alta masiva por rango.
+  - `DELETE /api/dias-no-lectivos/{id}` (ADMIN).
+- Integración en flujos existentes:
+  - `GuardarAsistenciaClase` bloquea registro/edición si la fecha está marcada como no lectiva.
+  - `ObtenerClasesHoyProfesor` enriquece la respuesta con `diaNoLectivo` para feedback de UI.
+  - `ObtenerAsistenciaMensualAlumno` incorpora `diasNoLectivos` en el response mensual.
+- Caching:
+  - `CacheControlInterceptor` define `Cache-Control: max-age=120` para `/api/dias-no-lectivos` (recurso de configuración de baja frecuencia de cambio).
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -255,6 +272,7 @@ Clase: `ApiErrorResponse`
 │   ├── usecase/apoderado     # casos de uso portal/gestión apoderado
 │   ├── usecase/alumno        # casos de uso de creación/enlace alumno-apoderado
 │   ├── usecase/auth          # caso de uso login
+│   ├── usecase/calendario    # casos de uso de días no lectivos
 │   ├── usecase/jornada       # casos de uso jornada escolar
 │   ├── usecase/matricula     # casos de uso matrícula
 │   └── usecase/profesor      # casos de uso de profesor
@@ -263,7 +281,7 @@ Clase: `ApiErrorResponse`
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway versionadas en repo: V1..V23
+    └── db/migration          # migraciones Flyway versionadas en repo: V1..V23 (V24 aplicada manual en Supabase)
 ```
 
 ### TODAS las clases por paquete
@@ -295,6 +313,7 @@ Clase: `ApiErrorResponse`
   - `AuthController`
   - `CursoController`
   - `DevToolsController` (solo perfil `dev`)
+  - `DiaNoLectivoController`
   - `AsistenciaController`
   - `GradoController`
   - `JornadaController`
@@ -327,6 +346,7 @@ Clase: `ApiErrorResponse`
   - `CopiarJornadaRequest`
   - `CrearAlumnoConApoderadoRequest`
   - `CursoRequest`
+  - `CrearDiaNoLectivoRequest`
   - `JornadaDiaRequest`
   - `LoginRequest`
   - `MallaCurricularBulkRequest`
@@ -349,6 +369,7 @@ Clase: `ApiErrorResponse`
   - `ClaseHoyResponse`
   - `ClasesHoyResponse`
   - `ConflictoHorarioResponse`
+  - `DiaNoLectivoResponse`
   - `EstadoClaseHoy`
   - `AuthResponse`
   - `CursoResponse`
@@ -375,6 +396,7 @@ Clase: `ApiErrorResponse`
   - `AsistenciaClase`
   - `BloqueHorario`
   - `Curso`
+  - `DiaNoLectivo`
   - `EventoAuditoria`
   - `Grado`
   - `MallaCurricular`
@@ -390,6 +412,7 @@ Clase: `ApiErrorResponse`
   - `EstadoAsistencia`
   - `EstadoMatricula`
   - `Rol`
+  - `TipoDiaNoLectivo`
   - `TipoBloque`
   - `TipoPersona`
   - `VinculoApoderado`
@@ -409,6 +432,7 @@ Clase: `ApiErrorResponse`
   - `AsistenciaClaseRepository`
   - `BloqueHorarioRepository`
   - `CursoRepository`
+  - `DiaNoLectivoRepository`
   - `EventoAuditoriaRepository`
   - `GradoRepository`
   - `MallaCurricularRepository`
@@ -436,6 +460,9 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.usecase.auth`
   - `LoginUsuario`
   - `RefrescarToken`
+- `com.schoolmate.api.usecase.calendario`
+  - `CrearDiasNoLectivos`
+  - `EliminarDiaNoLectivo`
 - `com.schoolmate.api.usecase.alumno`
   - `CrearAlumnoConApoderado`
 - `com.schoolmate.api.usecase.asistencia`
@@ -541,6 +568,27 @@ Regla de estado:
 - `AnoEscolar` calcula su estado con `calcularEstado(LocalDate fechaReferencia)` (no depende de `LocalDate.now()` dentro de la entidad).
 
 Divergencia: `V3` crea `ano_escolar` con columna `activo` y **sin** `fecha_inicio_planificacion`; el código actual exige `fecha_inicio_planificacion` y no mapea `activo`.
+
+### `DiaNoLectivo` (`dia_no_lectivo`)
+
+| Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
+|---|---|---|---|---|
+| `id` | `UUID` | `id` | `UUID` | PK |
+| `anoEscolar` | `AnoEscolar` | `ano_escolar_id` | `UUID` | FK NOT NULL |
+| `fecha` | `LocalDate` | `fecha` | `DATE` | NOT NULL |
+| `tipo` | `TipoDiaNoLectivo` | `tipo` | `VARCHAR(30)` | NOT NULL |
+| `descripcion` | `String` | `descripcion` | `VARCHAR(200)` | nullable |
+| `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
+| `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
+
+Relaciones:
+
+- `@ManyToOne(fetch = LAZY)` -> `AnoEscolar`.
+
+Restricciones esperadas de BD:
+
+- unicidad por año/fecha (`UNIQUE (ano_escolar_id, fecha)`).
+- check de `tipo` acotado a valores de `TipoDiaNoLectivo`.
 
 ### `Grado` (`grado`)
 
@@ -760,7 +808,7 @@ Relaciones:
 
 Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 
-- `created_at` + `updated_at`: `Usuario`, `AnoEscolar`, `Grado`, `Materia`, `Profesor`, `Curso`, `Alumno`, `Matricula`, `MallaCurricular`, `BloqueHorario`, `AsistenciaClase`, `RegistroAsistencia`, `Apoderado`.
+- `created_at` + `updated_at`: `Usuario`, `AnoEscolar`, `DiaNoLectivo`, `Grado`, `Materia`, `Profesor`, `Curso`, `Alumno`, `Matricula`, `MallaCurricular`, `BloqueHorario`, `AsistenciaClase`, `RegistroAsistencia`, `Apoderado`.
 - Solo `created_at`: `SeccionCatalogo`, `SesionUsuario`, `EventoAuditoria`.
 
 ### Enums usados y valores
@@ -769,6 +817,7 @@ Presente en todas las entidades excepto sin `updatedAt` en `SeccionCatalogo`.
 - `EstadoAnoEscolar`: `FUTURO`, `PLANIFICACION`, `ACTIVO`, `CERRADO`
 - `EstadoMatricula`: `ACTIVA`, `RETIRADO`, `TRASLADADO`
 - `TipoBloque`: `CLASE`, `RECREO`, `ALMUERZO`
+- `TipoDiaNoLectivo`: `FERIADO_LEGAL`, `VACACIONES`, `SUSPENSION`, `INTERFERIADO`, `ADMINISTRATIVO`
 - `VinculoApoderado`: `MADRE`, `PADRE`, `TUTOR_LEGAL`, `ABUELO`, `OTRO`
 
 ### Diagrama ER ASCII (modelo lógico actual)
@@ -796,6 +845,8 @@ grado 1---* curso *---1 ano_escolar
 materia 1---* malla_curricular *---1 grado
                       |
                       *---1 ano_escolar
+
+ano_escolar 1---* dia_no_lectivo
 
 curso 1---* bloque_horario *---0..1 profesor
                         |
@@ -837,6 +888,10 @@ seccion_catalogo 1---* curso (por letra)
 22. `V22__audit_trail_operaciones.sql`
 23. `V23__consolidacion_esquema_faltante.sql`
 
+Nota de estado:
+
+- `V24` (creación de `dia_no_lectivo`) fue aplicada directamente en Supabase y actualmente no está versionada como archivo Flyway en este repositorio.
+
 ### Qué hace cada migración
 
 | Migración | Cambios |
@@ -864,10 +919,11 @@ seccion_catalogo 1---* curso (por letra)
 | `V21` | Migración marcador (DDL ejecutado en Supabase): `sesion_usuario` + `asistencia_clase.registrado_por_usuario_id` + índices de trazabilidad |
 | `V22` | Migración marcador (DDL ejecutado en Supabase): `evento_auditoria` + FK a `usuario` + índices BTREE/GIN |
 | `V23` | Consolidación idempotente de drift: crea tablas faltantes históricas y agrega `ano_escolar.fecha_inicio_planificacion` + FK/índice de `asistencia_clase.registrado_por_usuario_id` |
+| `V24` *(manual en Supabase)* | Crea `dia_no_lectivo` con FK a `ano_escolar`, `UNIQUE (ano_escolar_id, fecha)`, checks de tipo e índices por año/fecha |
 
 ### Estado resultante del esquema (según migraciones + código)
 
-- Modelo oficial en código y queries usa: `usuario`, `sesion_usuario`, `evento_auditoria`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
+- Modelo oficial en código y queries usa: `usuario`, `sesion_usuario`, `evento_auditoria`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `dia_no_lectivo`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
 - `apoderado_alumno` incorpora columna `vinculo` en el modelo actual (REQ-04) y es tratada como enum `VinculoApoderado` en JPA.
 - IDs/FKs operativos en modelo actual: `UUID` (alineado con V20).
 - Drift histórico mitigado por `V23` para bootstrap en ambientes limpios.
@@ -884,7 +940,7 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V24+` para cualquier ajuste de esquema (V23 ya versionada en repo).
+2. Crear nueva `V{n}` disponible para cualquier ajuste de esquema y evitar DDL manual sin marcador Flyway.
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
@@ -946,6 +1002,7 @@ Configuración activa en código:
 - `CacheControlInterceptor` (registrado en `WebMvcConfig`):
   - aplica solo en `GET` con status `200`.
   - reglas:
+    - `/api/dias-no-lectivos` -> `Cache-Control: max-age=120`.
     - Grupo A/B (`/api/grados`, `/api/materias`, `/api/anos-escolares/**`, `/api/cursos/**`, `/api/malla-curricular`, `/api/profesores`) -> `Cache-Control: no-cache`.
     - Grupo C transaccional (`/api/matriculas/**`, `/api/asistencia/**`, `/api/alumnos/**`) -> `Cache-Control: no-store`.
     - Grupo C sensible (`/api/apoderado/**`, `/api/profesor/**`, `/api/auth/**`, `/api/profesores/{id}/sesiones`, `/api/auditoria/**`) -> `Cache-Control: no-store, private`.
@@ -1070,7 +1127,7 @@ Implementación actual:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `GET /api/apoderado/mis-alumnos` | Lista hijos vinculados al apoderado autenticado, con matrícula activa del año activo si existe | `APODERADO` | `Authorization` | - | `List<AlumnoApoderadoResponse>` | `ObtenerAlumnosApoderado` | `ACCESS_DENIED` (si principal inválido) |
-| `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual?mes=...&anio=...` | Asistencia diaria agregada por bloques para un mes (`PRESENTE/AUSENTE/PARCIAL`) | `APODERADO` (ownership) | Path `alumnoId`, Query `mes,anio` | - | `AsistenciaMensualResponse` | `ObtenerAsistenciaMensualAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
+| `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual?mes=...&anio=...` | Asistencia diaria agregada por bloques para un mes (`PRESENTE/AUSENTE/PARCIAL`) + lista `diasNoLectivos` del período | `APODERADO` (ownership) | Path `alumnoId`, Query `mes,anio` | - | `AsistenciaMensualResponse` | `ObtenerAsistenciaMensualAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 | `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen` | Resumen anual de asistencia por bloques con porcentaje (prioridad `header > query`) | `APODERADO` (ownership) | Path `alumnoId`, Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `ResumenAsistenciaResponse` | `ObtenerResumenAsistenciaAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 
 ### Dominio: DevTools (solo perfil `dev`)
@@ -1090,6 +1147,14 @@ Implementación actual:
 | `GET /api/anos-escolares/activo` | Año activo para fecha actual | autenticado | - | - | `AnoEscolarResponse` | directo | `RESOURCE_NOT_FOUND` |
 | `POST /api/anos-escolares` | Crea año | `ADMIN` | Body | `AnoEscolarRequest {ano,fechaInicioPlanificacion,fechaInicio,fechaFin}` | `AnoEscolarResponse` | directo con reglas | `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `PUT /api/anos-escolares/{id}` | Actualiza año | `ADMIN` | Path `id` + Body | `AnoEscolarRequest` | `AnoEscolarResponse` | directo con reglas | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+
+### Dominio: Días No Lectivos
+
+| Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
+|---|---|---|---|---|---|---|---|
+| `GET /api/dias-no-lectivos` | Lista días no lectivos del año escolar resuelto por header; filtro opcional por `mes` y `anio` | autenticado | Header `X-Ano-Escolar-Id` (resuelto por `@AnoEscolarActivo`), Query opcional `mes,anio` | - | `List<DiaNoLectivoResponse>` | directo repository | `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `POST /api/dias-no-lectivos` | Crea días no lectivos por rango (`fechaInicio`..`fechaFin`) | `ADMIN` | Header `X-Ano-Escolar-Id`, Body | `CrearDiaNoLectivoRequest` | `List<DiaNoLectivoResponse>` (`201`) | `CrearDiasNoLectivos` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `DELETE /api/dias-no-lectivos/{id}` | Elimina un día no lectivo | `ADMIN` | Path `id` | - | `204` | `EliminarDiaNoLectivo` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 
 ### Dominio: Grados
 
@@ -1139,7 +1204,7 @@ Implementación actual:
 | `POST /api/profesores` | Crea profesor con materias, horas de contrato y usuario asociado (`ROL=PROFESOR`); valida formato/DV de RUT y disponibilidad cross-tabla | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | `CrearProfesorConUsuario` | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `PUT /api/profesores/{id}` | Actualiza profesor; valida formato de RUT, mantiene RUT inmutable y permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/profesores/{profesorId}/horario` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia, prioridad `header > query`) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `ProfesorHorarioResponse` | directo | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `VALIDATION_FAILED` |
-| `GET /api/profesor/mis-clases-hoy` | Clases del día para el profesor autenticado (`estado` por ventana de 15 min, `asistenciaTomada` real por bloque+fecha) | `PROFESOR` | `Authorization` (usa `profesorId` del JWT) | - | `ClasesHoyResponse` | `ObtenerClasesHoyProfesor` | `ACCESS_DENIED` |
+| `GET /api/profesor/mis-clases-hoy` | Clases del día para el profesor autenticado (`estado` por ventana de 15 min, `asistenciaTomada` real por bloque+fecha) con `diaNoLectivo` cuando aplica | `PROFESOR` | `Authorization` (usa `profesorId` del JWT) | - | `ClasesHoyResponse` | `ObtenerClasesHoyProfesor` | `ACCESS_DENIED` |
 
 ### Dominio: Alumnos
 
@@ -1165,7 +1230,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/asistencia/clase` | Registra o edita asistencia de un bloque CLASE. `PROFESOR`: cierre estricto (`fecha==hoy` + ventana ±15 min). `ADMIN`: bypass temporal para gestión excepcional | `PROFESOR`,`ADMIN` | Body | `GuardarAsistenciaRequest {bloqueHorarioId,fecha,registros[]}` | `AsistenciaClaseResponse` (`201 Created`) | `GuardarAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `ASISTENCIA_CERRADA`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `POST /api/asistencia/clase` | Registra o edita asistencia de un bloque CLASE. `PROFESOR`: cierre estricto (`fecha==hoy` + ventana ±15 min). `ADMIN`: bypass temporal para gestión excepcional. Bloquea fechas no lectivas | `PROFESOR`,`ADMIN` | Body | `GuardarAsistenciaRequest {bloqueHorarioId,fecha,registros[]}` | `AsistenciaClaseResponse` (`201 Created`) | `GuardarAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `ASISTENCIA_CERRADA`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/asistencia/clase?bloqueHorarioId=...&fecha=...` | Obtiene asistencia registrada para un bloque y fecha | `PROFESOR` (ownership por bloque) | Query `bloqueHorarioId`,`fecha` | - | `AsistenciaClaseResponse` | `ObtenerAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
 
 ### Dominio: Jornada
@@ -1194,13 +1259,14 @@ Implementación actual:
 
 - Función: registrar o editar asistencia de una clase con reglas temporales por rol.
 - Repositorios/dependencias:
-  - `BloqueHorarioRepository`, `MatriculaRepository`, `AsistenciaClaseRepository`, `RegistroAsistenciaRepository`, `UsuarioRepository`, `ClockProvider`
+  - `BloqueHorarioRepository`, `MatriculaRepository`, `AsistenciaClaseRepository`, `RegistroAsistenciaRepository`, `DiaNoLectivoRepository`, `UsuarioRepository`, `ClockProvider`
 - Firma actual:
   - `execute(GuardarAsistenciaRequest request, UUID profesorId, UUID usuarioId, Rol rolUsuario)`
 - Validaciones generales:
   - bloque existe y es tipo `CLASE`
   - no permite sábados ni domingos
   - fecha debe corresponder al `diaSemana` del bloque
+  - no permite fechas marcadas en `dia_no_lectivo` para el año escolar del curso
   - el año escolar del curso no puede estar `CERRADO`
   - la fecha debe estar dentro de `[fechaInicio, fechaFin]` del año escolar
   - todos los alumnos del request deben estar con matrícula `ACTIVA` en el curso
@@ -1284,6 +1350,37 @@ Implementación actual:
   - `ApiException(SESSION_REVOKED)`
 - `@Transactional`: sí.
 
+### `com.schoolmate.api.usecase.calendario.CrearDiasNoLectivos`
+
+- Función: registrar días no lectivos por rango para un año escolar.
+- Repositorios/dependencias:
+  - `AnoEscolarRepository`, `DiaNoLectivoRepository`, `ClockProvider`
+- Reglas:
+  - el año escolar debe existir y no estar `CERRADO`
+  - `fechaFin >= fechaInicio`
+  - rango máximo permitido: 60 días corridos
+  - excluye sábados y domingos del alta
+  - si el rango no deja días hábiles, retorna error
+  - cada fecha debe estar dentro de `[anoEscolar.fechaInicio, anoEscolar.fechaFin]`
+  - no permite duplicado por `(anoEscolarId, fecha)`
+- Resultado:
+  - guarda una entidad por cada fecha hábil válida y retorna la lista creada.
+- Errores:
+  - `ResourceNotFoundException`, `BusinessException`
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.calendario.EliminarDiaNoLectivo`
+
+- Función: eliminar un día no lectivo por id.
+- Repositorios/dependencias:
+  - `DiaNoLectivoRepository`, `ClockProvider`
+- Reglas:
+  - el día no lectivo debe existir
+  - el año escolar asociado no puede estar `CERRADO`
+- Errores:
+  - `ResourceNotFoundException`, `BusinessException`
+- `@Transactional`: sí.
+
 ### `com.schoolmate.api.usecase.apoderado.CrearApoderadoConUsuario`
 
 - Función: crear apoderado + usuario `ROL=APODERADO` o vincular apoderado existente por RUT a un alumno.
@@ -1319,12 +1416,13 @@ Implementación actual:
 
 - Función: obtener asistencia mensual agregada por día para un alumno del apoderado.
 - Repositorios/dependencias:
-  - `ApoderadoAlumnoRepository`, `RegistroAsistenciaRepository`, `AlumnoRepository`
+  - `ApoderadoAlumnoRepository`, `RegistroAsistenciaRepository`, `AlumnoRepository`, `AnoEscolarRepository`, `DiaNoLectivoRepository`
 - Reglas:
   - ownership obligatorio (`apoderadoId` -> `alumnoId`)
   - valida mes/año para construir rango de fechas
   - agrupa registros por fecha y calcula `PRESENTE`, `AUSENTE` o `PARCIAL`
-  - mes sin registros retorna `dias=[]`
+  - resuelve año escolar activo en el mes consultado y agrega `diasNoLectivos` por rango mensual
+  - mes sin registros retorna `dias=[]` y mantiene `diasNoLectivos` según calendario
 - Errores:
   - `AccessDeniedException`
   - `ResourceNotFoundException`
@@ -1440,10 +1538,11 @@ Implementación actual:
 
 - Función: obtener clases del día del profesor autenticado.
 - Repositorios/dependencias:
-  - `ClockProvider`, `AnoEscolarRepository`, `BloqueHorarioRepository`, `MatriculaRepository`, `AsistenciaClaseRepository`
+  - `ClockProvider`, `AnoEscolarRepository`, `BloqueHorarioRepository`, `MatriculaRepository`, `AsistenciaClaseRepository`, `DiaNoLectivoRepository`
 - Reglas:
   - usa `profesorId` del JWT (`UserPrincipal`)
   - si hoy es sábado/domingo o no hay año activo: retorna lista vacía
+  - adjunta `diaNoLectivo` cuando existe registro para `hoy` en el año activo
   - consulta bloques `CLASE` activos del día y año activo
   - calcula estado temporal `PENDIENTE|DISPONIBLE|EXPIRADA` con ventana ±15 minutos
   - calcula `cantidadAlumnos` con matrículas `ACTIVA`
@@ -1658,6 +1757,7 @@ Implementación actual:
 | `AsistenciaClaseRepository` | `AsistenciaClase` | `findByBloqueHorarioIdAndFecha`, `existsByBloqueHorarioIdAndFecha` | no | no |
 | `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findColisionesProfesorConCursoYMateria`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolarConProfesor`, `findClasesProfesorEnDia`, `existsBloqueActivoProfesorEnCurso`, `findDetalleById`, `findActivosByCursoIdWithMateriaAndProfesorOrderByDiaSemanaAscNumeroBloqueAsc`, `findActivosByCursoIdAndDiaSemanaWithMateriaAndProfesorOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor` | no |
 | `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc` | `findLetrasUsadasByGradoIdAndAnoEscolarId`, `findByIdWithGradoAndAnoEscolar`, `findByAnoEscolarIdOrderByNombreAscWithRelaciones`, `findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones`, `findAllOrderByNombreAscWithRelaciones` | no |
+| `DiaNoLectivoRepository` | `DiaNoLectivo` | `existsByAnoEscolarIdAndFecha`, `findByAnoEscolarIdAndFecha`, `findByAnoEscolarIdOrderByFechaAsc`, `findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc` | no | no |
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
 | `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | `findActivaByGradoIdAndAnoEscolarIdWithMateria` (`JOIN FETCH materia`) | no |
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
@@ -1703,6 +1803,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `BloqueRequest` | `numeroBloque,horaInicio,horaFin,tipo` | `@NotNull`, `@Min(1)`, `@Pattern` para hora `HH:mm` y tipo | `@Getter/@Setter` |
 | `JornadaDiaRequest` | `bloques[]` | `@NotNull`, `@Size(min=1)`, `@Valid` | `@Getter/@Setter` |
 | `CopiarJornadaRequest` | `diasDestino[]` | `@NotNull`, `@Size(min=1)`, elementos `@Min(1) @Max(5)` | `@Getter/@Setter` |
+| `CrearDiaNoLectivoRequest` | `fechaInicio,fechaFin,tipo,descripcion?` | `@NotNull` en fechas/tipo, `@Size(max=200)` en descripción, validador `fechaFin >= fechaInicio` | `@Data` |
 | `AsignarMateriaRequest` | `materiaId` | `@NotBlank` | `@Data` |
 | `AsignarProfesorRequest` | `profesorId` | `@NotBlank` | `@Data` |
 | `GuardarAsistenciaRequest` | `bloqueHorarioId,fecha,registros[]` | `@NotBlank`, `@NotNull`, `@Size(min=1)`, `@Valid` | `@Data` |
@@ -1718,12 +1819,13 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `ApoderadoResponse` | `id,nombre,apellido,rut,email,telefono,usuarioId,cuentaActiva,alumnos[]` | `@Getter/@Setter @Builder` |
 | `ApoderadoResponse.AlumnoResumen` | `id,nombre,apellido` | `@Getter/@Setter @Builder` |
 | `AlumnoApoderadoResponse` | `id,nombre,apellido,cursoId,cursoNombre,anoEscolarId` | `@Getter/@Setter @Builder` |
-| `AsistenciaMensualResponse` | `alumnoId,alumnoNombre,mes,anio,dias[]` | `@Getter/@Setter @Builder` |
+| `AsistenciaMensualResponse` | `alumnoId,alumnoNombre,mes,anio,dias[],diasNoLectivos[]` | `@Getter/@Setter @Builder` |
 | `AsistenciaDiaResponse` | `fecha,totalBloques,bloquesPresente,bloquesAusente,estado` | `@Getter/@Setter @Builder` |
 | `ResumenAsistenciaResponse` | `alumnoId,alumnoNombre,totalClases,totalPresente,totalAusente,porcentajeAsistencia` | `@Getter/@Setter @Builder` |
 | `RegistroConFecha` | `registroId,alumnoId,estado,fecha` (proyección interna para query) | `@Getter/@Setter` |
 | `SesionProfesorResponse` | `id,fechaHora,ipAddress,latitud,longitud,precisionMetros,userAgent` | `@Data @Builder` |
 | `SesionProfesorPageResponse` | `profesorId,profesorNombre,sesiones[],totalElements,totalPages,currentPage` | `@Data @Builder` |
+| `DiaNoLectivoResponse` | `id,fecha,tipo,descripcion` | `@Data @Builder` |
 | `EventoAuditoriaResponse` | `id,usuarioEmail,usuarioRol,metodoHttp,endpoint,requestBody,responseStatus,ipAddress,anoEscolarId,fechaHora` | `@Data @Builder` |
 | `EventoAuditoriaPageResponse` | `eventos[],totalElements,totalPages,currentPage` | `@Data @Builder` |
 
@@ -1755,7 +1857,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `ConflictoHorarioResponse` | `cursoNombre,materiaNombre,horaInicio,horaFin,bloqueId` | `@Data @Builder` |
 | `EstadoClaseHoy` | `PENDIENTE,DISPONIBLE,EXPIRADA` | `enum` |
 | `ClaseHoyResponse` | `bloqueId,numeroBloque,horaInicio,horaFin,cursoId,cursoNombre,materiaId,materiaNombre,materiaIcono,cantidadAlumnos,estado,asistenciaTomada` | `@Data @Builder` |
-| `ClasesHoyResponse` | `fecha,diaSemana,nombreDia,clases[]` | `@Data @Builder` |
+| `ClasesHoyResponse` | `fecha,diaSemana,nombreDia,diaNoLectivo?,clases[]` | `@Data @Builder` |
 | `AsistenciaClaseResponse` | `asistenciaClaseId,bloqueHorarioId,fecha,tomadaEn,registradoPorNombre,registros[]` | `@Data @Builder` |
 | `RegistroAsistenciaResponse` | `alumnoId,alumnoNombre,alumnoApellido,estado` | `@Data @Builder` |
 | `ProfesorDisponibleResponse` | `profesorId,profesorNombre,profesorApellido,horasPedagogicasContrato,horasAsignadas,excedido,disponible,asignadoEnEsteBloque,conflicto` | `@Data @Builder` |
@@ -1895,10 +1997,17 @@ Para alumnos:
   - `PROFESOR`: cierre estricto (`fecha == hoy` + ventana ±15 min), error `ASISTENCIA_CERRADA` al incumplir.
   - `ADMIN`: bypass de cierre temporal y ownership para gestión excepcional.
   - se bloquean fines de semana
+  - se bloquean fechas marcadas como `dia_no_lectivo` en el año escolar del curso
   - la fecha debe coincidir con el `diaSemana` del bloque
   - la fecha debe estar dentro del rango del año escolar del curso
   - no se permite registrar asistencia si el año escolar del curso está `CERRADO`
   - persistencia de registros por conciliación in-place (actualiza existentes, elimina huérfanos e inserta nuevos)
+- Días no lectivos:
+  - alta por rango con límite de 60 días corridos
+  - exclusión automática de sábados y domingos
+  - no permite crear fuera del rango del año escolar
+  - no permite duplicado por fecha para el mismo año escolar
+  - create/delete bloqueado cuando el año escolar está `CERRADO`
 - Portal apoderado:
   - ownership estricto por vínculo `apoderado_alumno`.
   - asistencia mensual marca día `PARCIAL` cuando hay bloques presentes y ausentes en la misma fecha.
@@ -1935,6 +2044,13 @@ Para alumnos:
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual` retorna:
   - lista `dias[]` solo con fechas que tienen registros
   - por día: `totalBloques`, `bloquesPresente`, `bloquesAusente`, `estado`
+  - lista `diasNoLectivos[]` para el mismo mes (`id,fecha,tipo,descripcion`)
+- `GET /api/profesor/mis-clases-hoy` retorna:
+  - `diaNoLectivo` cuando la fecha actual está marcada como excepción en calendario
+  - `diaNoLectivo = null` en días lectivos normales
+- `GET /api/dias-no-lectivos` retorna:
+  - lista ordenada ascendente por fecha
+  - cada elemento con `id,fecha,tipo,descripcion`
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen` retorna:
   - `totalClases`, `totalPresente`, `totalAusente`, `porcentajeAsistencia`
 - `GET /api/apoderados/buscar-por-rut?rut=...` retorna:
@@ -1982,6 +2098,8 @@ Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`):
   - filtro opcional `diaSemana`
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual`:
   - `mes`, `anio`
+- `GET /api/dias-no-lectivos`:
+  - filtros opcionales `mes`, `anio` (deben enviarse juntos)
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen`:
   - año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
 
@@ -1998,6 +2116,7 @@ Regla práctica actual:
 - Respuestas `GET /api/*` incluyen `ETag` calculado por backend.
 - Si el cliente envía `If-None-Match` con el mismo valor, la API responde `304 Not Modified` (sin body).
 - `Cache-Control` depende del grupo de endpoint:
+  - `max-age=120` para `/api/dias-no-lectivos`.
   - `no-cache` para catálogos/configuración (revalidación siempre con servidor).
   - `no-store` para datos transaccionales.
   - `no-store, private` para datos sensibles de usuario.
@@ -2056,6 +2175,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 - `ETag` automático en `GET /api/*` mediante `ShallowEtagHeaderFilter`.
 - `Cache-Control` asignado por `CacheControlInterceptor` según patrón de ruta.
+- `/api/dias-no-lectivos` usa `Cache-Control: max-age=120`.
 - Seguridad no fuerza `Cache-Control` global (se deshabilitó el header default de Spring Security).
 
 ---
@@ -2073,6 +2193,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - `curso`: `idx_curso_grado`, `idx_curso_ano_escolar`, `idx_curso_activo`, `uq_curso_grado_ano_letra`
 - `malla_curricular`: `idx_malla_curricular_ano_escolar`, `idx_malla_curricular_materia_ano`, `idx_malla_curricular_grado_ano`, `idx_malla_curricular_activo`
 - `matricula`: `idx_matricula_alumno`, `idx_matricula_curso`, `idx_matricula_ano_escolar`, `idx_matricula_estado`, `uq_matricula_alumno_ano_activa`
+- `dia_no_lectivo`: `idx_dia_no_lectivo_ano_escolar`, `idx_dia_no_lectivo_fecha`, `uq_dia_no_lectivo_ano_fecha`
 - `asistencia_clase`: índice de trazabilidad `idx_asistencia_clase_registrado_por`
 - `bloque_horario`: tabla existente en Supabase; índices/constraints no versionados en migraciones del repo
 
@@ -2112,6 +2233,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 | Grados | ✅ | list/get |
 | Materias | ✅ | list/get/create/update/delete |
 | Malla Curricular | ✅ | list por año, por materia, por grado, create, update, bulk, delete lógico |
+| Calendario Días No Lectivos | ✅ | list (`GET`), create por rango (`POST`), delete (`DELETE`) |
 | Cursos | ✅ | list/get/create/update |
 | Profesores | ✅ | list/get/create/update + sesiones de login por profesor |
 | Auditoría | ✅ | `GET /api/auditoria` (consulta paginada con filtros) + captura automática en mutaciones HTTP |

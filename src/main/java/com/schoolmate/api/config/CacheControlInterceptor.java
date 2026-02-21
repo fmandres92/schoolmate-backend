@@ -2,11 +2,14 @@ package com.schoolmate.api.config;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
+
+import java.time.Duration;
 
 @Component
 public class CacheControlInterceptor implements HandlerInterceptor {
@@ -14,6 +17,7 @@ public class CacheControlInterceptor implements HandlerInterceptor {
     private static final String NO_CACHE = "no-cache";
     private static final String NO_STORE = "no-store";
     private static final String NO_STORE_PRIVATE = "no-store, private";
+    private static final String MAX_AGE_2_MINUTES = CacheControl.maxAge(Duration.ofMinutes(2)).getHeaderValue();
 
     @Override
     public void postHandle(
@@ -46,6 +50,10 @@ public class CacheControlInterceptor implements HandlerInterceptor {
                 || isPathOrSubpath(path, "/api/asistencia")
                 || isPathOrSubpath(path, "/api/alumnos")) {
             return NO_STORE;
+        }
+
+        if (isPathOrSubpath(path, "/api/dias-no-lectivos")) {
+            return MAX_AGE_2_MINUTES;
         }
 
         if ("/api/grados".equals(path)

@@ -1,14 +1,14 @@
 # Database Structure Inventory
 
-Generated at: `2026-02-21T10:31:56.014811-03:00`  
+Generated at: `2026-02-21T13:18:01.274404-03:00`  
 Source: live PostgreSQL catalog (`information_schema` + `pg_catalog`)  
 Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres?sslmode=require`
 
 ## Summary
 
 - Schemas: **5**
-- Tables: **49**
-- Foreign Keys: **45**
+- Tables: **50**
+- Foreign Keys: **46**
 
 ## Relationships (Foreign Keys)
 
@@ -38,6 +38,7 @@ Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres
 - `public.curso` -> `curso_ano_escolar_id_fkey`: `FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id)`
 - `public.curso` -> `curso_grado_id_fkey`: `FOREIGN KEY (grado_id) REFERENCES grado(id)`
 - `public.curso` -> `fk_curso_seccion_catalogo`: `FOREIGN KEY (letra) REFERENCES seccion_catalogo(letra)`
+- `public.dia_no_lectivo` -> `fk_dia_no_lectivo_ano_escolar`: `FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id)`
 - `public.evento_auditoria` -> `fk_evento_auditoria_usuario`: `FOREIGN KEY (usuario_id) REFERENCES usuario(id)`
 - `public.malla_curricular` -> `malla_curricular_ano_escolar_id_fkey`: `FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id)`
 - `public.malla_curricular` -> `malla_curricular_grado_id_fkey`: `FOREIGN KEY (grado_id) REFERENCES grado(id)`
@@ -859,6 +860,34 @@ Indexes:
 - [INDEX] `idx_curso_ano_escolar`: `CREATE INDEX idx_curso_ano_escolar ON public.curso USING btree (ano_escolar_id)`
 - [INDEX] `idx_curso_grado`: `CREATE INDEX idx_curso_grado ON public.curso USING btree (grado_id)`
 - [INDEX] `uq_curso_grado_ano_letra`: `CREATE UNIQUE INDEX uq_curso_grado_ano_letra ON public.curso USING btree (grado_id, ano_escolar_id, letra)`
+
+### `public.dia_no_lectivo`
+
+Columns:
+
+| Name | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | `uuid` | NO | `gen_random_uuid()` |
+| `ano_escolar_id` | `uuid` | NO | `` |
+| `fecha` | `date` | NO | `` |
+| `tipo` | `character varying(30)` | NO | `` |
+| `descripcion` | `character varying(200)` | YES | `` |
+| `created_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
+| `updated_at` | `timestamp without time zone` | NO | `CURRENT_TIMESTAMP` |
+
+Constraints:
+
+- [PK] `dia_no_lectivo_pkey`: `PRIMARY KEY (id)`
+- [UNIQUE] `uq_dia_no_lectivo_ano_fecha`: `UNIQUE (ano_escolar_id, fecha)`
+- [FK] `fk_dia_no_lectivo_ano_escolar`: `FOREIGN KEY (ano_escolar_id) REFERENCES ano_escolar(id)`
+- [CHECK] `chk_dia_no_lectivo_tipo`: `CHECK (tipo::text = ANY (ARRAY['FERIADO_LEGAL'::text, 'VACACIONES'::text, 'SUSPENSION'::text, 'INTERFERIADO'::text, 'ADMINISTRATIVO'::text]))`
+
+Indexes:
+
+- [PK-INDEX] `dia_no_lectivo_pkey`: `CREATE UNIQUE INDEX dia_no_lectivo_pkey ON public.dia_no_lectivo USING btree (id)`
+- [INDEX] `idx_dia_no_lectivo_ano_escolar`: `CREATE INDEX idx_dia_no_lectivo_ano_escolar ON public.dia_no_lectivo USING btree (ano_escolar_id)`
+- [INDEX] `idx_dia_no_lectivo_fecha`: `CREATE INDEX idx_dia_no_lectivo_fecha ON public.dia_no_lectivo USING btree (fecha)`
+- [INDEX] `uq_dia_no_lectivo_ano_fecha`: `CREATE UNIQUE INDEX uq_dia_no_lectivo_ano_fecha ON public.dia_no_lectivo USING btree (ano_escolar_id, fecha)`
 
 ### `public.evento_auditoria`
 

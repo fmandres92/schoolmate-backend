@@ -12,5 +12,6 @@ public class ClasesHoyResponse {
     private LocalDate fecha;
     private Integer diaSemana;
     private String nombreDia;
+    private DiaNoLectivoResponse diaNoLectivo;
     private List<ClaseHoyResponse> clases;
 }

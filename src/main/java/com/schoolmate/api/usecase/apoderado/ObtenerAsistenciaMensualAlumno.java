@@ -4,11 +4,14 @@ import com.schoolmate.api.dto.AsistenciaDiaResponse;
 import com.schoolmate.api.dto.AsistenciaMensualResponse;
 import com.schoolmate.api.dto.RegistroConFecha;
 import com.schoolmate.api.entity.Alumno;
+import com.schoolmate.api.dto.response.DiaNoLectivoResponse;
 import com.schoolmate.api.enums.EstadoAsistencia;
 import com.schoolmate.api.exception.BusinessException;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AlumnoRepository;
+import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
+import com.schoolmate.api.repository.DiaNoLectivoRepository;
 import com.schoolmate.api.repository.RegistroAsistenciaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -29,6 +32,8 @@ public class ObtenerAsistenciaMensualAlumno {
     private final ApoderadoAlumnoRepository apoderadoAlumnoRepo;
     private final RegistroAsistenciaRepository registroAsistenciaRepo;
     private final AlumnoRepository alumnoRepo;
+    private final AnoEscolarRepository anoEscolarRepository;
+    private final DiaNoLectivoRepository diaNoLectivoRepository;
 
     public AsistenciaMensualResponse execute(UUID alumnoId, int mes, int anio, UUID apoderadoId) {
         if (!apoderadoAlumnoRepo.existsByApoderadoIdAndAlumnoId(apoderadoId, alumnoId)) {
@@ -75,12 +80,26 @@ public class ObtenerAsistenciaMensualAlumno {
                 .sorted(Comparator.comparing(AsistenciaDiaResponse::getFecha))
                 .toList();
 
+        List<DiaNoLectivoResponse> diasNoLectivos = anoEscolarRepository.findActivoByFecha(inicioMes)
+                .map(anoEscolar -> diaNoLectivoRepository
+                        .findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc(anoEscolar.getId(), inicioMes, finMes)
+                        .stream()
+                        .map(d -> DiaNoLectivoResponse.builder()
+                                .id(d.getId())
+                                .fecha(d.getFecha())
+                                .tipo(d.getTipo().name())
+                                .descripcion(d.getDescripcion())
+                                .build())
+                        .toList())
+                .orElse(List.of());
+
         return AsistenciaMensualResponse.builder()
                 .alumnoId(alumnoId)
                 .alumnoNombre(alumno.getNombre() + " " + alumno.getApellido())
                 .mes(mes)
                 .anio(anio)
                 .dias(dias)
+                .diasNoLectivos(diasNoLectivos)
                 .build();
     }
 }
