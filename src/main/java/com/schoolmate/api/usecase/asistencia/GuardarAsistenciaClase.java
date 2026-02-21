@@ -14,8 +14,11 @@ import com.schoolmate.api.entity.RegistroAsistencia;
 import com.schoolmate.api.entity.Usuario;
 import com.schoolmate.api.enums.EstadoAnoEscolar;
 import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.enums.Rol;
 import com.schoolmate.api.enums.TipoBloque;
+import com.schoolmate.api.exception.ApiException;
 import com.schoolmate.api.exception.BusinessException;
+import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AsistenciaClaseRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
@@ -55,7 +58,12 @@ public class GuardarAsistenciaClase {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public AsistenciaClaseResponse execute(GuardarAsistenciaRequest request, UUID profesorId, UUID usuarioId) {
+    public AsistenciaClaseResponse execute(
+        GuardarAsistenciaRequest request,
+        UUID profesorId,
+        UUID usuarioId,
+        Rol rolUsuario
+    ) {
         BloqueHorario bloque = bloqueHorarioRepository.findById(request.getBloqueHorarioId())
             .orElseThrow(() -> new ResourceNotFoundException("Bloque horario no encontrado"));
 
@@ -63,11 +71,11 @@ public class GuardarAsistenciaClase {
             throw new BusinessException("Solo se puede registrar asistencia en bloques de tipo CLASE");
         }
 
+        boolean esAdmin = Rol.ADMIN.equals(rolUsuario);
         LocalDate fechaRequest = request.getFecha();
         LocalDate hoy = clockProvider.today();
-
-        if (fechaRequest.isAfter(hoy)) {
-            throw new BusinessException("No se puede registrar asistencia para una fecha futura");
+        if (!esAdmin) {
+            validarCierreAsistenciaProfesor(fechaRequest, hoy, bloque);
         }
 
         DayOfWeek diaSemanaFecha = fechaRequest.getDayOfWeek();
@@ -90,17 +98,8 @@ public class GuardarAsistenciaClase {
             throw new BusinessException("La fecha está fuera del período del año escolar");
         }
 
-        if (bloque.getProfesor() == null || !bloque.getProfesor().getId().equals(profesorId)) {
+        if (!esAdmin && (bloque.getProfesor() == null || !bloque.getProfesor().getId().equals(profesorId))) {
             throw new AccessDeniedException("ACCESS_DENIED");
-        }
-
-        if (fechaRequest.equals(hoy)) {
-            LocalTime nowTime = clockProvider.now().toLocalTime();
-            LocalTime inicioVentana = bloque.getHoraInicio().minusMinutes(VENTANA_MINUTOS);
-            LocalTime finVentana = bloque.getHoraFin().plusMinutes(VENTANA_MINUTOS);
-            if (nowTime.isBefore(inicioVentana) || nowTime.isAfter(finVentana)) {
-                throw new BusinessException("Fuera de la ventana horaria para tomar asistencia");
-            }
         }
 
         List<Matricula> matriculasActivas = matriculaRepository.findByCursoIdAndEstado(
@@ -142,35 +141,79 @@ public class GuardarAsistenciaClase {
             savedAsistencia = asistenciaClaseRepository.save(existente);
         }
 
-        registroAsistenciaRepository.deleteByAsistenciaClaseId(savedAsistencia.getId());
-        registroAsistenciaRepository.flush();
-        List<RegistroAsistencia> registros = construirRegistros(
-            request.getRegistros(), alumnosActivosById, savedAsistencia, ahora);
+        conciliarRegistros(
+            savedAsistencia,
+            request.getRegistros(),
+            alumnosActivosById,
+            ahora
+        );
 
-        List<RegistroAsistencia> guardados = registroAsistenciaRepository.saveAll(registros);
+        savedAsistencia = asistenciaClaseRepository.save(savedAsistencia);
+        List<RegistroAsistencia> guardados = registroAsistenciaRepository
+            .findByAsistenciaClaseId(savedAsistencia.getId());
         return mapResponse(savedAsistencia, guardados);
     }
 
-    private List<RegistroAsistencia> construirRegistros(
+    private void validarCierreAsistenciaProfesor(LocalDate fechaRequest, LocalDate hoy, BloqueHorario bloque) {
+        if (!fechaRequest.equals(hoy)) {
+            throw asistenciaCerradaException();
+        }
+
+        LocalTime nowTime = clockProvider.now().toLocalTime();
+        LocalTime inicioVentana = bloque.getHoraInicio().minusMinutes(VENTANA_MINUTOS);
+        LocalTime finVentana = bloque.getHoraFin().plusMinutes(VENTANA_MINUTOS);
+        if (nowTime.isBefore(inicioVentana) || nowTime.isAfter(finVentana)) {
+            throw asistenciaCerradaException();
+        }
+    }
+
+    private ApiException asistenciaCerradaException() {
+        return new ApiException(
+            ErrorCode.ASISTENCIA_CERRADA,
+            "El período para registrar o modificar esta asistencia ha finalizado. Contacte a Administración.",
+            (Map<String, String>) null
+        );
+    }
+
+    private void conciliarRegistros(
+        AsistenciaClase asistenciaClase,
         List<RegistroAlumnoRequest> registrosRequest,
         Map<UUID, Alumno> alumnosActivosById,
-        AsistenciaClase asistenciaClase,
         LocalDateTime ahora
     ) {
-        List<RegistroAsistencia> registros = new ArrayList<>();
-        for (RegistroAlumnoRequest registroRequest : registrosRequest) {
-            Alumno alumno = alumnosActivosById.get(registroRequest.getAlumnoId());
-            RegistroAsistencia registro = RegistroAsistencia.builder()
+        Map<UUID, RegistroAlumnoRequest> requestMap = registrosRequest.stream()
+            .collect(Collectors.toMap(RegistroAlumnoRequest::getAlumnoId, r -> r));
+
+        if (asistenciaClase.getRegistros() == null) {
+            asistenciaClase.setRegistros(new ArrayList<>());
+        }
+
+        asistenciaClase.getRegistros().removeIf(
+            registro -> !requestMap.containsKey(registro.getAlumno().getId())
+        );
+
+        for (RegistroAsistencia registro : asistenciaClase.getRegistros()) {
+            RegistroAlumnoRequest req = requestMap.remove(registro.getAlumno().getId());
+            if (req == null) {
+                continue;
+            }
+            registro.setEstado(req.getEstado());
+            registro.setObservacion(req.getObservacion());
+            registro.setUpdatedAt(ahora);
+        }
+
+        for (RegistroAlumnoRequest req : requestMap.values()) {
+            Alumno alumno = alumnosActivosById.get(req.getAlumnoId());
+            RegistroAsistencia nuevo = RegistroAsistencia.builder()
                 .asistenciaClase(asistenciaClase)
                 .alumno(alumno)
-                .estado(registroRequest.getEstado())
-                .observacion(registroRequest.getObservacion())
+                .estado(req.getEstado())
+                .observacion(req.getObservacion())
                 .createdAt(ahora)
                 .updatedAt(ahora)
                 .build();
-            registros.add(registro);
+            asistenciaClase.getRegistros().add(nuevo);
         }
-        return registros;
     }
 
     private void validarRegistros(List<RegistroAlumnoRequest> registros, Set<UUID> alumnosActivos) {

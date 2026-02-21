@@ -17,6 +17,7 @@ public enum ErrorCode {
 
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "error.validation.failed"),
     BUSINESS_RULE(HttpStatus.BAD_REQUEST, "error.business.rule"),
+    ASISTENCIA_CERRADA(HttpStatus.BAD_REQUEST, "error.asistencia.cerrada"),
 
     PROFESOR_RUT_DUPLICADO(HttpStatus.CONFLICT, "error.profesor.rut_duplicado"),
     PROFESOR_RUT_INMUTABLE(HttpStatus.BAD_REQUEST, "error.profesor.rut_inmutable"),

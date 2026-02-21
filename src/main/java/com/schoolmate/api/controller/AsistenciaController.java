@@ -31,13 +31,13 @@ public class AsistenciaController {
     private final ObtenerAsistenciaClase obtenerAsistenciaClase;
 
     @PostMapping("/clase")
-    @PreAuthorize("hasRole('PROFESOR')")
+    @PreAuthorize("hasAnyRole('PROFESOR','ADMIN')")
     public ResponseEntity<AsistenciaClaseResponse> guardar(
         @AuthenticationPrincipal UserPrincipal user,
         @Valid @RequestBody GuardarAsistenciaRequest request
     ) {
         AsistenciaClaseResponse response = guardarAsistenciaClase.execute(
-            request, user.getProfesorId(), user.getId());
+            request, user.getProfesorId(), user.getId(), user.getRol());
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

@@ -9,15 +9,19 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.CascadeType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -51,6 +55,10 @@ public class AsistenciaClase {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "asistenciaClase", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<RegistroAsistencia> registros = new ArrayList<>();
 
     @PrePersist
     protected void onCreate() {

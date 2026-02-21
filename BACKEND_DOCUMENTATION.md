@@ -128,6 +128,25 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - `CacheControlInterceptor` clasifica `/api/auditoria/**` como sensible: `Cache-Control: no-store, private`.
 - Migración marcador agregada: `V22__audit_trail_operaciones.sql` (DDL ejecutado en Supabase).
 
+### Actualización técnica reciente (REQ-05 baseline Flyway)
+
+- Se agregó `V23__consolidacion_esquema_faltante.sql` como migración idempotente de sinceramiento de drift.
+- `V23` consolida DDL histórico faltante para ambientes limpios:
+  - tablas: `alumno`, `bloque_horario`, `apoderado`, `apoderado_alumno`, `sesion_usuario`, `evento_auditoria`.
+  - columnas/constraints de drift: `ano_escolar.fecha_inicio_planificacion`, `asistencia_clase.registrado_por_usuario_id`.
+- Objetivo operativo: bootstrap reproducible de una BD nueva sin depender de ejecuciones manuales en Supabase.
+
+### Actualización técnica reciente (REQ-06 + REQ-08 asistencia)
+
+- `GuardarAsistenciaClase` dejó el anti-patrón `DELETE + INSERT` de `registro_asistencia` y ahora usa conciliación in-place por `alumnoId`:
+  - actualiza existentes, elimina huérfanos (`orphanRemoval`) y agrega solo nuevos.
+- `AsistenciaClase` expone colección administrada de `registros` con:
+  - `@OneToMany(mappedBy = "asistenciaClase", cascade = CascadeType.ALL, orphanRemoval = true)`.
+- Cierre temporal estricto por rol:
+  - `PROFESOR`: solo puede guardar/editar cuando `fecha == hoy` y dentro de ventana `[horaInicio-15m, horaFin+15m]`.
+  - `ADMIN`: bypass de cierre temporal y ownership de bloque para gestión excepcional.
+- Nuevo código de error de negocio: `ASISTENCIA_CERRADA` (`400`) para violaciones de ventana temporal en profesor.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -244,7 +263,7 @@ Clase: `ApiErrorResponse`
     ├── application-dev.yml
     ├── application-prod.yml
     ├── messages_es.properties
-    └── db/migration          # migraciones Flyway versionadas en repo: V1..V22
+    └── db/migration          # migraciones Flyway versionadas en repo: V1..V23
 ```
 
 ### TODAS las clases por paquete
@@ -697,6 +716,7 @@ Relaciones:
 
 - `@ManyToOne` -> `BloqueHorario`
 - `@ManyToOne` -> `Usuario` (`registradoPor`, lazy)
+- `@OneToMany` -> `RegistroAsistencia` (`cascade = ALL`, `orphanRemoval = true`)
 
 ### `SesionUsuario` (`sesion_usuario`)
 
@@ -815,6 +835,7 @@ seccion_catalogo 1---* curso (por letra)
 20. `V20__migracion_uuid_nativo.sql` *(aplicada en BD, no versionada en este repo)*
 21. `V21__registro_sesiones_y_trazabilidad_asistencia.sql`
 22. `V22__audit_trail_operaciones.sql`
+23. `V23__consolidacion_esquema_faltante.sql`
 
 ### Qué hace cada migración
 
@@ -842,16 +863,14 @@ seccion_catalogo 1---* curso (por letra)
 | `V20` | Migración global a UUID nativo en BD (`id`/FKs) para entidades de negocio |
 | `V21` | Migración marcador (DDL ejecutado en Supabase): `sesion_usuario` + `asistencia_clase.registrado_por_usuario_id` + índices de trazabilidad |
 | `V22` | Migración marcador (DDL ejecutado en Supabase): `evento_auditoria` + FK a `usuario` + índices BTREE/GIN |
+| `V23` | Consolidación idempotente de drift: crea tablas faltantes históricas y agrega `ano_escolar.fecha_inicio_planificacion` + FK/índice de `asistencia_clase.registrado_por_usuario_id` |
 
 ### Estado resultante del esquema (según migraciones + código)
 
 - Modelo oficial en código y queries usa: `usuario`, `sesion_usuario`, `evento_auditoria`, `apoderado`, `apoderado_alumno`, `ano_escolar`, `grado`, `materia`, `profesor`, `profesor_materia`, `curso`, `seccion_catalogo`, `malla_curricular`, `alumno`, `matricula`, `bloque_horario`, `asistencia_clase`, `registro_asistencia`.
 - `apoderado_alumno` incorpora columna `vinculo` en el modelo actual (REQ-04) y es tratada como enum `VinculoApoderado` en JPA.
 - IDs/FKs operativos en modelo actual: `UUID` (alineado con V20).
-- Riesgo de drift:
-  - `ano_escolar.fecha_inicio_planificacion` requerido por código pero no aparece en `V3`.
-  - `alumno` no está versionado explícitamente en repo (V7/V8 placeholders).
-  - `bloque_horario` existe en Supabase pero no está creada por migración Flyway versionada en el repo.
+- Drift histórico mitigado por `V23` para bootstrap en ambientes limpios.
 
 ### Convenciones para nuevas migraciones
 
@@ -865,7 +884,7 @@ Convenciones observadas:
 Recomendación alineada al proyecto:
 
 1. No editar migraciones históricas.
-2. Crear nueva `V23+` para cualquier ajuste de esquema (V22 ya versionada en repo).
+2. Crear nueva `V24+` para cualquier ajuste de esquema (V23 ya versionada en repo).
 3. Incluir `ALTER` explícito para cerrar drift (`ano_escolar`, `alumno`) si existe.
 
 ---
@@ -1012,7 +1031,9 @@ Implementación actual:
 
 - En `ProfesorHorarioController`, si el rol autenticado es `PROFESOR`, solo puede consultar su propio `profesorId`.
 - Si intenta consultar otro `profesorId`, responde `403` (`AccessDeniedException` -> `ACCESS_DENIED`).
-- En `AsistenciaController`, el profesor autenticado solo puede registrar/consultar asistencia de bloques donde está asignado como docente.
+- En `AsistenciaController`:
+  - `PROFESOR` solo puede registrar/consultar asistencia de bloques donde está asignado y con cierre temporal estricto.
+  - `ADMIN` puede registrar/editar asistencia sin restricción de ventana horaria para gestión excepcional.
 - En `ApoderadoPortalController`, cada consulta valida vínculo `apoderadoId`->`alumnoId` antes de exponer asistencia o resumen.
 - En `JornadaController` (`GET /api/cursos/{cursoId}/jornada`), si el rol es `APODERADO` valida que tenga al menos un alumno con matrícula `ACTIVA` en ese curso.
 
@@ -1144,7 +1165,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `POST /api/asistencia/clase` | Registra o edita asistencia de un bloque CLASE para una fecha no futura y válida del año escolar; ventana ±15 min solo cuando la fecha es hoy | `PROFESOR` (ownership por bloque) | Body | `GuardarAsistenciaRequest {bloqueHorarioId,fecha,registros[]}` | `AsistenciaClaseResponse` (`201 Created`) | `GuardarAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `POST /api/asistencia/clase` | Registra o edita asistencia de un bloque CLASE. `PROFESOR`: cierre estricto (`fecha==hoy` + ventana ±15 min). `ADMIN`: bypass temporal para gestión excepcional | `PROFESOR`,`ADMIN` | Body | `GuardarAsistenciaRequest {bloqueHorarioId,fecha,registros[]}` | `AsistenciaClaseResponse` (`201 Created`) | `GuardarAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `ASISTENCIA_CERRADA`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/asistencia/clase?bloqueHorarioId=...&fecha=...` | Obtiene asistencia registrada para un bloque y fecha | `PROFESOR` (ownership por bloque) | Query `bloqueHorarioId`,`fecha` | - | `AsistenciaClaseResponse` | `ObtenerAsistenciaClase` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
 
 ### Dominio: Jornada
@@ -1171,24 +1192,36 @@ Implementación actual:
 
 ### `com.schoolmate.api.usecase.asistencia.GuardarAsistenciaClase`
 
-- Función: registrar o editar asistencia de una clase para una fecha no futura del año escolar del bloque.
+- Función: registrar o editar asistencia de una clase con reglas temporales por rol.
 - Repositorios/dependencias:
   - `BloqueHorarioRepository`, `MatriculaRepository`, `AsistenciaClaseRepository`, `RegistroAsistenciaRepository`, `UsuarioRepository`, `ClockProvider`
-- Validaciones:
+- Firma actual:
+  - `execute(GuardarAsistenciaRequest request, UUID profesorId, UUID usuarioId, Rol rolUsuario)`
+- Validaciones generales:
   - bloque existe y es tipo `CLASE`
-  - fecha no puede ser futura
   - no permite sábados ni domingos
   - fecha debe corresponder al `diaSemana` del bloque
   - el año escolar del curso no puede estar `CERRADO`
   - la fecha debe estar dentro de `[fechaInicio, fechaFin]` del año escolar
-  - ownership: bloque debe pertenecer al profesor autenticado
-  - ventana horaria permitida (`horaInicio-15min` a `horaFin+15min`) solo cuando `fechaRequest == hoy`
   - todos los alumnos del request deben estar con matrícula `ACTIVA` en el curso
   - no se aceptan alumnos duplicados en el request
+- Reglas por rol:
+  - `PROFESOR`:
+    - `fechaRequest` debe ser exactamente `clockProvider.today()`
+    - hora actual debe estar dentro de `[horaInicio-15min, horaFin+15min]`
+    - si falla cualquiera de ambas, lanza `ApiException(ErrorCode.ASISTENCIA_CERRADA, ...)`
+    - ownership: el bloque debe pertenecer al profesor autenticado
+  - `ADMIN`:
+    - bypass de cierre temporal (puede registrar/editar fuera de la ventana)
+    - bypass de ownership de bloque para gestión excepcional
 - Comportamiento de persistencia:
-  - si no existe asistencia para `(bloque,fechaRequest)`, crea `asistencia_clase` + registros
-  - si ya existe, actualiza `updatedAt`, borra registros previos y vuelve a insertar los registros enviados
-  - siempre setea `registrado_por_usuario_id` con el usuario autenticado que registra/edita
+  - si no existe asistencia para `(bloque,fechaRequest)`, crea `asistencia_clase`
+  - si ya existe, actualiza metadata (`updatedAt`, `registradoPor`)
+  - conciliación in-place de `registro_asistencia` por `alumnoId`:
+    - elimina huérfanos de la colección (`orphanRemoval`)
+    - actualiza existentes (`estado`, `observacion`, `updatedAt`)
+    - inserta solo nuevos alumnos
+  - preserva UUID de registros existentes (sin `DELETE + INSERT` masivo)
 - Manejo de concurrencia:
   - ante carrera al crear cabecera (`asistencia_clase`), recupera la existente y continúa como edición
 - `@Transactional`: sí.
@@ -1634,7 +1667,7 @@ Implementación actual:
 | `EventoAuditoriaRepository` | `EventoAuditoria` | `findByFiltros` (paginado por `createdAt DESC`) | JPQL con filtros opcionales por `usuarioId`, `metodoHttp`, `endpoint LIKE`, `desde/hasta` | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |
 | `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | `findByApoderadoIdWithAlumno` (JPQL con `JOIN FETCH`) | no |
-| `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId`, `findByAlumnoIdAndFechaEntre`, `countByAlumnoIdAndEstadoAndAnoEscolarId` | `DELETE` por `asistenciaClase.id`; JPQL para mensual por fecha y resumen por año escolar vía joins `asistencia_clase -> bloque_horario -> curso` | no |
+| `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId` (legacy, no usado por `GuardarAsistenciaClase` actual), `findByAlumnoIdAndFechaEntre`, `countByAlumnoIdAndEstadoAndAnoEscolarId` | `DELETE` por `asistenciaClase.id`; JPQL para mensual por fecha y resumen por año escolar vía joins `asistencia_clase -> bloque_horario -> curso` | no |
 | `SeccionCatalogoRepository` | `SeccionCatalogo` | `findByActivoTrueOrderByOrdenAsc` | no | no |
 | `UsuarioRepository` | `Usuario` | `findByEmail`, `findByRut`, `findByApoderadoId`, `findByProfesorId`, `findByRefreshToken`, `existsByEmail`, `existsByRut`, `existsByProfesorId` | no | no |
 
@@ -1859,12 +1892,13 @@ Para alumnos:
   - si el alumno ya tiene vínculo, responde conflicto (`409`).
   - `GET /api/apoderados/buscar-por-rut` retorna alumnos vinculados; incluye `cursoNombre` cuando hay matrícula activa.
 - En asistencia (`GuardarAsistenciaClase`):
-  - se permite registrar asistencia para fechas pasadas válidas (ya no solo `hoy`)
-  - se bloquean fechas futuras y fines de semana
+  - `PROFESOR`: cierre estricto (`fecha == hoy` + ventana ±15 min), error `ASISTENCIA_CERRADA` al incumplir.
+  - `ADMIN`: bypass de cierre temporal y ownership para gestión excepcional.
+  - se bloquean fines de semana
   - la fecha debe coincidir con el `diaSemana` del bloque
   - la fecha debe estar dentro del rango del año escolar del curso
   - no se permite registrar asistencia si el año escolar del curso está `CERRADO`
-  - la ventana horaria ±15 min se aplica solo cuando la fecha es `hoy`
+  - persistencia de registros por conciliación in-place (actualiza existentes, elimina huérfanos e inserta nuevos)
 - Portal apoderado:
   - ownership estricto por vínculo `apoderado_alumno`.
   - asistencia mensual marca día `PARCIAL` cuando hay bloques presentes y ausentes en la misma fecha.
@@ -2063,6 +2097,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
 - Revalidación HTTP en GET con `ETag` + `If-None-Match` (`304`) y políticas `Cache-Control` por endpoint.
 - Auditoría automática de mutaciones HTTP con persistencia desacoplada (AOP + `REQUIRES_NEW`) para trazabilidad operativa.
+- Guardado de asistencia refactorizado a merge in-place de `registro_asistencia` (sin `DELETE + INSERT` masivo), preservando UUIDs y trazabilidad.
 
 ---
 
@@ -2164,13 +2199,8 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 ### Hallazgos críticos
 
-1. Drift esquema/código en `ano_escolar`:
-- Entidad y DTO usan `fecha_inicio_planificacion`.
-- `V3` no crea esa columna y sí crea `activo` que no se usa en entidad.
-
-2. `alumno` fuera de versionado explícito:
-- `V7` y `V8` son placeholders sin DDL/DML real.
-- Dificulta bootstrap reproducible de una BD limpia solo con el repositorio.
+1. No hay hallazgos críticos nuevos abiertos tras `V23` para bootstrap de esquema base.
+2. Riesgo operativo residual: asegurar ejecución de `V23` en todos los entornos no productivos para eliminar diferencias históricas.
 
 ### Hallazgos importantes
 
@@ -2184,5 +2214,5 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 ### Impacto operativo
 
-- Riesgo de fallas de arranque en entornos nuevos por desalineación de esquema.
+- `V23` reduce de forma significativa el riesgo de fallas de arranque en entornos nuevos por desalineación de esquema.
 - Riesgo de seguridad por exposición de secretos en repositorio.
