@@ -15,13 +15,15 @@ public interface SesionUsuarioRepository extends JpaRepository<SesionUsuario, UU
     @Query("""
         SELECT s FROM SesionUsuario s
         WHERE s.usuario.id = :usuarioId
-        AND (:desde IS NULL OR s.createdAt >= :desde)
-        AND (:hasta IS NULL OR s.createdAt < :hasta)
+        AND (:aplicarDesde = false OR s.createdAt >= :desde)
+        AND (:aplicarHasta = false OR s.createdAt < :hasta)
         ORDER BY s.createdAt DESC
         """)
     Page<SesionUsuario> findByUsuarioIdAndFechas(
             @Param("usuarioId") UUID usuarioId,
+            @Param("aplicarDesde") boolean aplicarDesde,
             @Param("desde") LocalDateTime desde,
+            @Param("aplicarHasta") boolean aplicarHasta,
             @Param("hasta") LocalDateTime hasta,
             Pageable pageable
     );

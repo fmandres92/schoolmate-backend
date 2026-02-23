@@ -45,6 +45,9 @@ import java.util.Set;
 @PreAuthorize("hasRole('ADMIN')")
 public class ProfesorController {
 
+    private static final LocalDateTime FECHA_DESDE_SIN_FILTRO = LocalDateTime.of(1970, 1, 1, 0, 0);
+    private static final LocalDateTime FECHA_HASTA_SIN_FILTRO = LocalDateTime.of(3000, 1, 1, 0, 0);
+
     private final ProfesorRepository profesorRepository;
     private final MateriaRepository materiaRepository;
     private final AnoEscolarRepository anoEscolarRepository;
@@ -139,11 +142,15 @@ public class ProfesorController {
 
         LocalDateTime desdeDateTime = desde != null ? desde.atStartOfDay() : null;
         LocalDateTime hastaDateTime = hasta != null ? hasta.plusDays(1).atStartOfDay() : null;
+        boolean aplicarDesde = desdeDateTime != null;
+        boolean aplicarHasta = hastaDateTime != null;
 
         var sesionesPage = sesionUsuarioRepository.findByUsuarioIdAndFechas(
                 usuario.getId(),
-                desdeDateTime,
-                hastaDateTime,
+                aplicarDesde,
+                aplicarDesde ? desdeDateTime : FECHA_DESDE_SIN_FILTRO,
+                aplicarHasta,
+                aplicarHasta ? hastaDateTime : FECHA_HASTA_SIN_FILTRO,
                 PageRequest.of(page, size)
         );
 

@@ -178,6 +178,9 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - Ajuste en consulta de auditoría (`GET /api/auditoria`) para PostgreSQL:
   - se reemplazó estrategia `:param IS NULL` por flags booleanos `aplicarFiltro`.
   - evita errores de tipado SQL (`42P18`, `varchar ~~ bytea`) con filtros opcionales.
+- Ajuste equivalente en sesiones de profesor (`GET /api/profesores/{profesorId}/sesiones`):
+  - `SesionUsuarioRepository.findByUsuarioIdAndFechas` usa flags `aplicarDesde/aplicarHasta`.
+  - elimina errores SQL de tipado con filtros opcionales de fecha (`42P18`).
 
 ---
 
@@ -1802,7 +1805,7 @@ Implementación actual:
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
 | `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, `countByAnoEscolarIdAndEstado` | `countActivasByCursoIds` | no |
 | `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id`, `countByActivoTrue` | no | no |
-| `SesionUsuarioRepository` | `SesionUsuario` | `findByUsuarioIdAndFechas` (paginado, orden desc por `createdAt`) | JPQL con filtros opcionales por rango (`desde`/`hasta`) | no |
+| `SesionUsuarioRepository` | `SesionUsuario` | `findByUsuarioIdAndFechas` (paginado, orden desc por `createdAt`) | JPQL con flags booleanos (`aplicarDesde/aplicarHasta`) para filtros opcionales por rango (`desde`/`hasta`) y tipado estable en PostgreSQL | no |
 | `EventoAuditoriaRepository` | `EventoAuditoria` | `findByFiltros` (paginado por `createdAt DESC`) | JPQL con flags booleanos (`aplicarFiltro`) para filtros opcionales por `usuarioId`, `metodoHttp`, `endpoint LIKE`, `desde/hasta` (evita problemas de tipado con parámetros null en PostgreSQL) | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |
 | `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | `findByApoderadoIdWithAlumno` (JPQL con `JOIN FETCH`) | no |
