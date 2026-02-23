@@ -25,6 +25,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuditoriaController {
 
+    private static final UUID UUID_SIN_FILTRO = UUID.fromString("00000000-0000-0000-0000-000000000000");
+    private static final String STRING_SIN_FILTRO = "__SIN_FILTRO__";
+    private static final LocalDateTime FECHA_DESDE_SIN_FILTRO = LocalDateTime.of(1970, 1, 1, 0, 0);
+    private static final LocalDateTime FECHA_HASTA_SIN_FILTRO = LocalDateTime.of(3000, 1, 1, 0, 0);
+
     private final EventoAuditoriaRepository auditoriaRepository;
     private final ObjectMapper objectMapper;
 
@@ -41,14 +46,26 @@ public class AuditoriaController {
     ) {
         LocalDateTime desdeDateTime = desde != null ? desde.atStartOfDay() : null;
         LocalDateTime hastaDateTime = hasta != null ? hasta.plusDays(1).atStartOfDay() : null;
-        String metodoNormalizado = metodoHttp != null ? metodoHttp.toUpperCase() : null;
+        String metodoNormalizado = metodoHttp != null && !metodoHttp.isBlank() ? metodoHttp.toUpperCase() : null;
+        String endpointPattern = endpoint != null && !endpoint.isBlank() ? "%" + endpoint.trim() + "%" : null;
+
+        boolean aplicarUsuario = usuarioId != null;
+        boolean aplicarMetodo = metodoNormalizado != null;
+        boolean aplicarEndpoint = endpointPattern != null;
+        boolean aplicarDesde = desdeDateTime != null;
+        boolean aplicarHasta = hastaDateTime != null;
 
         var resultPage = auditoriaRepository.findByFiltros(
-                usuarioId,
-                metodoNormalizado,
-                endpoint,
-                desdeDateTime,
-                hastaDateTime,
+                aplicarUsuario,
+                aplicarUsuario ? usuarioId : UUID_SIN_FILTRO,
+                aplicarMetodo,
+                aplicarMetodo ? metodoNormalizado : STRING_SIN_FILTRO,
+                aplicarEndpoint,
+                aplicarEndpoint ? endpointPattern : STRING_SIN_FILTRO,
+                aplicarDesde,
+                aplicarDesde ? desdeDateTime : FECHA_DESDE_SIN_FILTRO,
+                aplicarHasta,
+                aplicarHasta ? hastaDateTime : FECHA_HASTA_SIN_FILTRO,
                 PageRequest.of(page, size)
         );
 

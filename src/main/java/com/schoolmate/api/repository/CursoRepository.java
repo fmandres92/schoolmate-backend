@@ -12,6 +12,7 @@ public interface CursoRepository extends JpaRepository<Curso, UUID> {
     List<Curso> findByAnoEscolarIdOrderByNombreAsc(UUID anoEscolarId);
     List<Curso> findByAnoEscolarIdAndGradoIdOrderByLetraAsc(UUID anoEscolarId, UUID gradoId);
     List<Curso> findByActivoTrueAndAnoEscolarIdOrderByNombreAsc(UUID anoEscolarId);
+    long countByAnoEscolarIdAndActivoTrue(UUID anoEscolarId);
 
     @EntityGraph(attributePaths = {"grado", "anoEscolar"})
     @Query("""

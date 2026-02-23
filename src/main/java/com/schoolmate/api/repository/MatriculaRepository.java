@@ -43,6 +43,8 @@ public interface MatriculaRepository extends JpaRepository<Matricula, UUID> {
 
     long countByCursoIdAndEstado(UUID cursoId, EstadoMatricula estado);
 
+    long countByAnoEscolarIdAndEstado(UUID anoEscolarId, EstadoMatricula estado);
+
     boolean existsByCursoIdAndEstadoAndAlumnoIdIn(UUID cursoId, EstadoMatricula estado, Set<UUID> alumnoIds);
 
     @Query("""

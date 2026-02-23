@@ -14,18 +14,23 @@ public interface EventoAuditoriaRepository extends JpaRepository<EventoAuditoria
 
     @Query("""
         SELECT e FROM EventoAuditoria e
-        WHERE (:usuarioId IS NULL OR e.usuario.id = :usuarioId)
-        AND (:metodoHttp IS NULL OR e.metodoHttp = :metodoHttp)
-        AND (:endpoint IS NULL OR e.endpoint LIKE CONCAT('%', :endpoint, '%'))
-        AND (:desde IS NULL OR e.createdAt >= :desde)
-        AND (:hasta IS NULL OR e.createdAt < :hasta)
+        WHERE (:aplicarUsuario = false OR e.usuario.id = :usuarioId)
+        AND (:aplicarMetodo = false OR e.metodoHttp = :metodoHttp)
+        AND (:aplicarEndpoint = false OR e.endpoint LIKE :endpointPattern)
+        AND (:aplicarDesde = false OR e.createdAt >= :desde)
+        AND (:aplicarHasta = false OR e.createdAt < :hasta)
         ORDER BY e.createdAt DESC
         """)
     Page<EventoAuditoria> findByFiltros(
+            @Param("aplicarUsuario") boolean aplicarUsuario,
             @Param("usuarioId") UUID usuarioId,
+            @Param("aplicarMetodo") boolean aplicarMetodo,
             @Param("metodoHttp") String metodoHttp,
-            @Param("endpoint") String endpoint,
+            @Param("aplicarEndpoint") boolean aplicarEndpoint,
+            @Param("endpointPattern") String endpointPattern,
+            @Param("aplicarDesde") boolean aplicarDesde,
             @Param("desde") LocalDateTime desde,
+            @Param("aplicarHasta") boolean aplicarHasta,
             @Param("hasta") LocalDateTime hasta,
             Pageable pageable
     );

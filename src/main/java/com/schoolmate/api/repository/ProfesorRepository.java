@@ -15,4 +15,5 @@ public interface ProfesorRepository extends JpaRepository<Profesor, UUID> {
     boolean existsByRutAndIdNot(String rut, UUID id);
     boolean existsByEmailAndIdNot(String email, UUID id);
     boolean existsByTelefonoAndIdNot(String telefono, UUID id);
+    long countByActivoTrue();
 }

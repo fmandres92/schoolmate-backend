@@ -48,7 +48,7 @@ Fuente: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-a
 | Matrículas | ✅ operativo |
 | Jornada escolar por curso | ✅ operativo |
 | Ownership por profesor/apoderado | ⚠️ parcial (profesor + apoderado en dominios acotados) |
-| Asistencia, reportes, dashboards | ⚠️ parcial (asistencia operativa + consulta apoderado; reportes/dashboards pendientes) |
+| Asistencia, reportes, dashboards | ⚠️ parcial (asistencia operativa + dashboard admin base; reportes y dashboards avanzados pendientes) |
 
 ### Actualización técnica reciente (V19 + V20)
 
@@ -164,6 +164,21 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - Caching:
   - `CacheControlInterceptor` define `Cache-Control: max-age=120` para `/api/dias-no-lectivos` (recurso de configuración de baja frecuencia de cambio).
 
+### Actualización técnica reciente (REQ-09 dashboard admin base + fix auditoría)
+
+- Se incorporó endpoint de KPIs base para administración:
+  - `GET /api/dashboard/admin/resumen` (`ADMIN`).
+  - response `DashboardAdminResponse` con `totalAlumnos`, `totalCursos`, `totalProfesores`.
+  - lectura por año escolar resuelto vía `@AnoEscolarActivo`.
+- Nuevo caso de uso `ObtenerDashboardAdmin`:
+  - conteo en BD (sin cargar entidades en memoria) usando:
+    - `MatriculaRepository.countByAnoEscolarIdAndEstado(..., ACTIVA)`
+    - `CursoRepository.countByAnoEscolarIdAndActivoTrue(...)`
+    - `ProfesorRepository.countByActivoTrue()`
+- Ajuste en consulta de auditoría (`GET /api/auditoria`) para PostgreSQL:
+  - se reemplazó estrategia `:param IS NULL` por flags booleanos `aplicarFiltro`.
+  - evita errores de tipado SQL (`42P18`, `varchar ~~ bytea`) con filtros opcionales.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -273,6 +288,7 @@ Clase: `ApiErrorResponse`
 │   ├── usecase/alumno        # casos de uso de creación/enlace alumno-apoderado
 │   ├── usecase/auth          # caso de uso login
 │   ├── usecase/calendario    # casos de uso de días no lectivos
+│   ├── usecase/dashboard     # casos de uso de KPIs dashboard admin
 │   ├── usecase/jornada       # casos de uso jornada escolar
 │   ├── usecase/matricula     # casos de uso matrícula
 │   └── usecase/profesor      # casos de uso de profesor
@@ -313,6 +329,7 @@ Clase: `ApiErrorResponse`
   - `AuthController`
   - `CursoController`
   - `DevToolsController` (solo perfil `dev`)
+  - `DashboardController`
   - `DiaNoLectivoController`
   - `AsistenciaController`
   - `GradoController`
@@ -369,6 +386,7 @@ Clase: `ApiErrorResponse`
   - `ClaseHoyResponse`
   - `ClasesHoyResponse`
   - `ConflictoHorarioResponse`
+  - `DashboardAdminResponse`
   - `DiaNoLectivoResponse`
   - `EstadoClaseHoy`
   - `AuthResponse`
@@ -463,6 +481,8 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.usecase.calendario`
   - `CrearDiasNoLectivos`
   - `EliminarDiaNoLectivo`
+- `com.schoolmate.api.usecase.dashboard`
+  - `ObtenerDashboardAdmin`
 - `com.schoolmate.api.usecase.alumno`
   - `CrearAlumnoConApoderado`
 - `com.schoolmate.api.usecase.asistencia`
@@ -1114,6 +1134,12 @@ Implementación actual:
 |---|---|---|---|---|---|---|---|
 | `GET /api/auditoria` | Consulta paginada de eventos auditados con filtros opcionales por usuario, método, endpoint y rango de fechas | `ADMIN` | Query opcional `usuarioId,metodoHttp,endpoint,desde,hasta,page,size` | - | `EventoAuditoriaPageResponse` | directo repository | `ACCESS_DENIED` |
 
+### Dominio: Dashboard
+
+| Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
+|---|---|---|---|---|---|---|---|
+| `GET /api/dashboard/admin/resumen` | KPIs administrativos base del año escolar activo/resuelto (`alumnos activos`, `cursos activos`, `profesores activos`) | `ADMIN` | Header `X-Ano-Escolar-Id` (resuelto por `@AnoEscolarActivo`) | - | `DashboardAdminResponse` | `ObtenerDashboardAdmin` | `ACCESS_DENIED`, `VALIDATION_FAILED` |
+
 ### Dominio: Apoderados (Admin)
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
@@ -1349,6 +1375,19 @@ Implementación actual:
 - Errores:
   - `ApiException(SESSION_REVOKED)`
 - `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.dashboard.ObtenerDashboardAdmin`
+
+- Función: consolidar KPIs administrativos base para el dashboard.
+- Repositorios/dependencias:
+  - `MatriculaRepository`, `CursoRepository`, `ProfesorRepository`
+- Cálculo:
+  - `totalAlumnos`: conteo de matrículas `ACTIVA` para el `anoEscolarId` consultado.
+  - `totalCursos`: conteo de cursos `activo=true` para el `anoEscolarId`.
+  - `totalProfesores`: conteo global de profesores `activo=true`.
+- Salida:
+  - `DashboardAdminResponse {totalAlumnos,totalCursos,totalProfesores}`.
+- `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.calendario.CrearDiasNoLectivos`
 
@@ -1756,15 +1795,15 @@ Implementación actual:
 | `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual`, `findActivoByFecha` (default) | no | no |
 | `AsistenciaClaseRepository` | `AsistenciaClase` | `findByBloqueHorarioIdAndFecha`, `existsByBloqueHorarioIdAndFecha` | no | no |
 | `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findColisionesProfesorConCursoYMateria`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolarConProfesor`, `findClasesProfesorEnDia`, `existsBloqueActivoProfesorEnCurso`, `findDetalleById`, `findActivosByCursoIdWithMateriaAndProfesorOrderByDiaSemanaAscNumeroBloqueAsc`, `findActivosByCursoIdAndDiaSemanaWithMateriaAndProfesorOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor` | no |
-| `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc` | `findLetrasUsadasByGradoIdAndAnoEscolarId`, `findByIdWithGradoAndAnoEscolar`, `findByAnoEscolarIdOrderByNombreAscWithRelaciones`, `findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones`, `findAllOrderByNombreAscWithRelaciones` | no |
+| `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc`, `countByAnoEscolarIdAndActivoTrue` | `findLetrasUsadasByGradoIdAndAnoEscolarId`, `findByIdWithGradoAndAnoEscolar`, `findByAnoEscolarIdOrderByNombreAscWithRelaciones`, `findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones`, `findAllOrderByNombreAscWithRelaciones` | no |
 | `DiaNoLectivoRepository` | `DiaNoLectivo` | `existsByAnoEscolarIdAndFecha`, `findByAnoEscolarIdAndFecha`, `findByAnoEscolarIdOrderByFechaAsc`, `findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc` | no | no |
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
 | `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | `findActivaByGradoIdAndAnoEscolarIdWithMateria` (`JOIN FETCH materia`) | no |
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
-| `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, etc. | `countActivasByCursoIds` | no |
-| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id` | no | no |
+| `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, `countByAnoEscolarIdAndEstado` | `countActivasByCursoIds` | no |
+| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id`, `countByActivoTrue` | no | no |
 | `SesionUsuarioRepository` | `SesionUsuario` | `findByUsuarioIdAndFechas` (paginado, orden desc por `createdAt`) | JPQL con filtros opcionales por rango (`desde`/`hasta`) | no |
-| `EventoAuditoriaRepository` | `EventoAuditoria` | `findByFiltros` (paginado por `createdAt DESC`) | JPQL con filtros opcionales por `usuarioId`, `metodoHttp`, `endpoint LIKE`, `desde/hasta` | no |
+| `EventoAuditoriaRepository` | `EventoAuditoria` | `findByFiltros` (paginado por `createdAt DESC`) | JPQL con flags booleanos (`aplicarFiltro`) para filtros opcionales por `usuarioId`, `metodoHttp`, `endpoint LIKE`, `desde/hasta` (evita problemas de tipado con parámetros null en PostgreSQL) | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |
 | `ApoderadoAlumnoRepository` | `ApoderadoAlumno` | `existsByIdApoderadoIdAndIdAlumnoId`, `findByIdApoderadoId`, `findByIdAlumnoId`, wrappers `findByApoderadoId/findByAlumnoId`, `existsByAlumnoId`, `existsByApoderadoIdAndAlumnoId` | `findByApoderadoIdWithAlumno` (JPQL con `JOIN FETCH`) | no |
 | `RegistroAsistenciaRepository` | `RegistroAsistencia` | `findByAsistenciaClaseId` (con `@EntityGraph alumno`), `deleteByAsistenciaClaseId` (legacy, no usado por `GuardarAsistenciaClase` actual), `findByAlumnoIdAndFechaEntre`, `countByAlumnoIdAndEstadoAndAnoEscolarId` | `DELETE` por `asistenciaClase.id`; JPQL para mensual por fecha y resumen por año escolar vía joins `asistencia_clase -> bloque_horario -> curso` | no |
@@ -1855,6 +1894,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `MateriasDisponiblesResponse` | `bloqueId,bloqueDuracionMinutos,materias[]` | `@Data @Builder` |
 | `AsignacionMateriaResumenResponse` | resumen curso + `materias[]` + bloques asignados por materia | `@Data @Builder` |
 | `ConflictoHorarioResponse` | `cursoNombre,materiaNombre,horaInicio,horaFin,bloqueId` | `@Data @Builder` |
+| `DashboardAdminResponse` | `totalAlumnos,totalCursos,totalProfesores` | `@Data @Builder` |
 | `EstadoClaseHoy` | `PENDIENTE,DISPONIBLE,EXPIRADA` | `enum` |
 | `ClaseHoyResponse` | `bloqueId,numeroBloque,horaInicio,horaFin,cursoId,cursoNombre,materiaId,materiaNombre,materiaIcono,cantidadAlumnos,estado,asistenciaTomada` | `@Data @Builder` |
 | `ClasesHoyResponse` | `fecha,diaSemana,nombreDia,diaNoLectivo?,clases[]` | `@Data @Builder` |
@@ -2245,20 +2285,20 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 | Ownership por rol no-admin | ⚠️ parcial | profesor (horario, asistencia, matrículas por curso) + apoderado (portal y lectura de jornada por curso) |
 | Asistencia | ✅ parcial | registro/consulta por profesor + consulta mensual/resumen por apoderado |
 | Reportes | ❌ | no existe |
-| Dashboards | ❌ | no existe |
+| Dashboards | ✅ parcial | `GET /api/dashboard/admin/resumen` (KPIs base administrativos) |
 
 ### Qué falta para que frontend deje DataContext completamente
 
 - Completar la segunda fase de migración de `anoEscolarId`: eliminar parámetros/body legacy cuando frontend use 100% `X-Ano-Escolar-Id`.
 - Completar ownership en backend para más dominios (`principal.profesorId/apoderadoId`) fuera de los ya cubiertos.
 - Extender capacidades de `APODERADO` a más vistas académicas (más allá de asistencia y jornada).
-- Endpoints de agregación operacional (dashboard, indicadores) si frontend hoy los calcula localmente.
-- Completar módulos pendientes (reportes/dashboards) que normalmente DataContext simula.
+- Expandir dashboard con KPIs adicionales (asistencia, riesgo, tendencia temporal, cortes por grado/curso).
+- Completar módulos pendientes (reportes y dashboard avanzado) que normalmente DataContext simula.
 
 ### Próximos módulos lógicos
 
 1. Reportes (académico, matrícula, carga docente).
-2. Dashboards (KPIs por año/curso/docente).
+2. Dashboards avanzados (KPIs por año/curso/docente + tendencias).
 3. Asistencia avanzada (justificaciones, alertas, historiales comparativos).
 
 ---
