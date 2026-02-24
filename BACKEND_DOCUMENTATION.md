@@ -72,7 +72,8 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 
 - `spring.jpa.open-in-view=false` en `application.yml` para evitar lazy loading implícito durante serialización de respuestas.
 - Endpoints GET de lectura directa a repository marcados con `@Transactional(readOnly = true)` en:
-  - `GradoController`, `MateriaController` (`listar`,`obtener`), `CursoController` (`listar`,`obtener`), `ProfesorController` (`listar`,`obtener`), `AlumnoController` (`listar`,`obtener`,`buscarPorRut`), `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`) y `MatriculaController` (`porCurso`,`porAlumno`).
+  - `GradoController`, `MateriaController` (`listar`,`obtener`), `ProfesorController` (`listar`,`obtener`), `AlumnoController` (`listar`,`obtener`,`buscarPorRut`), `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`) y `MatriculaController` (`porCurso`,`porAlumno`).
+  - Nota: `CursoController` (`listar`,`obtener`) fue desacoplado a use cases de lectura (`ObtenerCursos`, `ObtenerDetalleCurso`) con `@Transactional(readOnly = true)`.
 - Fix de autenticación en `/api/auth/me`:
   - `SecurityConfig` limita públicos a `/api/auth/login` y `/api/auth/registro`.
   - `/api/auth/me` queda autenticado.
@@ -217,8 +218,8 @@ Ejemplos reales:
 - CRUD directo:
   - `/api/materias` en `MateriaController`.
   - `/api/profesores` en `ProfesorController`.
-  - `/api/cursos` en `CursoController` (aunque con lógica de letra automática, sigue en controller).
 - Use case explícito:
+  - `/api/cursos` en `CursoController` (`ObtenerCursos`, `ObtenerDetalleCurso`, `CrearCurso`, `ActualizarCurso`).
   - `LoginUsuario` para autenticación JWT.
   - `MatricularAlumno` y `CambiarEstadoMatricula` para reglas de matrícula.
   - `GuardarJornadaDia`, `CopiarJornadaDia`, `EliminarJornadaDia` y `ObtenerJornadaCurso` para reglas de jornada.
@@ -484,6 +485,11 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.usecase.calendario`
   - `CrearDiasNoLectivos`
   - `EliminarDiaNoLectivo`
+- `com.schoolmate.api.usecase.curso`
+  - `ActualizarCurso`
+  - `CrearCurso`
+  - `ObtenerCursos`
+  - `ObtenerDetalleCurso`
 - `com.schoolmate.api.usecase.dashboard`
   - `ObtenerDashboardAdmin`
 - `com.schoolmate.api.usecase.alumno`
@@ -1218,10 +1224,10 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/cursos` | Lista cursos (filtro opcional por año/grado) + matriculados (prioridad `header > query`) | `ADMIN` | Header opcional `X-Ano-Escolar-Id`; Query opcional `anoEscolarId`, `gradoId` | - | `List<CursoResponse>` | directo | - |
-| `GET /api/cursos/{id}` | Detalle enriquecido (malla + conteos) | `ADMIN` | Path `id` | - | `CursoResponse` con `materias`, `cantidadMaterias`, `totalHorasPedagogicas`, `alumnosMatriculados` | directo | `RESOURCE_NOT_FOUND` |
-| `POST /api/cursos` | Crea curso con letra automática (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `CursoRequest {gradoId,anoEscolarId?}` | `CursoResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
-| `PUT /api/cursos/{id}` | Reasigna curso (recalcula letra si cambia grado/año, prioridad `header > body`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Body | `CursoRequest` | `CursoResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE`, `VALIDATION_FAILED` |
+| `GET /api/cursos` | Lista cursos (filtro opcional por año/grado) + matriculados (prioridad `header > query`) | `ADMIN` | Header opcional `X-Ano-Escolar-Id`; Query opcional `anoEscolarId`, `gradoId` | - | `List<CursoResponse>` | `ObtenerCursos` | - |
+| `GET /api/cursos/{id}` | Detalle enriquecido (malla + conteos) | `ADMIN` | Path `id` | - | `CursoResponse` con `materias`, `cantidadMaterias`, `totalHorasPedagogicas`, `alumnosMatriculados` | `ObtenerDetalleCurso` | `RESOURCE_NOT_FOUND` |
+| `POST /api/cursos` | Crea curso con letra automática (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `CursoRequest {gradoId,anoEscolarId?}` | `CursoResponse` | `CrearCurso` | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `PUT /api/cursos/{id}` | Reasigna curso (recalcula letra si cambia grado/año, prioridad `header > body`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Body | `CursoRequest` | `CursoResponse` | `ActualizarCurso` | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE`, `VALIDATION_FAILED` |
 
 ### Dominio: Profesores
 
@@ -1377,6 +1383,66 @@ Implementación actual:
   4. genera nuevo `accessToken` JWT y retorna `AuthResponse`
 - Errores:
   - `ApiException(SESSION_REVOKED)`
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.curso.ObtenerCursos`
+
+- Función: listar cursos con filtros opcionales por año/grado y enriquecer con total de matrículas activas.
+- Repositorios/dependencias:
+  - `CursoRepository`, `MatriculaRepository`
+- Reglas:
+  - resuelve prioridad de año escolar `header > query`.
+  - si hay año+grado: consulta por ambos.
+  - si hay solo año: consulta por año.
+  - si no hay año: lista global ordenada.
+  - calcula `alumnosMatriculados` con query agregada `countActivasByCursoIds(...)`.
+- Salida:
+  - `List<CursoResponse>`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.curso.ObtenerDetalleCurso`
+
+- Función: devolver detalle enriquecido de un curso.
+- Repositorios/dependencias:
+  - `CursoRepository`, `MatriculaRepository`, `MallaCurricularRepository`
+- Reglas:
+  - carga curso con `grado` y `anoEscolar`.
+  - cuenta matrículas activas del curso.
+  - obtiene malla activa de `grado + año`.
+  - ordena materias por nombre (case-insensitive).
+  - calcula `cantidadMaterias` y `totalHorasPedagogicas`.
+- Errores:
+  - `ResourceNotFoundException("Curso no encontrado")`
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.curso.CrearCurso`
+
+- Función: crear curso con letra automática disponible.
+- Repositorios/dependencias:
+  - `CursoRepository`, `GradoRepository`, `AnoEscolarRepository`, `SeccionCatalogoRepository`, `ClockProvider`
+- Reglas:
+  - resuelve prioridad `header > body` para `anoEscolarId`.
+  - valida que exista `grado` y `anoEscolar`.
+  - bloquea escritura si `anoEscolar` está `CERRADO`.
+  - selecciona primera letra libre desde `seccion_catalogo` (orden ascendente).
+  - delega armado de identidad académica en `Curso.actualizarIdentidadAcademica(...)`.
+- Errores:
+  - `ResourceNotFoundException`, `ApiException(CURSO_SIN_SECCION_DISPONIBLE)`, `ApiException(VALIDATION_FAILED)`, `ApiException(BUSINESS_RULE)`
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.curso.ActualizarCurso`
+
+- Función: reasignar curso (grado/año) recalculando letra cuando cambia la asignación.
+- Repositorios/dependencias:
+  - `CursoRepository`, `GradoRepository`, `AnoEscolarRepository`, `SeccionCatalogoRepository`
+- Reglas:
+  - resuelve prioridad `header > body` para `anoEscolarId`.
+  - valida existencia de curso, grado y año.
+  - si mantiene mismo `grado + año`, conserva la letra actual.
+  - si cambia asignación, toma primera letra disponible del catálogo.
+  - actualiza identidad del curso vía `Curso.actualizarIdentidadAcademica(...)`.
+- Errores:
+  - `ResourceNotFoundException`, `ApiException(CURSO_SIN_SECCION_DISPONIBLE)`, `ApiException(VALIDATION_FAILED)`
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.dashboard.ObtenerDashboardAdmin`
@@ -1946,7 +2012,7 @@ Reglas adicionales en controller:
 
 ### Generación automática de curso (nombre + letra)
 
-`CursoController`:
+`CrearCurso` y `ActualizarCurso`:
 
 - busca letras ocupadas por `(gradoId, anoEscolarId)`.
 - toma primera letra activa disponible de `seccion_catalogo` ordenada por `orden`.
@@ -2251,7 +2317,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 ### Queries potencialmente problemáticas a escala
 
 - Filtrado por grado en alumnos (`getAlumnoIdsByMatriculaFilters`) hace parte en memoria tras consulta por año.
-- `CursoController.obtener`: calcula malla y agregados por request; puede crecer en costo si se vuelve endpoint masivo.
+- `ObtenerDetalleCurso.execute`: calcula malla y agregados por request; puede crecer en costo si se vuelve endpoint masivo.
 
 ### Optimizaciones aplicadas recientemente
 
@@ -2357,6 +2423,15 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 2. No editar `V` anteriores.
 3. Incluir constraints/índices para invariantes de negocio.
 4. Ejecutar arranque con Flyway validate/migrate.
+
+### Skills locales para agentes
+
+- Catálogo local en `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/AGENTS.md`.
+- Skills propias del repo:
+  - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/skills/spring-architecture-auditor/SKILL.md`
+  - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/skills/spring-clean-refactorer/SKILL.md`
+- Referencia de reglas de refactor para la skill ejecutora:
+  - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/skills/spring-clean-refactorer/references/architecture-rules.md`
 
 ---
 

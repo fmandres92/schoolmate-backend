@@ -1,6 +1,6 @@
 # Database Structure Inventory
 
-Generated at: `2026-02-21T13:18:01.274404-03:00`  
+Generated at: `2026-02-23T19:55:30.292505-03:00`  
 Source: live PostgreSQL catalog (`information_schema` + `pg_catalog`)  
 Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres?sslmode=require`
 

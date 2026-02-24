@@ -51,4 +51,15 @@ public class Curso {
     protected void onUpdate() {
         updatedAt = TimeContext.now();
     }
+
+    public void actualizarIdentidadAcademica(Grado grado, AnoEscolar anoEscolar, String letra) {
+        this.grado = grado;
+        this.anoEscolar = anoEscolar;
+        this.letra = letra;
+        this.nombre = formatearNombreCurso(grado.getNombre(), letra);
+    }
+
+    private String formatearNombreCurso(String nombreGrado, String letra) {
+        return nombreGrado + " " + letra;
+    }
 }

@@ -1,5 +1,5 @@
 -- Auto-generated schema snapshot from live PostgreSQL
--- Generated at: 2026-02-21T13:18:01.262757-03:00
+-- Generated at: 2026-02-23T19:55:30.275904-03:00
 
 -- Table: auth.audit_log_entries
 CREATE TABLE "auth"."audit_log_entries" (
