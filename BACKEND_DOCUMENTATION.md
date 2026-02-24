@@ -85,6 +85,8 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `CrearProfesorConUsuario` y `PUT /api/profesores/{id}` recargan profesor con `materias` (`findByIdWithMaterias`) antes del mapeo a `ProfesorResponse`.
   - `CambiarEstadoMatricula` usa `findByIdWithRelaciones` para devolver `MatriculaResponse` sin depender de OSIV.
   - `ProfesorRepository.findByIdWithMaterias` usa `@Query` + `@EntityGraph` (evita parsing derivado inválido de Spring Data para ese nombre de método).
+- Refactor Clean Architecture:
+  - `MallaCurricularController` quedó delgado y delega en use cases por endpoint (`listar/crear/actualizar/bulk/eliminar`), manteniendo contratos HTTP sin cambios.
 - Caching HTTP:
   - `CacheConfig` registra `ShallowEtagHeaderFilter` para `/api/*` (ETag automático por body en GET).
   - `CacheControlInterceptor` aplica `Cache-Control` por grupo de rutas (catálogos/configuración vs transaccional/sensible).
@@ -222,9 +224,10 @@ Ejemplos reales:
 
 - CRUD directo:
   - `/api/materias` en `MateriaController`.
-  - `/api/profesores` en `ProfesorController`.
 - Use case explícito:
   - `/api/cursos` en `CursoController` (`ObtenerCursos`, `ObtenerDetalleCurso`, `CrearCurso`, `ActualizarCurso`).
+  - `/api/profesores` en `ProfesorController` (`ObtenerProfesores`, `ObtenerDetalleProfesor`, `ActualizarProfesor`, `ObtenerSesionesProfesor`, `CrearProfesorConUsuario`).
+  - `/api/malla-curricular` en `MallaCurricularController` (`ListarMallaCurricularPorAnoEscolar`, `ListarMallaCurricularPorMateria`, `ListarMallaCurricularPorGrado`, `CrearMallaCurricular`, `ActualizarMallaCurricular`, `GuardarMallaCurricularBulk`, `EliminarMallaCurricular`).
   - `LoginUsuario` para autenticación JWT.
   - `MatricularAlumno` y `CambiarEstadoMatricula` para reglas de matrícula.
   - `GuardarJornadaDia`, `CopiarJornadaDia`, `EliminarJornadaDia` y `ObtenerJornadaCurso` para reglas de jornada.
@@ -299,6 +302,7 @@ Clase: `ApiErrorResponse`
 │   ├── usecase/calendario    # casos de uso de días no lectivos
 │   ├── usecase/dashboard     # casos de uso de KPIs dashboard admin
 │   ├── usecase/jornada       # casos de uso jornada escolar
+│   ├── usecase/malla         # casos de uso de malla curricular
 │   ├── usecase/matricula     # casos de uso matrícula
 │   └── usecase/profesor      # casos de uso de profesor
 └── src/main/resources
@@ -520,6 +524,14 @@ Clase: `ApiErrorResponse`
   - `ObtenerResumenAsignacionProfesores`
   - `QuitarMateriaBloque`
   - `QuitarProfesorBloque`
+- `com.schoolmate.api.usecase.malla`
+  - `ActualizarMallaCurricular`
+  - `CrearMallaCurricular`
+  - `EliminarMallaCurricular`
+  - `GuardarMallaCurricularBulk`
+  - `ListarMallaCurricularPorAnoEscolar`
+  - `ListarMallaCurricularPorGrado`
+  - `ListarMallaCurricularPorMateria`
 - `com.schoolmate.api.usecase.matricula`
   - `CambiarEstadoMatricula`
   - `MatricularAlumno`
@@ -1226,13 +1238,13 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/malla-curricular` | Lista malla activa por año (prioridad `header > query`) | `ADMIN` | Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback, obligatorio al menos uno) | - | `List<MallaCurricularResponse>` | directo | `ACCESS_DENIED`, `VALIDATION_FAILED` |
-| `GET /api/malla-curricular/materia/{materiaId}` | Lista malla por materia y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | directo | `VALIDATION_FAILED` |
-| `GET /api/malla-curricular/grado/{gradoId}` | Lista malla por grado y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | directo | `VALIDATION_FAILED` |
-| `POST /api/malla-curricular` | Crea registro malla (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId?,horasPedagogicas}` | `MallaCurricularResponse` | directo transaccional | `409` conflict (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
-| `PUT /api/malla-curricular/{id}` | Actualiza horas/activo | `ADMIN` | Path + Body | `MallaCurricularUpdateRequest {horasPedagogicas,activo}` (inner class) | `MallaCurricularResponse` | directo transaccional | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
-| `POST /api/malla-curricular/bulk` | Upsert masivo por materia-año (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularBulkRequest` | `List<MallaCurricularResponse>` | directo transaccional | `BAD_REQUEST` grados duplicados, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
-| `DELETE /api/malla-curricular/{id}` | Baja lógica (`activo=false`) | `ADMIN` | Path | - | `204` | directo transaccional | `RESOURCE_NOT_FOUND` |
+| `GET /api/malla-curricular` | Lista malla activa por año (prioridad `header > query`) | `ADMIN` | Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback, obligatorio al menos uno) | - | `List<MallaCurricularResponse>` | `ListarMallaCurricularPorAnoEscolar` | `ACCESS_DENIED`, `VALIDATION_FAILED` |
+| `GET /api/malla-curricular/materia/{materiaId}` | Lista malla por materia y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | `ListarMallaCurricularPorMateria` | `VALIDATION_FAILED` |
+| `GET /api/malla-curricular/grado/{gradoId}` | Lista malla por grado y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | `ListarMallaCurricularPorGrado` | `VALIDATION_FAILED` |
+| `POST /api/malla-curricular` | Crea registro malla (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId?,horasPedagogicas}` | `MallaCurricularResponse` | `CrearMallaCurricular` | `409` conflict (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `PUT /api/malla-curricular/{id}` | Actualiza horas/activo | `ADMIN` | Path + Body | `MallaCurricularUpdateRequest {horasPedagogicas,activo}` (inner class) | `MallaCurricularResponse` | `ActualizarMallaCurricular` | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
+| `POST /api/malla-curricular/bulk` | Upsert masivo por materia-año (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularBulkRequest` | `List<MallaCurricularResponse>` | `GuardarMallaCurricularBulk` | `BAD_REQUEST` grados duplicados, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `DELETE /api/malla-curricular/{id}` | Baja lógica (`activo=false`) | `ADMIN` | Path | - | `204` | `EliminarMallaCurricular` | `RESOURCE_NOT_FOUND` |
 
 ### Dominio: Cursos
 
@@ -1459,6 +1471,87 @@ Implementación actual:
   - tras guardar, recarga curso con `grado` y `anoEscolar` usando `findByIdWithGradoAndAnoEscolar`.
 - Errores:
   - `ResourceNotFoundException`, `ApiException(CURSO_SIN_SECCION_DISPONIBLE)`, `ApiException(VALIDATION_FAILED)`
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.malla.ListarMallaCurricularPorAnoEscolar`
+
+- Función: listar malla activa por año escolar (`header > query`) ordenada por grado y materia.
+- Repositorios/dependencias:
+  - `MallaCurricularRepository`
+- Reglas:
+  - requiere `anoEscolarId` resuelto desde header o query.
+- Salida:
+  - `List<MallaCurricularResponse>`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.malla.ListarMallaCurricularPorMateria`
+
+- Función: listar malla por `materiaId` y año escolar (`header > query`).
+- Repositorios/dependencias:
+  - `MallaCurricularRepository`
+- Reglas:
+  - requiere `anoEscolarId` resuelto desde header o query.
+- Salida:
+  - `List<MallaCurricularResponse>`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.malla.ListarMallaCurricularPorGrado`
+
+- Función: listar malla por `gradoId` y año escolar (`header > query`).
+- Repositorios/dependencias:
+  - `MallaCurricularRepository`
+- Reglas:
+  - requiere `anoEscolarId` resuelto desde header o query.
+- Salida:
+  - `List<MallaCurricularResponse>`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.malla.CrearMallaCurricular`
+
+- Función: crear registro de malla curricular.
+- Repositorios/dependencias:
+  - `MallaCurricularRepository`, `MateriaRepository`, `GradoRepository`, `AnoEscolarRepository`, `ClockProvider`
+- Reglas:
+  - resuelve prioridad `header > body` para `anoEscolarId`.
+  - valida duplicado por combinación `(materiaId, gradoId, anoEscolarId)` (409).
+  - valida existencia de materia/grado/año.
+  - bloquea escritura si el año escolar está `CERRADO`.
+- Salida:
+  - `MallaCurricularResponse`.
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.malla.ActualizarMallaCurricular`
+
+- Función: actualizar `horasPedagogicas` y `activo` de un registro de malla.
+- Repositorios/dependencias:
+  - `MallaCurricularRepository`
+- Reglas:
+  - valida existencia por `id`.
+- Salida:
+  - `MallaCurricularResponse`.
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.malla.GuardarMallaCurricularBulk`
+
+- Función: upsert masivo de malla por materia-año, con desactivación de grados no enviados.
+- Repositorios/dependencias:
+  - `MallaCurricularRepository`, `MateriaRepository`, `GradoRepository`, `AnoEscolarRepository`, `ClockProvider`
+- Reglas:
+  - resuelve prioridad `header > body` para `anoEscolarId`.
+  - valida existencia de materia/año y bloqueo por año `CERRADO`.
+  - valida que no haya `gradoId` duplicados en el request (400).
+  - reactiva/actualiza existentes, crea nuevos y desactiva ausentes (`activo=false`).
+- Salida:
+  - `List<MallaCurricularResponse>`.
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.malla.EliminarMallaCurricular`
+
+- Función: baja lógica de malla (`activo=false`).
+- Repositorios/dependencias:
+  - `MallaCurricularRepository`
+- Reglas:
+  - valida existencia por `id`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.dashboard.ObtenerDashboardAdmin`
