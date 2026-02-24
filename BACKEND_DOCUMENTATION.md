@@ -253,6 +253,10 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `CursoPageResponse`, `ProfesorPageResponse`, `MallaCurricularPageResponse`, `MatriculaPageResponse`.
 - Antipatrón #1 (N+1) adicional corregido:
   - `BuscarApoderadoPorRut` dejó de consultar matrículas por alumno dentro de `map` y ahora resuelve curso activo por lote con `findByAlumnoIdInAndEstadoOrderByFechaMatriculaDescCreatedAtDesc(...)`.
+  - `ObtenerClasesHoyProfesor` dejó de consultar por bloque dentro de `map`:
+    - `cantidadAlumnos` ahora se resuelve por lote con `MatriculaRepository.countActivasByCursoIds(...)`.
+    - `asistenciaTomada` ahora se resuelve por lote con `AsistenciaClaseRepository.findBloqueIdsConAsistenciaTomada(...)`.
+  - resultado: `GET /api/profesor/mis-clases-hoy` reduce queries de `1 + 2N` a consultas batch fijas.
 - Antipatrón #2 (filtrado en memoria) corregido en años escolares:
   - `CrearAnoEscolar` y `ActualizarAnoEscolar` validan solapamientos con queries de existencia en BD (`existsSolapamiento*`) en vez de `findAll()` + loop.
 - Antipatrón #6 (acoplamiento temporal) corregido en fallback de entidades insert-only:
@@ -2225,8 +2229,9 @@ Implementación actual:
   - adjunta `diaNoLectivo` cuando existe registro para `hoy` en el año activo
   - consulta bloques `CLASE` activos del día y año activo
   - calcula estado temporal `PENDIENTE|DISPONIBLE|EXPIRADA` con ventana ±15 minutos
-  - calcula `cantidadAlumnos` con matrículas `ACTIVA`
-  - `asistenciaTomada` se calcula por existencia de `asistencia_clase` para `(bloqueId, fechaHoy)`
+  - evita N+1 con resolución batch:
+    - `cantidadAlumnos` se obtiene por curso con `countActivasByCursoIds(...)`.
+    - `asistenciaTomada` se obtiene por conjunto de bloques con `findBloqueIdsConAsistenciaTomada(...)`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.jornada.GuardarJornadaDia`
@@ -2446,7 +2451,7 @@ Implementación actual:
 |---|---|---|---|---|
 | `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | `findActivoByRutNormalizado` (native SQL con `regexp_replace`) | sí, vía `JpaSpecificationExecutor` |
 | `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual`, `findActivoByFecha` (default) | `existsSolapamiento`, `existsSolapamientoExcluyendoId` | no |
-| `AsistenciaClaseRepository` | `AsistenciaClase` | `findByBloqueHorarioIdAndFecha`, `existsByBloqueHorarioIdAndFecha` | no | no |
+| `AsistenciaClaseRepository` | `AsistenciaClase` | `findByBloqueHorarioIdAndFecha`, `existsByBloqueHorarioIdAndFecha` | `findBloqueIdsConAsistenciaTomada` (batch por `bloqueIds + fecha`) | no |
 | `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findColisionesProfesorConCursoYMateria`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolarConProfesor`, `findClasesProfesorEnDia`, `existsBloqueActivoProfesorEnCurso`, `findDetalleById`, `findActivosByCursoIdWithMateriaAndProfesorOrderByDiaSemanaAscNumeroBloqueAsc`, `findActivosByCursoIdAndDiaSemanaWithMateriaAndProfesorOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor` | no |
 | `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc`, `countByAnoEscolarIdAndActivoTrue`, `findPageByAnoEscolarIdAndGradoId`, `findPageByAnoEscolarId` | `findLetrasUsadasByGradoIdAndAnoEscolarId`, `findByIdWithGradoAndAnoEscolar`, `findByAnoEscolarIdOrderByNombreAscWithRelaciones`, `findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones`, `findAllOrderByNombreAscWithRelaciones`, `findPageWithRelaciones` | no |
 | `DiaNoLectivoRepository` | `DiaNoLectivo` | `existsByAnoEscolarIdAndFecha`, `findByAnoEscolarIdAndFecha`, `findByAnoEscolarIdOrderByFechaAsc`, `findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc` | no | no |
@@ -2926,6 +2931,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - Cargas explícitas de relaciones en curso/jornada con `@EntityGraph` y `JOIN FETCH` para reducir N+1.
 - Listados de `cursos`, `profesores`, `malla curricular` y `matrículas` migrados a paginación en BD para evitar respuestas masivas no acotadas.
 - `ObtenerProfesores` usa `findPageWithMaterias` (`@EntityGraph`) para evitar lazy/N+1 al mapear `materias` en `ProfesorResponse`.
+- `ObtenerClasesHoyProfesor` eliminó N+1 en `cantidadAlumnos`/`asistenciaTomada` usando consultas batch por curso y por bloque.
 - `AlumnoController.getMatriculaMap` ahora consulta por `alumno_id IN (...)` (IDs de la página actual) en vez de traer todas las matrículas activas del año.
 - Validación de solapamiento en años escolares movida a queries de existencia (`existsSolapamiento*`) en BD, eliminando `findAll()+loop`.
 - Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.

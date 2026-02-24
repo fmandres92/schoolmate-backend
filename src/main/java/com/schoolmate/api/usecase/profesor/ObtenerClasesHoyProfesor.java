@@ -24,7 +24,11 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -68,14 +72,31 @@ public class ObtenerClasesHoyProfesor {
         List<BloqueHorario> bloques = bloqueHorarioRepository.findClasesProfesorEnDia(
             profesorId, diaSemana, anoActivo.getId());
 
+        if (bloques.isEmpty()) {
+            return ClasesHoyResponse.builder()
+                .fecha(today)
+                .diaSemana(diaSemana)
+                .nombreDia(nombreDia(diaSemana))
+                .diaNoLectivo(diaNoLectivo)
+                .clases(List.of())
+                .build();
+        }
+
+        List<UUID> cursoIds = bloques.stream()
+            .map(b -> b.getCurso().getId())
+            .distinct()
+            .toList();
+        Map<UUID, Long> cantidadActivosPorCurso = obtenerCantidadActivosPorCurso(cursoIds);
+
+        List<UUID> bloqueIds = bloques.stream().map(BloqueHorario::getId).toList();
+        Set<UUID> bloquesConAsistenciaTomada = obtenerBloquesConAsistenciaTomada(bloqueIds, today);
+
         LocalTime now = clockProvider.now().toLocalTime();
 
         List<ClaseHoyResponse> clases = bloques.stream()
             .map(b -> {
-                long cantidadActivos = matriculaRepository.countByCursoIdAndEstado(
-                    b.getCurso().getId(), EstadoMatricula.ACTIVA);
-                boolean asistenciaTomada = asistenciaClaseRepository
-                    .existsByBloqueHorarioIdAndFecha(b.getId(), today);
+                long cantidadActivos = cantidadActivosPorCurso.getOrDefault(b.getCurso().getId(), 0L);
+                boolean asistenciaTomada = bloquesConAsistenciaTomada.contains(b.getId());
                 return ClaseHoyResponse.builder()
                     .bloqueId(b.getId())
                     .numeroBloque(b.getNumeroBloque())
@@ -100,6 +121,25 @@ public class ObtenerClasesHoyProfesor {
             .diaNoLectivo(diaNoLectivo)
             .clases(clases)
             .build();
+    }
+
+    private Map<UUID, Long> obtenerCantidadActivosPorCurso(List<UUID> cursoIds) {
+        if (cursoIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<UUID, Long> conteo = new HashMap<>();
+        for (Object[] row : matriculaRepository.countActivasByCursoIds(cursoIds, EstadoMatricula.ACTIVA)) {
+            conteo.put((UUID) row[0], (Long) row[1]);
+        }
+        return conteo;
+    }
+
+    private Set<UUID> obtenerBloquesConAsistenciaTomada(List<UUID> bloqueIds, LocalDate fecha) {
+        if (bloqueIds.isEmpty()) {
+            return Set.of();
+        }
+        return new HashSet<>(asistenciaClaseRepository.findBloqueIdsConAsistenciaTomada(bloqueIds, fecha));
     }
 
     private ClasesHoyResponse buildVacio(LocalDate today, int diaSemana) {
