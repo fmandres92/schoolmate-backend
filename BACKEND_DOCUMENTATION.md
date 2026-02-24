@@ -72,8 +72,8 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 
 - `spring.jpa.open-in-view=false` en `application.yml` para evitar lazy loading implícito durante serialización de respuestas.
 - Endpoints GET de lectura directa a repository marcados con `@Transactional(readOnly = true)` en:
-  - `GradoController`, `MateriaController` (`listar`,`obtener`) y `MatriculaController` (`porCurso`,`porAlumno`).
-  - Nota: `CursoController` (`listar`,`obtener`), `ProfesorController` (`listar`,`obtener`,`obtenerSesiones`) y `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`) fueron desacoplados a use cases de lectura con `@Transactional(readOnly = true)`.
+  - `GradoController` y `MateriaController` (`listar`,`obtener`).
+  - Nota: `CursoController` (`listar`,`obtener`), `ProfesorController` (`listar`,`obtener`,`obtenerSesiones`), `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`), `MatriculaController` (`porCurso`,`porAlumno`) y `DiaNoLectivoController` (`listar`) fueron desacoplados a use cases de lectura con `@Transactional(readOnly = true)`.
 - Fix de autenticación en `/api/auth/me`:
   - `SecurityConfig` limita públicos a `/api/auth/login` y `/api/auth/registro`.
   - `/api/auth/me` queda autenticado.
@@ -88,6 +88,7 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - Refactor Clean Architecture:
   - `MallaCurricularController` quedó delgado y delega en use cases por endpoint (`listar/crear/actualizar/bulk/eliminar`), manteniendo contratos HTTP sin cambios.
   - `AnoEscolarController` quedó delgado y delega todos sus endpoints (`listar/obtener/activo/crear/actualizar`) en use cases dedicados.
+  - `ApoderadoController`, `ProfesorHorarioController`, `JornadaController`, `MatriculaController` y `DiaNoLectivoController` quedaron delgados; su orquestación/validación principal fue movida a use cases dedicados.
 - Caching HTTP:
   - `CacheConfig` registra `ShallowEtagHeaderFilter` para `/api/*` (ETag automático por body en GET).
   - `CacheControlInterceptor` aplica `Cache-Control` por grupo de rutas (catálogos/configuración vs transaccional/sensible).
@@ -485,8 +486,10 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.specification`
   - `AlumnoSpecifications`
 - `com.schoolmate.api.usecase.apoderado`
+  - `BuscarApoderadoPorRut`
   - `CrearApoderadoConUsuario`
   - `ObtenerAlumnosApoderado`
+  - `ObtenerApoderadoPorAlumno`
   - `ObtenerAsistenciaMensualAlumno`
   - `ObtenerResumenAsistenciaAlumno`
 - `com.schoolmate.api.usecase.auth`
@@ -495,6 +498,7 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.usecase.calendario`
   - `CrearDiasNoLectivos`
   - `EliminarDiaNoLectivo`
+  - `ListarDiasNoLectivos`
 - `com.schoolmate.api.usecase.curso`
   - `ActualizarCurso`
   - `CrearCurso`
@@ -525,6 +529,7 @@ Clase: `ApiErrorResponse`
   - `ObtenerResumenAsignacionProfesores`
   - `QuitarMateriaBloque`
   - `QuitarProfesorBloque`
+  - `ValidarAccesoJornadaCurso`
 - `com.schoolmate.api.usecase.malla`
   - `ActualizarMallaCurricular`
   - `CrearMallaCurricular`
@@ -536,12 +541,15 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.usecase.matricula`
   - `CambiarEstadoMatricula`
   - `MatricularAlumno`
+  - `ObtenerMatriculasPorAlumno`
+  - `ObtenerMatriculasPorCurso`
   - `ValidarAccesoMatriculasCursoProfesor`
 - `com.schoolmate.api.usecase.profesor`
   - `ActualizarProfesor`
   - `CrearProfesorConUsuario`
   - `ObtenerClasesHoyProfesor`
   - `ObtenerDetalleProfesor`
+  - `ObtenerHorarioProfesor`
   - `ObtenerProfesores`
   - `ObtenerSesionesProfesor`
 
@@ -1142,13 +1150,13 @@ Sí existe en controllers de:
 
 Implementación actual:
 
-- En `ProfesorHorarioController`, si el rol autenticado es `PROFESOR`, solo puede consultar su propio `profesorId`.
+- En `ProfesorHorarioController` (vía `ObtenerHorarioProfesor`), si el rol autenticado es `PROFESOR`, solo puede consultar su propio `profesorId`.
 - Si intenta consultar otro `profesorId`, responde `403` (`AccessDeniedException` -> `ACCESS_DENIED`).
 - En `AsistenciaController`:
   - `PROFESOR` solo puede registrar/consultar asistencia de bloques donde está asignado y con cierre temporal estricto.
   - `ADMIN` puede registrar/editar asistencia sin restricción de ventana horaria para gestión excepcional.
 - En `ApoderadoPortalController`, cada consulta valida vínculo `apoderadoId`->`alumnoId` antes de exponer asistencia o resumen.
-- En `JornadaController` (`GET /api/cursos/{cursoId}/jornada`), si el rol es `APODERADO` valida que tenga al menos un alumno con matrícula `ACTIVA` en ese curso.
+- En `JornadaController` (`GET /api/cursos/{cursoId}/jornada`), la validación de ownership de `APODERADO` se ejecuta en `ValidarAccesoJornadaCurso` y exige al menos un alumno con matrícula `ACTIVA` en ese curso.
 
 ---
 
@@ -1181,8 +1189,8 @@ Implementación actual:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `POST /api/apoderados` | Crea apoderado + usuario `ROL=APODERADO`, o vincula un apoderado existente por RUT; valida formato/DV de RUT y cross-tabla solo si es persona nueva | `ADMIN` | Body JSON | `ApoderadoRequest` | `ApoderadoResponse` (`201`) | `CrearApoderadoConUsuario` | `RESOURCE_NOT_FOUND`, `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `GET /api/apoderados/buscar-por-rut?rut=...` | Busca apoderado por RUT normalizado e incluye lista de alumnos vinculados (`cursoNombre` cuando existe matrícula activa) | `ADMIN` | Query `rut` | - | `ApoderadoBuscarResponse` | directo repository | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
-| `GET /api/apoderados/por-alumno/{alumnoId}` | Retorna apoderado vinculado al alumno (MVP: primer vínculo) | `ADMIN` | Path `alumnoId` | - | `ApoderadoResponse` o `204` | directo repository | `RESOURCE_NOT_FOUND` |
+| `GET /api/apoderados/buscar-por-rut?rut=...` | Busca apoderado por RUT normalizado e incluye lista de alumnos vinculados (`cursoNombre` cuando existe matrícula activa) | `ADMIN` | Query `rut` | - | `ApoderadoBuscarResponse` | `BuscarApoderadoPorRut` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
+| `GET /api/apoderados/por-alumno/{alumnoId}` | Retorna apoderado vinculado al alumno (MVP: primer vínculo) | `ADMIN` | Path `alumnoId` | - | `ApoderadoResponse` o `204` | `ObtenerApoderadoPorAlumno` | `RESOURCE_NOT_FOUND` |
 
 ### Dominio: Portal Apoderado
 
@@ -1214,7 +1222,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/dias-no-lectivos` | Lista días no lectivos del año escolar resuelto por header; filtro opcional por `mes` y `anio` | autenticado | Header `X-Ano-Escolar-Id` (resuelto por `@AnoEscolarActivo`), Query opcional `mes,anio` | - | `List<DiaNoLectivoResponse>` | directo repository | `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `GET /api/dias-no-lectivos` | Lista días no lectivos del año escolar resuelto por header; filtro opcional por `mes` y `anio` | autenticado | Header `X-Ano-Escolar-Id` (resuelto por `@AnoEscolarActivo`), Query opcional `mes,anio` | - | `List<DiaNoLectivoResponse>` | `ListarDiasNoLectivos` | `VALIDATION_FAILED`, `BUSINESS_RULE` |
 | `POST /api/dias-no-lectivos` | Crea días no lectivos por rango (`fechaInicio`..`fechaFin`) | `ADMIN` | Header `X-Ano-Escolar-Id`, Body | `CrearDiaNoLectivoRequest` | `List<DiaNoLectivoResponse>` (`201`) | `CrearDiasNoLectivos` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `DELETE /api/dias-no-lectivos/{id}` | Elimina un día no lectivo | `ADMIN` | Path `id` | - | `204` | `EliminarDiaNoLectivo` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 
@@ -1265,7 +1273,7 @@ Implementación actual:
 | `GET /api/profesores/{profesorId}/sesiones` | Lista sesiones de login del usuario asociado al profesor (paginado, filtro por fechas) | `ADMIN` | Path `profesorId`; Query opcional `desde`,`hasta`,`page`,`size` | - | `SesionProfesorPageResponse` | `ObtenerSesionesProfesor` | `RESOURCE_NOT_FOUND` |
 | `POST /api/profesores` | Crea profesor con materias, horas de contrato y usuario asociado (`ROL=PROFESOR`); valida formato/DV de RUT y disponibilidad cross-tabla | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | `CrearProfesorConUsuario` | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `PUT /api/profesores/{id}` | Actualiza profesor; valida formato de RUT, mantiene RUT inmutable y permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | `ActualizarProfesor` | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `GET /api/profesores/{profesorId}/horario` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia, prioridad `header > query`) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `ProfesorHorarioResponse` | directo | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `VALIDATION_FAILED` |
+| `GET /api/profesores/{profesorId}/horario` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia, prioridad `header > query`) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `ProfesorHorarioResponse` | `ObtenerHorarioProfesor` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `VALIDATION_FAILED` |
 | `GET /api/profesor/mis-clases-hoy` | Clases del día para el profesor autenticado (`estado` por ventana de 15 min, `asistenciaTomada` real por bloque+fecha) con `diaNoLectivo` cuando aplica | `PROFESOR` | `Authorization` (usa `profesorId` del JWT) | - | `ClasesHoyResponse` | `ObtenerClasesHoyProfesor` | `ACCESS_DENIED` |
 
 ### Dominio: Alumnos
@@ -1284,8 +1292,8 @@ Implementación actual:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `POST /api/matriculas` | Matricula alumno en curso/año (prioridad `header > body`); bloquea creación si el año escolar está `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MatriculaRequest {alumnoId,cursoId,anoEscolarId?,fechaMatricula?}` | `MatriculaResponse` | `MatricularAlumno` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `GET /api/matriculas/curso/{cursoId}` | Matrículas activas por curso | `ADMIN`,`PROFESOR` (ownership por curso en año activo) | Path `cursoId` | - | `List<MatriculaResponse>` | directo + `ValidarAccesoMatriculasCursoProfesor` | `ACCESS_DENIED` |
-| `GET /api/matriculas/alumno/{alumnoId}` | Historial de matrículas por alumno | `ADMIN` | Path `alumnoId` | - | `List<MatriculaResponse>` | directo | - |
+| `GET /api/matriculas/curso/{cursoId}` | Matrículas activas por curso | `ADMIN`,`PROFESOR` (ownership por curso en año activo) | Path `cursoId` | - | `List<MatriculaResponse>` | `ObtenerMatriculasPorCurso` + `ValidarAccesoMatriculasCursoProfesor` | `ACCESS_DENIED` |
+| `GET /api/matriculas/alumno/{alumnoId}` | Historial de matrículas por alumno | `ADMIN` | Path `alumnoId` | - | `List<MatriculaResponse>` | `ObtenerMatriculasPorAlumno` | - |
 | `PATCH /api/matriculas/{id}/estado` | Cambia estado (`ACTIVA/RETIRADO/TRASLADADO`) | `ADMIN` | Path + body map `{estado}` | `Map<String,String>` | `MatriculaResponse` | `CambiarEstadoMatricula` | `400` por body inválido, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 
 ### Dominio: Asistencia
@@ -1300,7 +1308,7 @@ Implementación actual:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `PUT /api/cursos/{cursoId}/jornada/{diaSemana}` | Guarda/reemplaza la jornada de un día | `ADMIN` | Path `cursoId`,`diaSemana`; Body | `JornadaDiaRequest` | `JornadaDiaResponse` | `GuardarJornadaDia` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `GET /api/cursos/{cursoId}/jornada` | Obtiene jornada completa; opcionalmente filtra por día | `ADMIN`,`APODERADO` (ownership por matrícula activa en el curso) | Path `cursoId`; Query opcional `diaSemana` | - | `JornadaCursoResponse` | `ObtenerJornadaCurso` + validación en controller | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
+| `GET /api/cursos/{cursoId}/jornada` | Obtiene jornada completa; opcionalmente filtra por día | `ADMIN`,`APODERADO` (ownership por matrícula activa en el curso) | Path `cursoId`; Query opcional `diaSemana` | - | `JornadaCursoResponse` | `ObtenerJornadaCurso` + `ValidarAccesoJornadaCurso` | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED` |
 | `GET /api/cursos/{cursoId}/jornada/resumen` | Obtiene solo resumen semanal | `ADMIN` | Path `cursoId` | - | `JornadaResumenResponse` | `ObtenerJornadaCurso` (wrapper) | `RESOURCE_NOT_FOUND` |
 | `POST /api/cursos/{cursoId}/jornada/{diaSemanaOrigen}/copiar` | Copia estructura de un día a días destino | `ADMIN` | Path `cursoId`,`diaSemanaOrigen`; Body | `CopiarJornadaRequest` | `JornadaCursoResponse` | `CopiarJornadaDia` | `BUSINESS_RULE`, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 | `DELETE /api/cursos/{cursoId}/jornada/{diaSemana}` | Elimina lógicamente jornada de un día | `ADMIN` | Path `cursoId`,`diaSemana` | - | `204` | `EliminarJornadaDia` | `BUSINESS_RULE`, `RESOURCE_NOT_FOUND` |
@@ -1671,6 +1679,22 @@ Implementación actual:
   - `ResourceNotFoundException`, `BusinessException`
 - `@Transactional`: sí.
 
+### `com.schoolmate.api.usecase.calendario.ListarDiasNoLectivos`
+
+- Función: listar días no lectivos por año escolar, con filtro opcional por mes/año.
+- Repositorios/dependencias:
+  - `DiaNoLectivoRepository`
+- Reglas:
+  - si no se envían filtros, retorna todo el año escolar ordenado por fecha.
+  - si se filtra, exige `mes` y `anio` juntos.
+  - valida mes en rango `1..12`.
+  - valida que `mes/anio` formen una fecha válida.
+- Salida:
+  - `List<DiaNoLectivoResponse>`.
+- Errores:
+  - `BusinessException`.
+- `@Transactional(readOnly = true)`: sí.
+
 ### `com.schoolmate.api.usecase.apoderado.CrearApoderadoConUsuario`
 
 - Función: crear apoderado + usuario `ROL=APODERADO` o vincular apoderado existente por RUT a un alumno.
@@ -1689,6 +1713,36 @@ Implementación actual:
   - `ConflictException`
   - `BusinessException`
 - `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.apoderado.BuscarApoderadoPorRut`
+
+- Función: buscar apoderado por RUT normalizado y retornar alumnos vinculados con `cursoNombre` activo cuando exista.
+- Repositorios/dependencias:
+  - `ApoderadoRepository`, `ApoderadoAlumnoRepository`, `MatriculaRepository`
+- Reglas:
+  - normaliza y valida RUT de entrada.
+  - requiere existencia de apoderado por RUT.
+  - enriquece cada alumno con curso de matrícula `ACTIVA` cuando existe.
+- Salida:
+  - `ApoderadoBuscarResponse`.
+- Errores:
+  - `BusinessException`, `ResourceNotFoundException`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.apoderado.ObtenerApoderadoPorAlumno`
+
+- Función: obtener apoderado asociado a un alumno (MVP: primer vínculo), con estado de cuenta y resumen de alumnos del apoderado.
+- Repositorios/dependencias:
+  - `AlumnoRepository`, `ApoderadoAlumnoRepository`, `ApoderadoRepository`, `UsuarioRepository`
+- Reglas:
+  - valida existencia del alumno.
+  - si no hay vínculo, retorna vacío (`Optional.empty()` -> `204` en controller).
+  - si hay vínculo, arma `ApoderadoResponse` con `usuarioId/cuentaActiva`.
+- Salida:
+  - `Optional<ApoderadoResponse>`.
+- Errores:
+  - `ResourceNotFoundException`.
+- `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.apoderado.ObtenerAlumnosApoderado`
 
@@ -1829,24 +1883,43 @@ Implementación actual:
   - `ResourceNotFoundException` (profesor no encontrado / sin usuario asociado).
 - `@Transactional(readOnly = true)`: sí.
 
+### `com.schoolmate.api.usecase.profesor.ObtenerHorarioProfesor`
+
+- Función: construir horario semanal consolidado del profesor para un año escolar (`header > query`) con control de ownership.
+- Repositorios/dependencias:
+  - `ProfesorRepository`, `AnoEscolarRepository`, `BloqueHorarioRepository`
+- Reglas:
+  - requiere año escolar desde header o query.
+  - si rol es `PROFESOR`, solo permite consultar su propio `profesorId`.
+  - filtra bloques sin materia para el response.
+  - agrupa por día, ordena por hora y calcula `horasAsignadas` (`ceil(minutos/45)`).
+- Salida:
+  - `ProfesorHorarioResponse`.
+- Errores:
+  - `ApiException(VALIDATION_FAILED)`, `AccessDeniedException`, `ResourceNotFoundException`.
+- `@Transactional(readOnly = true)`: sí.
+
 ### `com.schoolmate.api.usecase.matricula.MatricularAlumno`
 
-- Función: crear matrícula activa de alumno.
+- Función: crear matrícula activa de alumno resolviendo año escolar con prioridad `header > body`.
 - Repositorios:
   - `AlumnoRepository`, `CursoRepository`, `AnoEscolarRepository`, `MatriculaRepository`
 - Validaciones:
+  - `anoEscolarId` requerido vía header `X-Ano-Escolar-Id` o body
   - alumno/curso/año existen
   - año escolar no puede estar `CERRADO` (`anoEscolar.calcularEstado(clockProvider.today())`)
   - curso pertenece al año indicado
   - alumno no tiene matrícula activa en ese año
 - Flujo:
-  1. carga entidades (curso con `findByIdWithGradoAndAnoEscolar`)
-  2. valida estado del año escolar (`!= CERRADO`)
-  3. valida pertenencia curso-año
-  4. valida unicidad de matrícula activa
-  5. define fecha (`request.fechaMatricula` o `clockProvider.today()`)
-  6. guarda `Matricula(estado=ACTIVA)`
+  1. resuelve `anoEscolarId` (`header > body`)
+  2. carga entidades (curso con `findByIdWithGradoAndAnoEscolar`)
+  3. valida estado del año escolar (`!= CERRADO`)
+  4. valida pertenencia curso-año
+  5. valida unicidad de matrícula activa
+  6. define fecha (`request.fechaMatricula` o `clockProvider.today()`)
+  7. guarda `Matricula(estado=ACTIVA)`
 - Errores:
+  - `ApiException(VALIDATION_FAILED)`
   - `ResourceNotFoundException`
   - `BusinessException`
 - `@Transactional`: sí.
@@ -1883,6 +1956,29 @@ Implementación actual:
   - debe existir al menos un bloque activo del profesor en el curso y año activo
 - Error:
   - `AccessDeniedException` (mapea a `ACCESS_DENIED`).
+
+### `com.schoolmate.api.usecase.matricula.ObtenerMatriculasPorCurso`
+
+- Función: listar matrículas activas por curso aplicando ownership para `PROFESOR`.
+- Repositorios/dependencias:
+  - `MatriculaRepository`, `ValidarAccesoMatriculasCursoProfesor`
+- Reglas:
+  - valida acceso según rol/ownership antes de consultar.
+  - retorna solo estado `ACTIVA` ordenado por apellido de alumno.
+- Salida:
+  - `List<MatriculaResponse>`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.matricula.ObtenerMatriculasPorAlumno`
+
+- Función: obtener historial de matrículas de un alumno.
+- Repositorios/dependencias:
+  - `MatriculaRepository`
+- Reglas:
+  - lectura pura del historial por `alumnoId`.
+- Salida:
+  - `List<MatriculaResponse>`.
+- `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.profesor.ObtenerClasesHoyProfesor`
 
@@ -1939,6 +2035,18 @@ Implementación actual:
 - Errores:
   - `ResourceNotFoundException`
 - `@Transactional`: no.
+
+### `com.schoolmate.api.usecase.jornada.ValidarAccesoJornadaCurso`
+
+- Función: validar acceso de lectura de jornada por curso.
+- Repositorios/dependencias:
+  - `ApoderadoAlumnoRepository`, `MatriculaRepository`
+- Reglas:
+  - `ADMIN` siempre permitido.
+  - `APODERADO` requiere `apoderadoId` en JWT.
+  - valida que tenga al menos un alumno vinculado con matrícula `ACTIVA` en el curso.
+- Error:
+  - `AccessDeniedException` (mapea a `ACCESS_DENIED`).
 
 ### `com.schoolmate.api.usecase.jornada.CopiarJornadaDia`
 

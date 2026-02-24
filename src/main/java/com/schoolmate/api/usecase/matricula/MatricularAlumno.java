@@ -8,7 +8,9 @@ import com.schoolmate.api.entity.Curso;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.enums.EstadoAnoEscolar;
 import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.exception.ApiException;
 import com.schoolmate.api.exception.BusinessException;
+import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AlumnoRepository;
 import com.schoolmate.api.repository.AnoEscolarRepository;
@@ -19,6 +21,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Map;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -31,7 +35,9 @@ public class MatricularAlumno {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public Matricula execute(MatriculaRequest request) {
+    public Matricula execute(MatriculaRequest request, UUID anoEscolarHeaderId) {
+        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, request.getAnoEscolarId());
+
         // 1. Validar que existan las entidades
         Alumno alumno = alumnoRepository.findById(request.getAlumnoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
@@ -39,7 +45,7 @@ public class MatricularAlumno {
         Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(request.getCursoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
-        AnoEscolar anoEscolar = anoEscolarRepository.findById(request.getAnoEscolarId())
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(resolvedAnoEscolarId)
                 .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
 
         EstadoAnoEscolar estadoAno = anoEscolar.calcularEstado(clockProvider.today());
@@ -72,5 +78,17 @@ public class MatricularAlumno {
                 .build();
 
         return matriculaRepository.save(matricula);
+    }
+
+    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarBodyId) {
+        UUID resolvedAnoEscolarId = anoEscolarHeaderId != null ? anoEscolarHeaderId : anoEscolarBodyId;
+        if (resolvedAnoEscolarId == null) {
+            throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                "Se requiere año escolar (header X-Ano-Escolar-Id o campo anoEscolarId)",
+                Map.of()
+            );
+        }
+        return resolvedAnoEscolarId;
     }
 }

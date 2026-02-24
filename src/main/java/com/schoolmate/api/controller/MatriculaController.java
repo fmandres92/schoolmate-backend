@@ -6,20 +6,17 @@ import com.schoolmate.api.dto.response.MatriculaResponse;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.enums.EstadoMatricula;
-import com.schoolmate.api.exception.ApiException;
-import com.schoolmate.api.exception.ErrorCode;
-import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.usecase.matricula.CambiarEstadoMatricula;
 import com.schoolmate.api.usecase.matricula.MatricularAlumno;
-import com.schoolmate.api.usecase.matricula.ValidarAccesoMatriculasCursoProfesor;
+import com.schoolmate.api.usecase.matricula.ObtenerMatriculasPorAlumno;
+import com.schoolmate.api.usecase.matricula.ObtenerMatriculasPorCurso;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -32,10 +29,10 @@ import com.schoolmate.api.security.UserPrincipal;
 @RequiredArgsConstructor
 public class MatriculaController {
 
-    private final MatriculaRepository matriculaRepository;
     private final MatricularAlumno matricularAlumno;
     private final CambiarEstadoMatricula cambiarEstadoMatricula;
-    private final ValidarAccesoMatriculasCursoProfesor validarAccesoMatriculasCursoProfesor;
+    private final ObtenerMatriculasPorCurso obtenerMatriculasPorCurso;
+    private final ObtenerMatriculasPorAlumno obtenerMatriculasPorAlumno;
 
     /**
      * Matricular un alumno en un curso
@@ -45,10 +42,10 @@ public class MatriculaController {
     public ResponseEntity<MatriculaResponse> matricular(
             @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
             @Valid @RequestBody MatriculaRequest request) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, request.getAnoEscolarId());
-        request.setAnoEscolarId(resolvedAnoEscolarId);
-
-        Matricula matricula = matricularAlumno.execute(request);
+        Matricula matricula = matricularAlumno.execute(
+                request,
+                anoEscolarHeader != null ? anoEscolarHeader.getId() : null
+        );
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(MatriculaResponse.fromEntity(matricula));
     }
@@ -58,19 +55,10 @@ public class MatriculaController {
      */
     @GetMapping("/curso/{cursoId}")
     @PreAuthorize("hasAnyRole('ADMIN','PROFESOR')")
-    @Transactional(readOnly = true)
     public ResponseEntity<List<MatriculaResponse>> porCurso(
             @PathVariable UUID cursoId,
             @AuthenticationPrincipal UserPrincipal principal) {
-
-        validarAccesoMatriculasCursoProfesor.execute(principal, cursoId);
-
-        List<MatriculaResponse> matriculas = matriculaRepository
-                .findByCursoIdAndEstadoOrderByAlumnoApellidoAsc(cursoId, EstadoMatricula.ACTIVA)
-                .stream()
-                .map(MatriculaResponse::fromEntity)
-                .toList();
-        return ResponseEntity.ok(matriculas);
+        return ResponseEntity.ok(obtenerMatriculasPorCurso.execute(cursoId, principal));
     }
 
     /**
@@ -78,14 +66,8 @@ public class MatriculaController {
      */
     @GetMapping("/alumno/{alumnoId}")
     @PreAuthorize("hasRole('ADMIN')")
-    @Transactional(readOnly = true)
     public ResponseEntity<List<MatriculaResponse>> porAlumno(@PathVariable UUID alumnoId) {
-        List<MatriculaResponse> matriculas = matriculaRepository
-                .findByAlumnoId(alumnoId)
-                .stream()
-                .map(MatriculaResponse::fromEntity)
-                .toList();
-        return ResponseEntity.ok(matriculas);
+        return ResponseEntity.ok(obtenerMatriculasPorAlumno.execute(alumnoId));
     }
 
     /**
@@ -112,21 +94,5 @@ public class MatriculaController {
 
         Matricula matricula = cambiarEstadoMatricula.execute(id, nuevoEstado);
         return ResponseEntity.ok(MatriculaResponse.fromEntity(matricula));
-    }
-
-    private UUID resolveAnoEscolarId(AnoEscolar anoEscolarHeader, UUID anoEscolarId) {
-        UUID resolvedAnoEscolarId = anoEscolarHeader != null
-                ? anoEscolarHeader.getId()
-                : anoEscolarId;
-
-        if (resolvedAnoEscolarId == null) {
-            throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "Se requiere año escolar (header X-Ano-Escolar-Id o campo anoEscolarId)",
-                    Map.of()
-            );
-        }
-
-        return resolvedAnoEscolarId;
     }
 }
