@@ -3,10 +3,9 @@ package com.schoolmate.api.controller;
 import com.schoolmate.api.dto.request.LoginRequest;
 import com.schoolmate.api.dto.request.RefreshTokenRequest;
 import com.schoolmate.api.dto.response.AuthResponse;
-import com.schoolmate.api.exception.ApiException;
-import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.security.UserPrincipal;
 import com.schoolmate.api.usecase.auth.LoginUsuario;
+import com.schoolmate.api.usecase.auth.ObtenerPerfilAutenticado;
 import com.schoolmate.api.usecase.auth.RefrescarToken;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -22,6 +21,7 @@ public class AuthController {
 
     private final LoginUsuario loginUsuario;
     private final RefrescarToken refrescarToken;
+    private final ObtenerPerfilAutenticado obtenerPerfilAutenticado;
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(
@@ -40,18 +40,6 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<?> me(@AuthenticationPrincipal UserPrincipal user) {
-        if (user == null) {
-            throw new ApiException(ErrorCode.UNAUTHORIZED);
-        }
-
-        return ResponseEntity.ok(java.util.Map.of(
-                "id", user.getId(),
-                "email", user.getEmail(),
-                "nombre", user.getNombre(),
-                "apellido", user.getApellido(),
-                "rol", user.getRol().name(),
-                "profesorId", user.getProfesorId(),
-                "apoderadoId", user.getApoderadoId()
-        ));
+        return ResponseEntity.ok(obtenerPerfilAutenticado.execute(user));
     }
 }

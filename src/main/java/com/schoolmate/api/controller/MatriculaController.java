@@ -1,11 +1,11 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
+import com.schoolmate.api.dto.request.CambiarEstadoMatriculaRequest;
 import com.schoolmate.api.dto.request.MatriculaRequest;
 import com.schoolmate.api.dto.response.MatriculaResponse;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.Matricula;
-import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.usecase.matricula.CambiarEstadoMatricula;
 import com.schoolmate.api.usecase.matricula.MatricularAlumno;
@@ -20,7 +20,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 import com.schoolmate.api.security.UserPrincipal;
 
@@ -78,21 +77,8 @@ public class MatriculaController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MatriculaResponse> cambiarEstado(
             @PathVariable UUID id,
-            @RequestBody Map<String, String> body) {
-
-        String estadoStr = body.get("estado");
-        if (estadoStr == null || estadoStr.isBlank()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        EstadoMatricula nuevoEstado;
-        try {
-            nuevoEstado = EstadoMatricula.valueOf(estadoStr.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        Matricula matricula = cambiarEstadoMatricula.execute(id, nuevoEstado);
+            @Valid @RequestBody CambiarEstadoMatriculaRequest request) {
+        Matricula matricula = cambiarEstadoMatricula.execute(id, request.getEstado());
         return ResponseEntity.ok(MatriculaResponse.fromEntity(matricula));
     }
 }

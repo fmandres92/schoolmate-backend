@@ -3,6 +3,8 @@ package com.schoolmate.api.usecase.apoderado;
 import com.schoolmate.api.dto.ResumenAsistenciaResponse;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.enums.EstadoAsistencia;
+import com.schoolmate.api.exception.ApiException;
+import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AlumnoRepository;
 import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
@@ -11,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Component
@@ -21,7 +24,14 @@ public class ObtenerResumenAsistenciaAlumno {
     private final RegistroAsistenciaRepository registroAsistenciaRepo;
     private final AlumnoRepository alumnoRepo;
 
-    public ResumenAsistenciaResponse execute(UUID alumnoId, UUID anoEscolarId, UUID apoderadoId) {
+    public ResumenAsistenciaResponse execute(
+        UUID alumnoId,
+        UUID anoEscolarHeaderId,
+        UUID anoEscolarQueryId,
+        UUID apoderadoId
+    ) {
+        UUID anoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, anoEscolarQueryId);
+
         if (!apoderadoAlumnoRepo.existsByApoderadoIdAndAlumnoId(apoderadoId, alumnoId)) {
             throw new AccessDeniedException("No tienes acceso a este alumno");
         }
@@ -47,5 +57,17 @@ public class ObtenerResumenAsistenciaAlumno {
                 .totalAusente((int) totalAusente)
                 .porcentajeAsistencia(porcentaje)
                 .build();
+    }
+
+    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarQueryId) {
+        UUID resolvedAnoEscolarId = anoEscolarHeaderId != null ? anoEscolarHeaderId : anoEscolarQueryId;
+        if (resolvedAnoEscolarId == null) {
+            throw new ApiException(
+                ErrorCode.VALIDATION_FAILED,
+                "Se requiere año escolar (header X-Ano-Escolar-Id o query param anoEscolarId)",
+                Map.of()
+            );
+        }
+        return resolvedAnoEscolarId;
     }
 }

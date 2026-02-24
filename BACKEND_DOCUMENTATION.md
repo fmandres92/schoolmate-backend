@@ -71,13 +71,14 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 ### Actualización técnica reciente (optimización de lectura y seguridad)
 
 - `spring.jpa.open-in-view=false` en `application.yml` para evitar lazy loading implícito durante serialización de respuestas.
-- Endpoints GET de lectura directa a repository marcados con `@Transactional(readOnly = true)` en:
-  - `GradoController` y `MateriaController` (`listar`,`obtener`).
-  - Nota: `CursoController` (`listar`,`obtener`), `ProfesorController` (`listar`,`obtener`,`obtenerSesiones`), `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`), `MatriculaController` (`porCurso`,`porAlumno`) y `DiaNoLectivoController` (`listar`) fueron desacoplados a use cases de lectura con `@Transactional(readOnly = true)`.
+- Endpoints de lectura desacoplados a use cases con `@Transactional(readOnly = true)`:
+  - `GradoController` (`listar`,`obtener`) via `ListarGrados` y `ObtenerGrado`.
+  - `MateriaController` (`listar`,`obtener`) via `ListarMaterias` y `ObtenerMateria`.
+  - Nota: `CursoController` (`listar`,`obtener`), `ProfesorController` (`listar`,`obtener`,`obtenerSesiones`), `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`), `MatriculaController` (`porCurso`,`porAlumno`) y `DiaNoLectivoController` (`listar`) ya estaban desacoplados a use cases de lectura.
 - Fix de autenticación en `/api/auth/me`:
   - `SecurityConfig` limita públicos a `/api/auth/login` y `/api/auth/registro`.
   - `/api/auth/me` queda autenticado.
-  - Guard defensivo en controller para responder `401` si principal nulo.
+  - Guard defensivo centralizado en `ObtenerPerfilAutenticado` para responder `401` si principal nulo.
 - Correcciones N+1 en curso/jornada mediante `@EntityGraph` y queries con `JOIN FETCH` en `CursoRepository`, `MallaCurricularRepository`, `BloqueHorarioRepository`, y ajuste de consumo en use cases/controladores de jornada.
 - `AlumnoController.getMatriculaMap` ahora consulta solo matrículas de alumnos de la página (`alumno_id IN (...)`) vía `MatriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(...)`.
 - Hardening adicional contra `LazyInitializationException` en mutaciones:
@@ -192,6 +193,21 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `SesionUsuarioRepository.findByUsuarioIdAndFechas` usa flags `aplicarDesde/aplicarHasta`.
   - elimina errores SQL de tipado con filtros opcionales de fecha (`42P18`).
 
+### Actualización técnica reciente (refactor incremental de controllers)
+
+- `MateriaController` quedó delgado y delega completamente en use cases:
+  - `ListarMaterias`, `ObtenerMateria`, `CrearMateria`, `ActualizarMateria`, `EliminarMateria`.
+- `GradoController` quedó delgado y delega lecturas en:
+  - `ListarGrados`, `ObtenerGrado`.
+- `AuditoriaController` quedó delgado y delega filtros/paginación/mapeo JSON en:
+  - `ConsultarEventosAuditoria`.
+- `AuthController` delega `GET /api/auth/me` en:
+  - `ObtenerPerfilAutenticado`.
+- `MatriculaController` usa request tipado para cambio de estado:
+  - nuevo DTO `CambiarEstadoMatriculaRequest {estado}`.
+  - `CambiarEstadoMatricula` incorpora validación de estado raw y responde `ApiException(VALIDATION_FAILED)` para entradas inválidas.
+- `ObtenerResumenAsistenciaAlumno` centraliza resolución de año escolar (`header > query`) dentro del use case y emite `VALIDATION_FAILED` cuando falta ambos.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -225,8 +241,12 @@ Regla observada en código:
 Ejemplos reales:
 
 - CRUD directo:
-  - `/api/materias` en `MateriaController`.
+  - `/api/alumnos` en `AlumnoController` (listado, detalle, búsqueda por RUT y mutaciones simples).
 - Use case explícito:
+  - `/api/materias` en `MateriaController` (`ListarMaterias`, `ObtenerMateria`, `CrearMateria`, `ActualizarMateria`, `EliminarMateria`).
+  - `/api/grados` en `GradoController` (`ListarGrados`, `ObtenerGrado`).
+  - `/api/auditoria` en `AuditoriaController` (`ConsultarEventosAuditoria`).
+  - `/api/auth/me` en `AuthController` (`ObtenerPerfilAutenticado`).
   - `/api/cursos` en `CursoController` (`ObtenerCursos`, `ObtenerDetalleCurso`, `CrearCurso`, `ActualizarCurso`).
   - `/api/profesores` en `ProfesorController` (`ObtenerProfesores`, `ObtenerDetalleProfesor`, `ActualizarProfesor`, `ObtenerSesionesProfesor`, `CrearProfesorConUsuario`).
   - `/api/malla-curricular` en `MallaCurricularController` (`ListarMallaCurricularPorAnoEscolar`, `ListarMallaCurricularPorMateria`, `ListarMallaCurricularPorGrado`, `CrearMallaCurricular`, `ActualizarMallaCurricular`, `GuardarMallaCurricularBulk`, `EliminarMallaCurricular`).
@@ -376,6 +396,7 @@ Clase: `ApiErrorResponse`
   - `BloqueRequest`
   - `GuardarAsistenciaRequest`
   - `CopiarJornadaRequest`
+  - `CambiarEstadoMatriculaRequest`
   - `CrearAlumnoConApoderadoRequest`
   - `CursoRequest`
   - `CrearDiaNoLectivoRequest`
@@ -492,8 +513,11 @@ Clase: `ApiErrorResponse`
   - `ObtenerApoderadoPorAlumno`
   - `ObtenerAsistenciaMensualAlumno`
   - `ObtenerResumenAsistenciaAlumno`
+- `com.schoolmate.api.usecase.auditoria`
+  - `ConsultarEventosAuditoria`
 - `com.schoolmate.api.usecase.auth`
   - `LoginUsuario`
+  - `ObtenerPerfilAutenticado`
   - `RefrescarToken`
 - `com.schoolmate.api.usecase.calendario`
   - `CrearDiasNoLectivos`
@@ -506,6 +530,9 @@ Clase: `ApiErrorResponse`
   - `ObtenerDetalleCurso`
 - `com.schoolmate.api.usecase.dashboard`
   - `ObtenerDashboardAdmin`
+- `com.schoolmate.api.usecase.grado`
+  - `ListarGrados`
+  - `ObtenerGrado`
 - `com.schoolmate.api.usecase.alumno`
   - `ActualizarAlumno`
   - `BuscarAlumnoPorRut`
@@ -538,6 +565,12 @@ Clase: `ApiErrorResponse`
   - `ListarMallaCurricularPorAnoEscolar`
   - `ListarMallaCurricularPorGrado`
   - `ListarMallaCurricularPorMateria`
+- `com.schoolmate.api.usecase.materia`
+  - `ActualizarMateria`
+  - `CrearMateria`
+  - `EliminarMateria`
+  - `ListarMaterias`
+  - `ObtenerMateria`
 - `com.schoolmate.api.usecase.matricula`
   - `CambiarEstadoMatricula`
   - `MatricularAlumno`
@@ -1170,13 +1203,13 @@ Implementación actual:
 |---|---|---|---|---|---|---|---|
 | `POST /api/auth/login` | Login y emisión de sesión (`accessToken` + `refreshToken`) por email o RUT; registra sesión de acceso | Público | Body JSON | `LoginRequest {identificador,password,latitud?,longitud?,precisionMetros?}` | `AuthResponse {token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `LoginUsuario` | `AUTH_BAD_CREDENTIALS`, `VALIDATION_FAILED` |
 | `POST /api/auth/refresh` | Refresca sesión usando refresh token persistido (con rotación) | Público | Body JSON | `RefreshTokenRequest {refreshToken}` | `AuthResponse {token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `RefrescarToken` | `SESSION_REVOKED`, `VALIDATION_FAILED` |
-| `GET /api/auth/me` | Datos del usuario actual | Autenticado | Header `Authorization` requerido | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}` | directo (guard defensivo) | `UNAUTHORIZED`, `ACCESS_DENIED` |
+| `GET /api/auth/me` | Datos del usuario actual | Autenticado | Header `Authorization` requerido | - | `Map{id,email,nombre,apellido,rol,profesorId,apoderadoId}` | `ObtenerPerfilAutenticado` | `UNAUTHORIZED`, `ACCESS_DENIED` |
 
 ### Dominio: Auditoría
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/auditoria` | Consulta paginada de eventos auditados con filtros opcionales por usuario, método, endpoint y rango de fechas | `ADMIN` | Query opcional `usuarioId,metodoHttp,endpoint,desde,hasta,page,size` | - | `EventoAuditoriaPageResponse` | directo repository | `ACCESS_DENIED` |
+| `GET /api/auditoria` | Consulta paginada de eventos auditados con filtros opcionales por usuario, método, endpoint y rango de fechas | `ADMIN` | Query opcional `usuarioId,metodoHttp,endpoint,desde,hasta,page,size` | - | `EventoAuditoriaPageResponse` | `ConsultarEventosAuditoria` | `ACCESS_DENIED` |
 
 ### Dominio: Dashboard
 
@@ -1230,18 +1263,18 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/grados` | Lista grados por nivel | `ADMIN` | - | - | `List<Grado>` (entidad directa) | directo | `ACCESS_DENIED` |
-| `GET /api/grados/{id}` | Obtiene grado por id | `ADMIN` | Path `id` | - | `Grado` | directo | `RESOURCE_NOT_FOUND` |
+| `GET /api/grados` | Lista grados por nivel | `ADMIN` | - | - | `List<Grado>` (entidad directa) | `ListarGrados` | `ACCESS_DENIED` |
+| `GET /api/grados/{id}` | Obtiene grado por id | `ADMIN` | Path `id` | - | `Grado` | `ObtenerGrado` | `RESOURCE_NOT_FOUND` |
 
 ### Dominio: Materias
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/materias` | Lista paginada y ordenable | `ADMIN` | Query: `page,size,sortBy,sortDir` | - | `MateriaPageResponse` | directo | `ACCESS_DENIED` |
-| `GET /api/materias/{id}` | Obtiene materia | `ADMIN` | Path `id` | - | `MateriaResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `POST /api/materias` | Crea materia | `ADMIN` | Body | `MateriaRequest {nombre,icono}` | `MateriaResponse` | directo | `VALIDATION_FAILED` |
-| `PUT /api/materias/{id}` | Actualiza materia | `ADMIN` | Path + Body | `MateriaRequest` | `MateriaResponse` | directo | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
-| `DELETE /api/materias/{id}` | Elimina materia (físico) | `ADMIN` | Path | - | `204` | directo | `RESOURCE_NOT_FOUND`, `DATA_INTEGRITY` |
+| `GET /api/materias` | Lista paginada y ordenable | `ADMIN` | Query: `page,size,sortBy,sortDir` | - | `MateriaPageResponse` | `ListarMaterias` | `ACCESS_DENIED` |
+| `GET /api/materias/{id}` | Obtiene materia | `ADMIN` | Path `id` | - | `MateriaResponse` | `ObtenerMateria` | `RESOURCE_NOT_FOUND` |
+| `POST /api/materias` | Crea materia | `ADMIN` | Body | `MateriaRequest {nombre,icono}` | `MateriaResponse` | `CrearMateria` | `VALIDATION_FAILED` |
+| `PUT /api/materias/{id}` | Actualiza materia | `ADMIN` | Path + Body | `MateriaRequest` | `MateriaResponse` | `ActualizarMateria` | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
+| `DELETE /api/materias/{id}` | Elimina materia (físico) | `ADMIN` | Path | - | `204` | `EliminarMateria` | `RESOURCE_NOT_FOUND`, `DATA_INTEGRITY` |
 
 ### Dominio: Malla Curricular
 
@@ -1294,7 +1327,7 @@ Implementación actual:
 | `POST /api/matriculas` | Matricula alumno en curso/año (prioridad `header > body`); bloquea creación si el año escolar está `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MatriculaRequest {alumnoId,cursoId,anoEscolarId?,fechaMatricula?}` | `MatriculaResponse` | `MatricularAlumno` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/matriculas/curso/{cursoId}` | Matrículas activas por curso | `ADMIN`,`PROFESOR` (ownership por curso en año activo) | Path `cursoId` | - | `List<MatriculaResponse>` | `ObtenerMatriculasPorCurso` + `ValidarAccesoMatriculasCursoProfesor` | `ACCESS_DENIED` |
 | `GET /api/matriculas/alumno/{alumnoId}` | Historial de matrículas por alumno | `ADMIN` | Path `alumnoId` | - | `List<MatriculaResponse>` | `ObtenerMatriculasPorAlumno` | - |
-| `PATCH /api/matriculas/{id}/estado` | Cambia estado (`ACTIVA/RETIRADO/TRASLADADO`) | `ADMIN` | Path + body map `{estado}` | `Map<String,String>` | `MatriculaResponse` | `CambiarEstadoMatricula` | `400` por body inválido, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
+| `PATCH /api/matriculas/{id}/estado` | Cambia estado (`ACTIVA/RETIRADO/TRASLADADO`) | `ADMIN` | Path + Body | `CambiarEstadoMatriculaRequest {estado}` | `MatriculaResponse` | `CambiarEstadoMatricula` | `VALIDATION_FAILED`, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 
 ### Dominio: Asistencia
 
@@ -1420,6 +1453,31 @@ Implementación actual:
   - `ApiException(SESSION_REVOKED)`
 - `@Transactional`: sí.
 
+### `com.schoolmate.api.usecase.auth.ObtenerPerfilAutenticado`
+
+- Función: resolver el perfil autenticado para `GET /api/auth/me`.
+- Repositorios/dependencias:
+  - no usa repositorios (opera con `UserPrincipal` del contexto de seguridad).
+- Reglas:
+  - rechaza principal nulo con `ApiException(UNAUTHORIZED)`.
+  - retorna mapa con `id,email,nombre,apellido,rol,profesorId,apoderadoId`.
+- Errores:
+  - `ApiException(UNAUTHORIZED)`.
+
+### `com.schoolmate.api.usecase.auditoria.ConsultarEventosAuditoria`
+
+- Función: consultar auditoría paginada con filtros opcionales y deserialización segura de `requestBody`.
+- Repositorios/dependencias:
+  - `EventoAuditoriaRepository`, `ObjectMapper`
+- Reglas:
+  - normaliza `metodoHttp` a mayúsculas.
+  - aplica filtros opcionales con flags booleanos para evitar problemas de tipado SQL en PostgreSQL.
+  - usa `desde` inclusivo y `hasta` exclusivo (`+1 día`).
+  - deserializa `requestBody` JSON string a objeto estructurado; si falla, retorna string raw.
+- Salida:
+  - `EventoAuditoriaPageResponse`.
+- `@Transactional(readOnly = true)`: sí.
+
 ### `com.schoolmate.api.usecase.anoescolar.ListarAnosEscolares`
 
 - Función: listar años escolares en orden descendente con estado calculado.
@@ -1492,6 +1550,28 @@ Implementación actual:
   - `ResourceNotFoundException`, `BusinessException`.
 - `@Transactional`: sí.
 
+### `com.schoolmate.api.usecase.grado.ListarGrados`
+
+- Función: listar grados en orden ascendente por nivel.
+- Repositorios/dependencias:
+  - `GradoRepository`
+- Salida:
+  - `List<Grado>`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.grado.ObtenerGrado`
+
+- Función: obtener un grado por `id`.
+- Repositorios/dependencias:
+  - `GradoRepository`
+- Reglas:
+  - valida existencia por id.
+- Salida:
+  - `Grado`.
+- Errores:
+  - `ResourceNotFoundException("Grado no encontrado")`.
+- `@Transactional(readOnly = true)`: sí.
+
 ### `com.schoolmate.api.usecase.curso.ObtenerCursos`
 
 - Función: listar cursos con filtros opcionales por año/grado y enriquecer con total de matrículas activas.
@@ -1552,6 +1632,65 @@ Implementación actual:
   - tras guardar, recarga curso con `grado` y `anoEscolar` usando `findByIdWithGradoAndAnoEscolar`.
 - Errores:
   - `ResourceNotFoundException`, `ApiException(CURSO_SIN_SECCION_DISPONIBLE)`, `ApiException(VALIDATION_FAILED)`
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.materia.ListarMaterias`
+
+- Función: listar materias paginadas con ordenamiento controlado.
+- Repositorios/dependencias:
+  - `MateriaRepository`
+- Reglas:
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - whitelistea campos de orden (`nombre`, `createdAt`, `updatedAt`, `id`).
+  - normaliza dirección (`asc|desc`, default `desc`).
+- Salida:
+  - `MateriaPageResponse`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.materia.ObtenerMateria`
+
+- Función: obtener una materia por `id`.
+- Repositorios/dependencias:
+  - `MateriaRepository`
+- Reglas:
+  - valida existencia por id.
+- Salida:
+  - `MateriaResponse`.
+- Errores:
+  - `ResourceNotFoundException("Materia no encontrada")`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.materia.CrearMateria`
+
+- Función: crear una materia.
+- Repositorios/dependencias:
+  - `MateriaRepository`
+- Salida:
+  - `MateriaResponse`.
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.materia.ActualizarMateria`
+
+- Función: actualizar nombre/icono de una materia existente.
+- Repositorios/dependencias:
+  - `MateriaRepository`
+- Reglas:
+  - valida existencia por id.
+- Salida:
+  - `MateriaResponse`.
+- Errores:
+  - `ResourceNotFoundException("Materia no encontrada")`.
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.materia.EliminarMateria`
+
+- Función: eliminar físicamente una materia por id.
+- Repositorios/dependencias:
+  - `MateriaRepository`
+- Reglas:
+  - valida existencia por id antes de eliminar.
+- Errores:
+  - `ResourceNotFoundException("Materia no encontrada")`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.malla.ListarMallaCurricularPorAnoEscolar`
@@ -1779,10 +1918,13 @@ Implementación actual:
 - Repositorios/dependencias:
   - `ApoderadoAlumnoRepository`, `RegistroAsistenciaRepository`, `AlumnoRepository`
 - Reglas:
+  - resuelve `anoEscolarId` con prioridad `header > query`.
+  - si faltan ambos (`header` y `query`), lanza `ApiException(VALIDATION_FAILED)`.
   - ownership obligatorio (`apoderadoId` -> `alumnoId`)
   - conteo por estado (`PRESENTE`, `AUSENTE`) filtrado por `anoEscolarId`
   - porcentaje con 1 decimal sobre el total de bloques registrados
 - Errores:
+  - `ApiException(VALIDATION_FAILED)`
   - `AccessDeniedException`
   - `ResourceNotFoundException`
 - `@Transactional`: no.
@@ -1929,17 +2071,21 @@ Implementación actual:
 - Función: transición de estado de matrícula.
 - Repositorio: `MatriculaRepository`.
 - Validaciones:
+  - entrada `estado` no vacía cuando se usa firma raw (`String`)
+  - parsing válido de enum (`ACTIVA|RETIRADO|TRASLADADO`) cuando se usa firma raw (`String`)
   - matrícula existe
   - transición válida:
     - `ACTIVA -> RETIRADO|TRASLADADO`
     - `RETIRADO|TRASLADADO -> ACTIVA`
   - no repetir mismo estado
 - Flujo:
-  1. carga matrícula con relaciones (`findByIdWithRelaciones`)
-  2. valida transición
-  3. setea nuevo estado
-  4. guarda
+  1. (firma `String`) valida/reconvierte estado raw y delega a firma tipada
+  2. carga matrícula con relaciones (`findByIdWithRelaciones`)
+  3. valida transición
+  4. setea nuevo estado
+  5. guarda
 - Errores:
+  - `ApiException(VALIDATION_FAILED)` (estado ausente/ inválido)
   - `ResourceNotFoundException`
   - `BusinessException`
 - `@Transactional`: sí.

@@ -5,8 +5,6 @@ import com.schoolmate.api.dto.AlumnoApoderadoResponse;
 import com.schoolmate.api.dto.AsistenciaMensualResponse;
 import com.schoolmate.api.dto.ResumenAsistenciaResponse;
 import com.schoolmate.api.entity.AnoEscolar;
-import com.schoolmate.api.exception.ApiException;
-import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.security.UserPrincipal;
 import com.schoolmate.api.usecase.apoderado.ObtenerAlumnosApoderado;
@@ -23,7 +21,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/apoderado")
@@ -61,25 +58,12 @@ public class ApoderadoPortalController {
             @PathVariable UUID alumnoId,
             @RequestParam(required = false) UUID anoEscolarId,
             @AuthenticationPrincipal UserPrincipal user) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
         ResumenAsistenciaResponse resultado = obtenerResumenAsistenciaAlumno.execute(
-                alumnoId, resolvedAnoEscolarId, user.getApoderadoId());
+                alumnoId,
+                anoEscolarHeader != null ? anoEscolarHeader.getId() : null,
+                anoEscolarId,
+                user.getApoderadoId()
+        );
         return ResponseEntity.ok(resultado);
-    }
-
-    private UUID resolveAnoEscolarId(AnoEscolar anoEscolarHeader, UUID anoEscolarId) {
-        UUID resolvedAnoEscolarId = anoEscolarHeader != null
-                ? anoEscolarHeader.getId()
-                : anoEscolarId;
-
-        if (resolvedAnoEscolarId == null) {
-            throw new ApiException(
-                    ErrorCode.VALIDATION_FAILED,
-                    "Se requiere año escolar (header X-Ano-Escolar-Id o query param anoEscolarId)",
-                    Map.of()
-            );
-        }
-
-        return resolvedAnoEscolarId;
     }
 }
