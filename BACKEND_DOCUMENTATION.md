@@ -72,8 +72,8 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 
 - `spring.jpa.open-in-view=false` en `application.yml` para evitar lazy loading implícito durante serialización de respuestas.
 - Endpoints GET de lectura directa a repository marcados con `@Transactional(readOnly = true)` en:
-  - `GradoController`, `MateriaController` (`listar`,`obtener`), `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`) y `MatriculaController` (`porCurso`,`porAlumno`).
-  - Nota: `CursoController` (`listar`,`obtener`) y `ProfesorController` (`listar`,`obtener`,`obtenerSesiones`) fueron desacoplados a use cases de lectura con `@Transactional(readOnly = true)`.
+  - `GradoController`, `MateriaController` (`listar`,`obtener`) y `MatriculaController` (`porCurso`,`porAlumno`).
+  - Nota: `CursoController` (`listar`,`obtener`), `ProfesorController` (`listar`,`obtener`,`obtenerSesiones`) y `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`) fueron desacoplados a use cases de lectura con `@Transactional(readOnly = true)`.
 - Fix de autenticación en `/api/auth/me`:
   - `SecurityConfig` limita públicos a `/api/auth/login` y `/api/auth/registro`.
   - `/api/auth/me` queda autenticado.
@@ -87,6 +87,7 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `ProfesorRepository.findByIdWithMaterias` usa `@Query` + `@EntityGraph` (evita parsing derivado inválido de Spring Data para ese nombre de método).
 - Refactor Clean Architecture:
   - `MallaCurricularController` quedó delgado y delega en use cases por endpoint (`listar/crear/actualizar/bulk/eliminar`), manteniendo contratos HTTP sin cambios.
+  - `AnoEscolarController` quedó delgado y delega todos sus endpoints (`listar/obtener/activo/crear/actualizar`) en use cases dedicados.
 - Caching HTTP:
   - `CacheConfig` registra `ShallowEtagHeaderFilter` para `/api/*` (ETag automático por body en GET).
   - `CacheControlInterceptor` aplica `Cache-Control` por grupo de rutas (catálogos/configuración vs transaccional/sensible).
@@ -1203,11 +1204,11 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/anos-escolares` | Lista años con estado calculado | `ADMIN` | - | - | `List<AnoEscolarResponse>` | directo repository | `ACCESS_DENIED` |
-| `GET /api/anos-escolares/{id}` | Obtiene año por id | `ADMIN` | Path `id` | - | `AnoEscolarResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `GET /api/anos-escolares/activo` | Año activo para fecha actual | autenticado | - | - | `AnoEscolarResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `POST /api/anos-escolares` | Crea año | `ADMIN` | Body | `AnoEscolarRequest {ano,fechaInicioPlanificacion,fechaInicio,fechaFin}` | `AnoEscolarResponse` | directo con reglas | `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `PUT /api/anos-escolares/{id}` | Actualiza año | `ADMIN` | Path `id` + Body | `AnoEscolarRequest` | `AnoEscolarResponse` | directo con reglas | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `GET /api/anos-escolares` | Lista años con estado calculado | `ADMIN` | - | - | `List<AnoEscolarResponse>` | `ListarAnosEscolares` | `ACCESS_DENIED` |
+| `GET /api/anos-escolares/{id}` | Obtiene año por id | `ADMIN` | Path `id` | - | `AnoEscolarResponse` | `ObtenerAnoEscolar` | `RESOURCE_NOT_FOUND` |
+| `GET /api/anos-escolares/activo` | Año activo para fecha actual | autenticado | - | - | `AnoEscolarResponse` | `ObtenerAnoEscolarActivo` | `RESOURCE_NOT_FOUND` |
+| `POST /api/anos-escolares` | Crea año | `ADMIN` | Body | `AnoEscolarRequest {ano,fechaInicioPlanificacion,fechaInicio,fechaFin}` | `AnoEscolarResponse` | `CrearAnoEscolar` | `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `PUT /api/anos-escolares/{id}` | Actualiza año | `ADMIN` | Path `id` + Body | `AnoEscolarRequest` | `AnoEscolarResponse` | `ActualizarAnoEscolar` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 
 ### Dominio: Días No Lectivos
 
@@ -1409,6 +1410,78 @@ Implementación actual:
   4. genera nuevo `accessToken` JWT y retorna `AuthResponse`
 - Errores:
   - `ApiException(SESSION_REVOKED)`
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.anoescolar.ListarAnosEscolares`
+
+- Función: listar años escolares en orden descendente con estado calculado.
+- Repositorios/dependencias:
+  - `AnoEscolarRepository`, `ClockProvider`
+- Reglas:
+  - usa `findAllByOrderByAnoDesc()`.
+  - calcula estado con `AnoEscolar.calcularEstado(clockProvider.today())`.
+- Salida:
+  - `List<AnoEscolarResponse>`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.anoescolar.ObtenerAnoEscolar`
+
+- Función: obtener un año escolar por id con estado calculado.
+- Repositorios/dependencias:
+  - `AnoEscolarRepository`, `ClockProvider`
+- Reglas:
+  - valida existencia por id.
+  - calcula estado según fecha actual del `ClockProvider`.
+- Salida:
+  - `AnoEscolarResponse`.
+- Errores:
+  - `ResourceNotFoundException("Año escolar no encontrado")`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.anoescolar.ObtenerAnoEscolarActivo`
+
+- Función: obtener año escolar activo para la fecha actual.
+- Repositorios/dependencias:
+  - `AnoEscolarRepository`, `ClockProvider`
+- Reglas:
+  - busca por rango inclusivo `fechaInicio <= hoy <= fechaFin`.
+  - calcula estado sobre la misma fecha de referencia.
+- Salida:
+  - `AnoEscolarResponse`.
+- Errores:
+  - `ResourceNotFoundException("No hay año escolar activo para la fecha actual")`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.anoescolar.CrearAnoEscolar`
+
+- Función: crear un año escolar validando consistencia temporal y solapamientos.
+- Repositorios/dependencias:
+  - `AnoEscolarRepository`, `ClockProvider`
+- Reglas:
+  - bloquea duplicados por `ano`.
+  - valida orden `fechaInicioPlanificacion < fechaInicio < fechaFin`.
+  - valida `request.ano == request.fechaInicio.year`.
+  - valida que no se solape con otros años existentes.
+  - bloquea creación con `fechaFin` en el pasado.
+- Salida:
+  - `AnoEscolarResponse`.
+- Errores:
+  - `BusinessException`.
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.anoescolar.ActualizarAnoEscolar`
+
+- Función: actualizar un año escolar existente aplicando reglas de consistencia.
+- Repositorios/dependencias:
+  - `AnoEscolarRepository`, `ClockProvider`
+- Reglas:
+  - valida existencia por id.
+  - no permite modificar un año en estado `CERRADO`.
+  - valida orden de fechas, coherencia de año y no solapamiento (excluyendo el propio id).
+- Salida:
+  - `AnoEscolarResponse`.
+- Errores:
+  - `ResourceNotFoundException`, `BusinessException`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.curso.ObtenerCursos`
