@@ -2,6 +2,7 @@ package com.schoolmate.api.usecase.calendario;
 
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.CrearDiaNoLectivoRequest;
+import com.schoolmate.api.dto.response.DiaNoLectivoResponse;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.DiaNoLectivo;
 import com.schoolmate.api.enums.EstadoAnoEscolar;
@@ -30,7 +31,7 @@ public class CrearDiasNoLectivos {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public List<DiaNoLectivo> execute(CrearDiaNoLectivoRequest request, UUID anoEscolarId) {
+    public List<DiaNoLectivoResponse> execute(CrearDiaNoLectivoRequest request, UUID anoEscolarId) {
         AnoEscolar anoEscolar = anoEscolarRepository.findById(anoEscolarId)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
 
@@ -80,6 +81,17 @@ public class CrearDiasNoLectivos {
                 .build());
         }
 
-        return diaNoLectivoRepository.saveAll(aGuardar);
+        return diaNoLectivoRepository.saveAll(aGuardar).stream()
+            .map(this::toResponse)
+            .toList();
+    }
+
+    private DiaNoLectivoResponse toResponse(DiaNoLectivo dia) {
+        return DiaNoLectivoResponse.builder()
+            .id(dia.getId())
+            .fecha(dia.getFecha())
+            .tipo(dia.getTipo().name())
+            .descripcion(dia.getDescripcion())
+            .build();
     }
 }

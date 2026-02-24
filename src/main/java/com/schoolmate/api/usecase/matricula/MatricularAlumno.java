@@ -2,6 +2,7 @@ package com.schoolmate.api.usecase.matricula;
 
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.MatriculaRequest;
+import com.schoolmate.api.dto.response.MatriculaResponse;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.Curso;
@@ -35,7 +36,7 @@ public class MatricularAlumno {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public Matricula execute(MatriculaRequest request, UUID anoEscolarHeaderId) {
+    public MatriculaResponse execute(MatriculaRequest request, UUID anoEscolarHeaderId) {
         UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, request.getAnoEscolarId());
 
         // 1. Validar que existan las entidades
@@ -77,7 +78,8 @@ public class MatricularAlumno {
                 .estado(EstadoMatricula.ACTIVA)
                 .build();
 
-        return matriculaRepository.save(matricula);
+        Matricula saved = matriculaRepository.save(matricula);
+        return MatriculaResponse.fromEntity(saved);
     }
 
     private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarBodyId) {

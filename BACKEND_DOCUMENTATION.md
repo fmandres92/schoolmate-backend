@@ -208,6 +208,17 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `CambiarEstadoMatricula` incorpora validación de estado raw y responde `ApiException(VALIDATION_FAILED)` para entradas inválidas.
 - `ObtenerResumenAsistenciaAlumno` centraliza resolución de año escolar (`header > query`) dentro del use case y emite `VALIDATION_FAILED` cuando falta ambos.
 
+### Actualización técnica reciente (frontera limpia en cursos/malla/matrículas/calendario)
+
+- Controllers ajustados para no recibir entidades JPA en la capa HTTP:
+  - `CursoController`, `MallaCurricularController`, `MatriculaController`, `DiaNoLectivoController`.
+- Resolución de año escolar en estos controllers vía header UUID:
+  - `@RequestHeader("X-Ano-Escolar-Id") UUID` (opcional/requerido según endpoint).
+- Mapeo entidad -> response movido a use cases en mutaciones:
+  - `CrearCurso`, `ActualizarCurso`, `MatricularAlumno`, `CambiarEstadoMatricula`, `CrearDiasNoLectivos` retornan DTO de salida.
+- DTO extraído desde controller:
+  - `MallaCurricularUpdateRequest` ahora vive en `dto/request` (ya no inner class en `MallaCurricularController`).
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -403,6 +414,7 @@ Clase: `ApiErrorResponse`
   - `JornadaDiaRequest`
   - `LoginRequest`
   - `MallaCurricularBulkRequest`
+  - `MallaCurricularUpdateRequest`
   - `MallaCurricularRequest`
   - `MateriaRequest`
   - `MatriculaRequest`
@@ -1255,7 +1267,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/dias-no-lectivos` | Lista días no lectivos del año escolar resuelto por header; filtro opcional por `mes` y `anio` | autenticado | Header `X-Ano-Escolar-Id` (resuelto por `@AnoEscolarActivo`), Query opcional `mes,anio` | - | `List<DiaNoLectivoResponse>` | `ListarDiasNoLectivos` | `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `GET /api/dias-no-lectivos` | Lista días no lectivos del año escolar resuelto por header; filtro opcional por `mes` y `anio` | autenticado | Header requerido `X-Ano-Escolar-Id`, Query opcional `mes,anio` | - | `List<DiaNoLectivoResponse>` | `ListarDiasNoLectivos` | `VALIDATION_FAILED`, `BUSINESS_RULE` |
 | `POST /api/dias-no-lectivos` | Crea días no lectivos por rango (`fechaInicio`..`fechaFin`) | `ADMIN` | Header `X-Ano-Escolar-Id`, Body | `CrearDiaNoLectivoRequest` | `List<DiaNoLectivoResponse>` (`201`) | `CrearDiasNoLectivos` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `DELETE /api/dias-no-lectivos/{id}` | Elimina un día no lectivo | `ADMIN` | Path `id` | - | `204` | `EliminarDiaNoLectivo` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 
@@ -1284,7 +1296,7 @@ Implementación actual:
 | `GET /api/malla-curricular/materia/{materiaId}` | Lista malla por materia y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | `ListarMallaCurricularPorMateria` | `VALIDATION_FAILED` |
 | `GET /api/malla-curricular/grado/{gradoId}` | Lista malla por grado y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | `ListarMallaCurricularPorGrado` | `VALIDATION_FAILED` |
 | `POST /api/malla-curricular` | Crea registro malla (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId?,horasPedagogicas}` | `MallaCurricularResponse` | `CrearMallaCurricular` | `409` conflict (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
-| `PUT /api/malla-curricular/{id}` | Actualiza horas/activo | `ADMIN` | Path + Body | `MallaCurricularUpdateRequest {horasPedagogicas,activo}` (inner class) | `MallaCurricularResponse` | `ActualizarMallaCurricular` | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
+| `PUT /api/malla-curricular/{id}` | Actualiza horas/activo | `ADMIN` | Path + Body | `MallaCurricularUpdateRequest {horasPedagogicas,activo}` | `MallaCurricularResponse` | `ActualizarMallaCurricular` | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 | `POST /api/malla-curricular/bulk` | Upsert masivo por materia-año (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularBulkRequest` | `List<MallaCurricularResponse>` | `GuardarMallaCurricularBulk` | `BAD_REQUEST` grados duplicados, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
 | `DELETE /api/malla-curricular/{id}` | Baja lógica (`activo=false`) | `ADMIN` | Path | - | `204` | `EliminarMallaCurricular` | `RESOURCE_NOT_FOUND` |
 
@@ -1614,6 +1626,8 @@ Implementación actual:
   - selecciona primera letra libre desde `seccion_catalogo` (orden ascendente).
   - delega armado de identidad académica en `Curso.actualizarIdentidadAcademica(...)`.
   - tras guardar, recarga curso con `grado` y `anoEscolar` usando `findByIdWithGradoAndAnoEscolar`.
+- Salida:
+  - `CursoResponse`.
 - Errores:
   - `ResourceNotFoundException`, `ApiException(CURSO_SIN_SECCION_DISPONIBLE)`, `ApiException(VALIDATION_FAILED)`, `ApiException(BUSINESS_RULE)`
 - `@Transactional`: sí.
@@ -1630,6 +1644,8 @@ Implementación actual:
   - si cambia asignación, toma primera letra disponible del catálogo.
   - actualiza identidad del curso vía `Curso.actualizarIdentidadAcademica(...)`.
   - tras guardar, recarga curso con `grado` y `anoEscolar` usando `findByIdWithGradoAndAnoEscolar`.
+- Salida:
+  - `CursoResponse`.
 - Errores:
   - `ResourceNotFoundException`, `ApiException(CURSO_SIN_SECCION_DISPONIBLE)`, `ApiException(VALIDATION_FAILED)`
 - `@Transactional`: sí.
@@ -1801,7 +1817,7 @@ Implementación actual:
   - cada fecha debe estar dentro de `[anoEscolar.fechaInicio, anoEscolar.fechaFin]`
   - no permite duplicado por `(anoEscolarId, fecha)`
 - Resultado:
-  - guarda una entidad por cada fecha hábil válida y retorna la lista creada.
+  - guarda una entidad por cada fecha hábil válida y retorna `List<DiaNoLectivoResponse>`.
 - Errores:
   - `ResourceNotFoundException`, `BusinessException`
 - `@Transactional`: sí.
@@ -2059,7 +2075,9 @@ Implementación actual:
   4. valida pertenencia curso-año
   5. valida unicidad de matrícula activa
   6. define fecha (`request.fechaMatricula` o `clockProvider.today()`)
-  7. guarda `Matricula(estado=ACTIVA)`
+  7. guarda `Matricula(estado=ACTIVA)` y mapea a response.
+- Salida:
+  - `MatriculaResponse`.
 - Errores:
   - `ApiException(VALIDATION_FAILED)`
   - `ResourceNotFoundException`
@@ -2079,11 +2097,13 @@ Implementación actual:
     - `RETIRADO|TRASLADADO -> ACTIVA`
   - no repetir mismo estado
 - Flujo:
-  1. (firma `String`) valida/reconvierte estado raw y delega a firma tipada
+  1. (firma `String`) valida/reconvierte estado raw.
   2. carga matrícula con relaciones (`findByIdWithRelaciones`)
   3. valida transición
   4. setea nuevo estado
-  5. guarda
+  5. guarda y mapea a response.
+- Salida:
+  - `MatriculaResponse`.
 - Errores:
   - `ApiException(VALIDATION_FAILED)` (estado ausente/ inválido)
   - `ResourceNotFoundException`
@@ -2401,9 +2421,11 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `AlumnoRequest` | `rut,nombre,apellido,fechaNacimiento` | `@NotBlank`, `@Size`, `@NotNull` | `@Data @Builder` |
 | `CrearAlumnoConApoderadoRequest` | `alumno{rut,nombre,apellido,fechaNacimiento}, apoderado{rut,nombre,apellido,email,telefono}, vinculo` | `@NotNull`, `@Valid`, `@NotBlank`, `@Email`, `@Size` | `@Data` |
 | `MatriculaRequest` | `alumnoId,cursoId,anoEscolarId,fechaMatricula?` | `@NotBlank` en `alumnoId,cursoId` (`anoEscolarId` nullable para migración header) | `@Data @Builder` |
+| `CambiarEstadoMatriculaRequest` | `estado` | `@NotBlank` en `estado` | `@Data` |
 | `MallaCurricularRequest` | `materiaId,gradoId,anoEscolarId,horasPedagogicas` | `@NotBlank` en `materiaId,gradoId`; `@NotNull`, `@Min(1)`, `@Max(15)` en `horasPedagogicas` (`anoEscolarId` nullable) | `@Data` |
 | `MallaCurricularBulkRequest` | `materiaId,anoEscolarId,grados[]` | `@NotBlank` en `materiaId`; `@NotEmpty`, `@Valid` en `grados` (`anoEscolarId` nullable) | `@Data` |
 | `MallaCurricularBulkRequest.GradoHoras` | `gradoId,horasPedagogicas` | `@NotBlank`, `@NotNull`, `@Min(1)`, `@Max(15)` | `@Data` |
+| `MallaCurricularUpdateRequest` | `horasPedagogicas,activo` | `@NotNull`, `@Min(1)`, `@Max(15)` en `horasPedagogicas`; `@NotNull` en `activo` | `@Data` |
 | `BloqueRequest` | `numeroBloque,horaInicio,horaFin,tipo` | `@NotNull`, `@Min(1)`, `@Pattern` para hora `HH:mm` y tipo | `@Getter/@Setter` |
 | `JornadaDiaRequest` | `bloques[]` | `@NotNull`, `@Size(min=1)`, `@Valid` | `@Getter/@Setter` |
 | `CopiarJornadaRequest` | `diasDestino[]` | `@NotNull`, `@Size(min=1)`, elementos `@Min(1) @Max(5)` | `@Getter/@Setter` |
@@ -2925,6 +2947,8 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - Catálogo local en `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/AGENTS.md`.
 - Skills propias del repo:
   - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/skills/spring-architecture-auditor/SKILL.md`
+  - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/skills/spring-architecture-reviewer/SKILL.md`
+  - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/skills/spring-antipattern-sniper/SKILL.md`
   - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/skills/spring-clean-refactorer/SKILL.md`
 - Referencia de reglas de refactor para la skill ejecutora:
   - `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-api/skills/spring-clean-refactorer/references/architecture-rules.md`

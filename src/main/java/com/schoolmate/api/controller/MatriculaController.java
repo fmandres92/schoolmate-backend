@@ -1,12 +1,10 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
+import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.dto.request.CambiarEstadoMatriculaRequest;
 import com.schoolmate.api.dto.request.MatriculaRequest;
 import com.schoolmate.api.dto.response.MatriculaResponse;
-import com.schoolmate.api.entity.AnoEscolar;
-import com.schoolmate.api.entity.Matricula;
-import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.usecase.matricula.CambiarEstadoMatricula;
 import com.schoolmate.api.usecase.matricula.MatricularAlumno;
 import com.schoolmate.api.usecase.matricula.ObtenerMatriculasPorAlumno;
@@ -39,14 +37,10 @@ public class MatriculaController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MatriculaResponse> matricular(
-            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+            @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
             @Valid @RequestBody MatriculaRequest request) {
-        Matricula matricula = matricularAlumno.execute(
-                request,
-                anoEscolarHeader != null ? anoEscolarHeader.getId() : null
-        );
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(MatriculaResponse.fromEntity(matricula));
+                .body(matricularAlumno.execute(request, anoEscolarHeaderId));
     }
 
     /**
@@ -78,7 +72,6 @@ public class MatriculaController {
     public ResponseEntity<MatriculaResponse> cambiarEstado(
             @PathVariable UUID id,
             @Valid @RequestBody CambiarEstadoMatriculaRequest request) {
-        Matricula matricula = cambiarEstadoMatricula.execute(id, request.getEstado());
-        return ResponseEntity.ok(MatriculaResponse.fromEntity(matricula));
+        return ResponseEntity.ok(cambiarEstadoMatricula.execute(id, request.getEstado()));
     }
 }

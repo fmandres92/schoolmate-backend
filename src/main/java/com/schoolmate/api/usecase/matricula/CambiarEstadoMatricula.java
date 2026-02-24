@@ -1,5 +1,6 @@
 package com.schoolmate.api.usecase.matricula;
 
+import com.schoolmate.api.dto.response.MatriculaResponse;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.exception.ApiException;
@@ -21,7 +22,7 @@ public class CambiarEstadoMatricula {
     private final MatriculaRepository matriculaRepository;
 
     @Transactional
-    public Matricula execute(UUID matriculaId, String nuevoEstadoRaw) {
+    public MatriculaResponse execute(UUID matriculaId, String nuevoEstadoRaw) {
         if (nuevoEstadoRaw == null || nuevoEstadoRaw.isBlank()) {
             throw new ApiException(
                 ErrorCode.VALIDATION_FAILED,
@@ -41,11 +42,10 @@ public class CambiarEstadoMatricula {
             );
         }
 
-        return execute(matriculaId, nuevoEstado);
+        return executeInterno(matriculaId, nuevoEstado);
     }
 
-    @Transactional
-    public Matricula execute(UUID matriculaId, EstadoMatricula nuevoEstado) {
+    private MatriculaResponse executeInterno(UUID matriculaId, EstadoMatricula nuevoEstado) {
         Matricula matricula = matriculaRepository.findByIdWithRelaciones(matriculaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Matrícula no encontrada"));
 
@@ -53,7 +53,8 @@ public class CambiarEstadoMatricula {
         validarTransicion(matricula.getEstado(), nuevoEstado);
 
         matricula.setEstado(nuevoEstado);
-        return matriculaRepository.save(matricula);
+        Matricula saved = matriculaRepository.save(matricula);
+        return MatriculaResponse.fromEntity(saved);
     }
 
     private void validarTransicion(EstadoMatricula actual, EstadoMatricula nuevo) {

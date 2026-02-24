@@ -2,6 +2,7 @@ package com.schoolmate.api.usecase.curso;
 
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.request.CursoRequest;
+import com.schoolmate.api.dto.response.CursoResponse;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.Curso;
 import com.schoolmate.api.entity.Grado;
@@ -35,7 +36,7 @@ public class CrearCurso {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public Curso execute(UUID anoEscolarHeaderId, CursoRequest request) {
+    public CursoResponse execute(UUID anoEscolarHeaderId, CursoRequest request) {
         UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, request.getAnoEscolarId());
 
         Grado grado = gradoRepository.findById(request.getGradoId())
@@ -53,8 +54,9 @@ public class CrearCurso {
         curso.actualizarIdentidadAcademica(grado, anoEscolar, letraAsignada);
 
         Curso saved = cursoRepository.save(curso);
-        return cursoRepository.findByIdWithGradoAndAnoEscolar(saved.getId())
+        Curso reloaded = cursoRepository.findByIdWithGradoAndAnoEscolar(saved.getId())
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
+        return CursoResponse.fromEntity(reloaded);
     }
 
     private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarIdRequest) {

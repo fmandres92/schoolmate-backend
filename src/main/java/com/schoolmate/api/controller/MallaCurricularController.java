@@ -2,9 +2,9 @@ package com.schoolmate.api.controller;
 
 import com.schoolmate.api.dto.request.MallaCurricularBulkRequest;
 import com.schoolmate.api.dto.request.MallaCurricularRequest;
+import com.schoolmate.api.dto.request.MallaCurricularUpdateRequest;
 import com.schoolmate.api.dto.response.MallaCurricularResponse;
-import com.schoolmate.api.entity.AnoEscolar;
-import com.schoolmate.api.security.AnoEscolarActivo;
+import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.usecase.malla.ActualizarMallaCurricular;
 import com.schoolmate.api.usecase.malla.CrearMallaCurricular;
 import com.schoolmate.api.usecase.malla.EliminarMallaCurricular;
@@ -13,12 +13,6 @@ import com.schoolmate.api.usecase.malla.ListarMallaCurricularPorAnoEscolar;
 import com.schoolmate.api.usecase.malla.ListarMallaCurricularPorGrado;
 import com.schoolmate.api.usecase.malla.ListarMallaCurricularPorMateria;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +24,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -52,39 +47,35 @@ public class MallaCurricularController {
 
     @GetMapping
     public List<MallaCurricularResponse> listarPorAnoEscolar(
-        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @RequestParam(required = false) UUID anoEscolarId
     ) {
-        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
         return listarMallaCurricularPorAnoEscolar.execute(anoEscolarHeaderId, anoEscolarId);
     }
 
     @GetMapping("/materia/{materiaId}")
     public List<MallaCurricularResponse> listarPorMateria(
-        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @PathVariable UUID materiaId,
         @RequestParam(required = false) UUID anoEscolarId
     ) {
-        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
         return listarMallaCurricularPorMateria.execute(anoEscolarHeaderId, materiaId, anoEscolarId);
     }
 
     @GetMapping("/grado/{gradoId}")
     public List<MallaCurricularResponse> listarPorGrado(
-        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @PathVariable UUID gradoId,
         @RequestParam(required = false) UUID anoEscolarId
     ) {
-        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
         return listarMallaCurricularPorGrado.execute(anoEscolarHeaderId, gradoId, anoEscolarId);
     }
 
     @PostMapping
     public ResponseEntity<MallaCurricularResponse> crear(
-        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @Valid @RequestBody MallaCurricularRequest request
     ) {
-        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
         MallaCurricularResponse response = crearMallaCurricular.execute(anoEscolarHeaderId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -96,10 +87,9 @@ public class MallaCurricularController {
 
     @PostMapping("/bulk")
     public List<MallaCurricularResponse> guardarMallaCompleta(
-        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @Valid @RequestBody MallaCurricularBulkRequest request
     ) {
-        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
         return guardarMallaCurricularBulk.execute(anoEscolarHeaderId, request);
     }
 
@@ -107,19 +97,5 @@ public class MallaCurricularController {
     public ResponseEntity<Void> eliminar(@PathVariable UUID id) {
         eliminarMallaCurricular.execute(id);
         return ResponseEntity.noContent().build();
-    }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class MallaCurricularUpdateRequest {
-
-        @NotNull
-        @Min(1)
-        @Max(15)
-        private Integer horasPedagogicas;
-
-        @NotNull
-        private Boolean activo;
     }
 }
