@@ -262,6 +262,17 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - Antipatrón #6 (acoplamiento temporal) corregido en fallback de entidades insert-only:
   - `SesionUsuario` y `EventoAuditoria` usan `TimeContext.now()` en `@PrePersist`.
 
+### Actualización técnica reciente (anti-pattern #1 N+1 residual en calendario/malla)
+
+- `CrearDiasNoLectivos` eliminó validación duplicada por fecha con query por iteración:
+  - antes: `existsByAnoEscolarIdAndFecha(...)` por cada día hábil del rango.
+  - ahora: una sola consulta por rango (`findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc(...)`) y validación en memoria con `Set<LocalDate>`.
+- `GuardarMallaCurricularBulk` eliminó carga por grado dentro de loop:
+  - antes: `gradoRepository.findById(...)` por cada `gradoId`.
+  - ahora: resolución batch de grados con `findAllById(...)`, validación de faltantes y persistencia consolidada con `saveAll(...)`.
+- Resultado:
+  - menor cantidad de roundtrips a BD en operaciones bulk/calendario sin cambiar contratos HTTP ni reglas funcionales.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -1834,7 +1845,9 @@ Implementación actual:
   - resuelve prioridad `header > body` para `anoEscolarId`.
   - valida existencia de materia/año y bloqueo por año `CERRADO`.
   - valida que no haya `gradoId` duplicados en el request (400).
+  - resuelve grados del request en lote con `findAllById(...)` (evita N+1 de búsqueda por grado).
   - reactiva/actualiza existentes, crea nuevos y desactiva ausentes (`activo=false`).
+  - persiste cambios consolidados con `saveAll(...)` al final del merge bulk.
 - Salida:
   - `List<MallaCurricularResponse>`.
 - `@Transactional`: sí.
@@ -1873,7 +1886,7 @@ Implementación actual:
   - excluye sábados y domingos del alta
   - si el rango no deja días hábiles, retorna error
   - cada fecha debe estar dentro de `[anoEscolar.fechaInicio, anoEscolar.fechaFin]`
-  - no permite duplicado por `(anoEscolarId, fecha)`
+  - no permite duplicado por `(anoEscolarId, fecha)` validando existentes en una sola consulta por rango (`findByAnoEscolarIdAndFechaBetween...`) y luego `Set` en memoria.
 - Resultado:
   - guarda una entidad por cada fecha hábil válida y retorna `List<DiaNoLectivoResponse>`.
 - Errores:
@@ -2932,6 +2945,8 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - Listados de `cursos`, `profesores`, `malla curricular` y `matrículas` migrados a paginación en BD para evitar respuestas masivas no acotadas.
 - `ObtenerProfesores` usa `findPageWithMaterias` (`@EntityGraph`) para evitar lazy/N+1 al mapear `materias` en `ProfesorResponse`.
 - `ObtenerClasesHoyProfesor` eliminó N+1 en `cantidadAlumnos`/`asistenciaTomada` usando consultas batch por curso y por bloque.
+- `CrearDiasNoLectivos` eliminó N+1 de validación de duplicados por fecha al usar una consulta única por rango y validación en memoria.
+- `GuardarMallaCurricularBulk` eliminó N+1 de carga de grados (`findById` por item) con resolución batch `findAllById` + `saveAll`.
 - `AlumnoController.getMatriculaMap` ahora consulta por `alumno_id IN (...)` (IDs de la página actual) en vez de traer todas las matrículas activas del año.
 - Validación de solapamiento en años escolares movida a queries de existencia (`existsSolapamiento*`) en BD, eliminando `findAll()+loop`.
 - Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.

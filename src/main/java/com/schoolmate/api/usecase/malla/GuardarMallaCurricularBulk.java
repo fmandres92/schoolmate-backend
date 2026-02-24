@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -56,11 +57,17 @@ public class GuardarMallaCurricularBulk {
             }
         }
 
+        List<Grado> gradosEncontrados = gradoRepository.findAllById(gradoIdsEntrada);
         Map<UUID, Grado> grados = new HashMap<>();
-        for (MallaCurricularBulkRequest.GradoHoras gradoHoras : request.getGrados()) {
-            Grado grado = gradoRepository.findById(gradoHoras.getGradoId())
-                .orElseThrow(() -> new ResourceNotFoundException("Grado no encontrado: " + gradoHoras.getGradoId()));
+        for (Grado grado : gradosEncontrados) {
             grados.put(grado.getId(), grado);
+        }
+        if (grados.size() != gradoIdsEntrada.size()) {
+            UUID gradoFaltante = gradoIdsEntrada.stream()
+                .filter(id -> !grados.containsKey(id))
+                .findFirst()
+                .orElse(null);
+            throw new ResourceNotFoundException("Grado no encontrado: " + gradoFaltante);
         }
 
         List<MallaCurricular> existentes = mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(
@@ -73,12 +80,13 @@ public class GuardarMallaCurricularBulk {
             existentesPorGrado.put(malla.getGrado().getId(), malla);
         }
 
+        List<MallaCurricular> aPersistir = new ArrayList<>();
         for (MallaCurricularBulkRequest.GradoHoras gradoHoras : request.getGrados()) {
             MallaCurricular existente = existentesPorGrado.get(gradoHoras.getGradoId());
             if (existente != null) {
                 existente.setHorasPedagogicas(gradoHoras.getHorasPedagogicas());
                 existente.setActivo(true);
-                mallaCurricularRepository.save(existente);
+                aPersistir.add(existente);
                 continue;
             }
 
@@ -89,16 +97,18 @@ public class GuardarMallaCurricularBulk {
                 .horasPedagogicas(gradoHoras.getHorasPedagogicas())
                 .activo(true)
                 .build();
-            mallaCurricularRepository.save(nuevo);
+            aPersistir.add(nuevo);
         }
 
         for (MallaCurricular existente : existentes) {
             UUID gradoId = existente.getGrado().getId();
             if (!gradoIdsEntrada.contains(gradoId)) {
                 existente.setActivo(false);
-                mallaCurricularRepository.save(existente);
+                aPersistir.add(existente);
             }
         }
+
+        mallaCurricularRepository.saveAll(aPersistir);
 
         return mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(request.getMateriaId(), resolvedAnoEscolarId).stream()
             .map(MallaCurricularMapper::toResponse)

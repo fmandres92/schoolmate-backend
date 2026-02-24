@@ -17,8 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -63,13 +66,19 @@ public class CrearDiasNoLectivos {
             throw new BusinessException("El rango seleccionado no contiene días hábiles");
         }
 
+        Set<LocalDate> fechasExistentes = diaNoLectivoRepository
+            .findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc(anoEscolarId, fechaInicio, fechaFin)
+            .stream()
+            .map(DiaNoLectivo::getFecha)
+            .collect(Collectors.toCollection(HashSet::new));
+
         List<DiaNoLectivo> aGuardar = new ArrayList<>();
         for (LocalDate fecha : fechasHabiles) {
             if (fecha.isBefore(anoEscolar.getFechaInicio()) || fecha.isAfter(anoEscolar.getFechaFin())) {
                 throw new BusinessException("La fecha " + fecha + " está fuera del rango del año escolar");
             }
 
-            if (diaNoLectivoRepository.existsByAnoEscolarIdAndFecha(anoEscolarId, fecha)) {
+            if (fechasExistentes.contains(fecha)) {
                 throw new BusinessException("Ya existe un día no lectivo registrado para el " + fecha);
             }
 
