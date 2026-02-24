@@ -72,8 +72,8 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 
 - `spring.jpa.open-in-view=false` en `application.yml` para evitar lazy loading implícito durante serialización de respuestas.
 - Endpoints GET de lectura directa a repository marcados con `@Transactional(readOnly = true)` en:
-  - `GradoController`, `MateriaController` (`listar`,`obtener`), `ProfesorController` (`listar`,`obtener`), `AlumnoController` (`listar`,`obtener`,`buscarPorRut`), `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`) y `MatriculaController` (`porCurso`,`porAlumno`).
-  - Nota: `CursoController` (`listar`,`obtener`) fue desacoplado a use cases de lectura (`ObtenerCursos`, `ObtenerDetalleCurso`) con `@Transactional(readOnly = true)`.
+  - `GradoController`, `MateriaController` (`listar`,`obtener`), `AnoEscolarController` (`listar`,`obtener`,`obtenerActivo`) y `MatriculaController` (`porCurso`,`porAlumno`).
+  - Nota: `CursoController` (`listar`,`obtener`) y `ProfesorController` (`listar`,`obtener`,`obtenerSesiones`) fueron desacoplados a use cases de lectura con `@Transactional(readOnly = true)`.
 - Fix de autenticación en `/api/auth/me`:
   - `SecurityConfig` limita públicos a `/api/auth/login` y `/api/auth/registro`.
   - `/api/auth/me` queda autenticado.
@@ -84,6 +84,7 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `CrearCurso` y `ActualizarCurso` recargan curso con `grado` y `anoEscolar` (`findByIdWithGradoAndAnoEscolar`) antes del mapeo a `CursoResponse`.
   - `CrearProfesorConUsuario` y `PUT /api/profesores/{id}` recargan profesor con `materias` (`findByIdWithMaterias`) antes del mapeo a `ProfesorResponse`.
   - `CambiarEstadoMatricula` usa `findByIdWithRelaciones` para devolver `MatriculaResponse` sin depender de OSIV.
+  - `ProfesorRepository.findByIdWithMaterias` usa `@Query` + `@EntityGraph` (evita parsing derivado inválido de Spring Data para ese nombre de método).
 - Caching HTTP:
   - `CacheConfig` registra `ShallowEtagHeaderFilter` para `/api/*` (ETag automático por body en GET).
   - `CacheControlInterceptor` aplica `Cache-Control` por grupo de rutas (catálogos/configuración vs transaccional/sensible).
@@ -497,7 +498,12 @@ Clase: `ApiErrorResponse`
 - `com.schoolmate.api.usecase.dashboard`
   - `ObtenerDashboardAdmin`
 - `com.schoolmate.api.usecase.alumno`
+  - `ActualizarAlumno`
+  - `BuscarAlumnoPorRut`
+  - `CrearAlumno`
   - `CrearAlumnoConApoderado`
+  - `ObtenerAlumnos`
+  - `ObtenerDetalleAlumno`
 - `com.schoolmate.api.usecase.asistencia`
   - `GuardarAsistenciaClase`
   - `ObtenerAsistenciaClase`
@@ -519,8 +525,12 @@ Clase: `ApiErrorResponse`
   - `MatricularAlumno`
   - `ValidarAccesoMatriculasCursoProfesor`
 - `com.schoolmate.api.usecase.profesor`
+  - `ActualizarProfesor`
   - `CrearProfesorConUsuario`
   - `ObtenerClasesHoyProfesor`
+  - `ObtenerDetalleProfesor`
+  - `ObtenerProfesores`
+  - `ObtenerSesionesProfesor`
 
 ---
 
@@ -1237,11 +1247,11 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/profesores` | Lista profesores ordenados por apellido | `ADMIN` | - | - | `List<ProfesorResponse>` | directo | - |
-| `GET /api/profesores/{id}` | Obtiene profesor con contrato y horas asignadas del año ACTIVO (si existe) | `ADMIN` | Path | - | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `GET /api/profesores/{profesorId}/sesiones` | Lista sesiones de login del usuario asociado al profesor (paginado, filtro por fechas) | `ADMIN` | Path `profesorId`; Query opcional `desde`,`hasta`,`page`,`size` | - | `SesionProfesorPageResponse` | directo | `RESOURCE_NOT_FOUND` |
+| `GET /api/profesores` | Lista profesores ordenados por apellido | `ADMIN` | - | - | `List<ProfesorResponse>` | `ObtenerProfesores` | - |
+| `GET /api/profesores/{id}` | Obtiene profesor con contrato y horas asignadas del año ACTIVO (si existe) | `ADMIN` | Path | - | `ProfesorResponse` | `ObtenerDetalleProfesor` | `RESOURCE_NOT_FOUND` |
+| `GET /api/profesores/{profesorId}/sesiones` | Lista sesiones de login del usuario asociado al profesor (paginado, filtro por fechas) | `ADMIN` | Path `profesorId`; Query opcional `desde`,`hasta`,`page`,`size` | - | `SesionProfesorPageResponse` | `ObtenerSesionesProfesor` | `RESOURCE_NOT_FOUND` |
 | `POST /api/profesores` | Crea profesor con materias, horas de contrato y usuario asociado (`ROL=PROFESOR`); valida formato/DV de RUT y disponibilidad cross-tabla | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | `CrearProfesorConUsuario` | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `PUT /api/profesores/{id}` | Actualiza profesor; valida formato de RUT, mantiene RUT inmutable y permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | directo | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `PUT /api/profesores/{id}` | Actualiza profesor; valida formato de RUT, mantiene RUT inmutable y permite setear/limpiar horas de contrato | `ADMIN` | Path + Body | `ProfesorRequest` | `ProfesorResponse` | `ActualizarProfesor` | `RESOURCE_NOT_FOUND`, `PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `GET /api/profesores/{profesorId}/horario` | Horario semanal consolidado por profesor y año escolar (solo bloques CLASE con materia, prioridad `header > query`) | `ADMIN`,`PROFESOR` (ownership) | Path `profesorId` + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `ProfesorHorarioResponse` | directo | `RESOURCE_NOT_FOUND`, `ACCESS_DENIED`, `VALIDATION_FAILED` |
 | `GET /api/profesor/mis-clases-hoy` | Clases del día para el profesor autenticado (`estado` por ventana de 15 min, `asistenciaTomada` real por bloque+fecha) con `diaNoLectivo` cuando aplica | `PROFESOR` | `Authorization` (usa `profesorId` del JWT) | - | `ClasesHoyResponse` | `ObtenerClasesHoyProfesor` | `ACCESS_DENIED` |
 
@@ -1594,6 +1604,65 @@ Implementación actual:
   - tras persistir profesor/usuario, recarga profesor con `materias` usando `findByIdWithMaterias`.
 - `@Transactional`: sí.
 
+### `com.schoolmate.api.usecase.profesor.ObtenerProfesores`
+
+- Función: listar profesores ordenados por apellido.
+- Repositorios/dependencias:
+  - `ProfesorRepository`
+- Reglas:
+  - lectura pura para alimentar `GET /api/profesores`.
+- Salida:
+  - `List<ProfesorResponse>`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.profesor.ObtenerDetalleProfesor`
+
+- Función: obtener detalle de profesor con horas asignadas en año escolar activo.
+- Repositorios/dependencias:
+  - `ProfesorRepository`, `AnoEscolarRepository`, `BloqueHorarioRepository`, `ClockProvider`
+- Reglas:
+  - carga profesor con materias (`findByIdWithMaterias`).
+  - resuelve año activo por fecha con `findActivoByFecha(clockProvider.today())`.
+  - calcula `horasAsignadas` desde bloques (`ceil(minutos/45)`), o `null` si no hay año activo.
+- Salida:
+  - `ProfesorResponse`.
+- Errores:
+  - `ResourceNotFoundException("Profesor no encontrado")`.
+- `@Transactional(readOnly = true)`: sí.
+
+### `com.schoolmate.api.usecase.profesor.ActualizarProfesor`
+
+- Función: actualizar datos de profesor manteniendo invariantes de RUT y unicidad.
+- Repositorios/dependencias:
+  - `ProfesorRepository`, `MateriaRepository`, `RutValidationService`
+- Reglas:
+  - valida formato de RUT normalizado.
+  - bloquea cambio de RUT (`PROFESOR_RUT_INMUTABLE`).
+  - valida duplicados en `rut`, `email`, `telefono`.
+  - valida `materiaIds` existentes; si faltan -> `MATERIAS_NOT_FOUND`.
+  - persiste y recarga con materias (`findByIdWithMaterias`) para mapeo seguro de respuesta.
+- Salida:
+  - `Profesor`.
+- Errores:
+  - `ResourceNotFoundException`, `ApiException` (`PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`).
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.profesor.ObtenerSesionesProfesor`
+
+- Función: listar sesiones de login del usuario asociado a un profesor (paginado, con filtros opcionales de fecha).
+- Repositorios/dependencias:
+  - `ProfesorRepository`, `UsuarioRepository`, `SesionUsuarioRepository`
+- Reglas:
+  - valida existencia de profesor.
+  - valida que exista usuario vinculado al profesor.
+  - convierte `desde` (inclusivo) y `hasta` (exclusivo +1 día) a `LocalDateTime`.
+  - usa flags booleanos en repository (`aplicarDesde`, `aplicarHasta`) para tipado estable en PostgreSQL.
+- Salida:
+  - `SesionProfesorPageResponse`.
+- Errores:
+  - `ResourceNotFoundException` (profesor no encontrado / sin usuario asociado).
+- `@Transactional(readOnly = true)`: sí.
+
 ### `com.schoolmate.api.usecase.matricula.MatricularAlumno`
 
 - Función: crear matrícula activa de alumno.
@@ -1877,7 +1946,7 @@ Implementación actual:
 | `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | `findActivaByGradoIdAndAnoEscolarIdWithMateria` (`JOIN FETCH materia`) | no |
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
 | `MatriculaRepository` | `Matricula` | `findByIdWithRelaciones`, `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, `countByAnoEscolarIdAndEstado` | `countActivasByCursoIds` | no |
-| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id`, `findByIdWithMaterias`, `countByActivoTrue` | no | no |
+| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id`, `findByIdWithMaterias`, `countByActivoTrue` | `findByIdWithMaterias` (JPQL + `@EntityGraph(materias)`) | no |
 | `SesionUsuarioRepository` | `SesionUsuario` | `findByUsuarioIdAndFechas` (paginado, orden desc por `createdAt`) | JPQL con flags booleanos (`aplicarDesde/aplicarHasta`) para filtros opcionales por rango (`desde`/`hasta`) y tipado estable en PostgreSQL | no |
 | `EventoAuditoriaRepository` | `EventoAuditoria` | `findByFiltros` (paginado por `createdAt DESC`) | JPQL con flags booleanos (`aplicarFiltro`) para filtros opcionales por `usuarioId`, `metodoHttp`, `endpoint LIKE`, `desde/hasta` (evita problemas de tipado con parámetros null en PostgreSQL) | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |

@@ -3,6 +3,7 @@ package com.schoolmate.api.repository;
 import com.schoolmate.api.entity.Profesor;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
@@ -21,5 +22,10 @@ public interface ProfesorRepository extends JpaRepository<Profesor, UUID> {
     long countByActivoTrue();
 
     @EntityGraph(attributePaths = {"materias"})
+    @Query("""
+        select p
+        from Profesor p
+        where p.id = :id
+        """)
     Optional<Profesor> findByIdWithMaterias(UUID id);
 }
