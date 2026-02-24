@@ -3,6 +3,7 @@ package com.schoolmate.api.controller;
 import com.schoolmate.api.dto.request.MallaCurricularBulkRequest;
 import com.schoolmate.api.dto.request.MallaCurricularRequest;
 import com.schoolmate.api.dto.request.MallaCurricularUpdateRequest;
+import com.schoolmate.api.dto.response.MallaCurricularPageResponse;
 import com.schoolmate.api.dto.response.MallaCurricularResponse;
 import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.usecase.malla.ActualizarMallaCurricular;
@@ -46,29 +47,35 @@ public class MallaCurricularController {
     private final EliminarMallaCurricular eliminarMallaCurricular;
 
     @GetMapping
-    public List<MallaCurricularResponse> listarPorAnoEscolar(
+    public MallaCurricularPageResponse listarPorAnoEscolar(
         @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
-        @RequestParam(required = false) UUID anoEscolarId
+        @RequestParam(required = false) UUID anoEscolarId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
     ) {
-        return listarMallaCurricularPorAnoEscolar.execute(anoEscolarHeaderId, anoEscolarId);
+        return listarMallaCurricularPorAnoEscolar.execute(anoEscolarHeaderId, anoEscolarId, page, size);
     }
 
     @GetMapping("/materia/{materiaId}")
-    public List<MallaCurricularResponse> listarPorMateria(
+    public MallaCurricularPageResponse listarPorMateria(
         @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @PathVariable UUID materiaId,
-        @RequestParam(required = false) UUID anoEscolarId
+        @RequestParam(required = false) UUID anoEscolarId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
     ) {
-        return listarMallaCurricularPorMateria.execute(anoEscolarHeaderId, materiaId, anoEscolarId);
+        return listarMallaCurricularPorMateria.execute(anoEscolarHeaderId, materiaId, anoEscolarId, page, size);
     }
 
     @GetMapping("/grado/{gradoId}")
-    public List<MallaCurricularResponse> listarPorGrado(
+    public MallaCurricularPageResponse listarPorGrado(
         @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @PathVariable UUID gradoId,
-        @RequestParam(required = false) UUID anoEscolarId
+        @RequestParam(required = false) UUID anoEscolarId,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "20") int size
     ) {
-        return listarMallaCurricularPorGrado.execute(anoEscolarHeaderId, gradoId, anoEscolarId);
+        return listarMallaCurricularPorGrado.execute(anoEscolarHeaderId, gradoId, anoEscolarId, page, size);
     }
 
     @PostMapping

@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -56,46 +55,9 @@ public class CrearApoderadoConUsuario {
         }
 
         String emailNormalizado = request.getEmail().trim().toLowerCase();
-
-        Optional<Apoderado> apoderadoExistente = apoderadoRepo.findByRut(rutNormalizado);
-        Apoderado apoderado;
-
-        if (apoderadoExistente.isPresent()) {
-            apoderado = apoderadoExistente.get();
-
-            if (apoderadoAlumnoRepo.existsByApoderadoIdAndAlumnoId(apoderado.getId(), request.getAlumnoId())) {
-                throw new ConflictException("Este apoderado ya está vinculado a este alumno");
-            }
-        } else {
-            if (Boolean.TRUE.equals(usuarioRepo.existsByEmail(emailNormalizado))) {
-                throw new ConflictException("Ya existe un usuario con el email: " + emailNormalizado);
-            }
-
-            if (apoderadoRepo.existsByEmail(emailNormalizado)) {
-                throw new ConflictException("Ya existe un apoderado con el email: " + emailNormalizado);
-            }
-
-            apoderado = Apoderado.builder()
-                    .nombre(request.getNombre())
-                    .apellido(request.getApellido())
-                    .rut(rutNormalizado)
-                    .email(emailNormalizado)
-                    .telefono(request.getTelefono())
-                    .build();
-            apoderado = apoderadoRepo.save(apoderado);
-
-            Usuario usuario = Usuario.builder()
-                    .email(emailNormalizado)
-                    .nombre(request.getNombre())
-                    .apellido(request.getApellido())
-                    .rol(Rol.APODERADO)
-                    .rut(rutNormalizado)
-                    .apoderadoId(apoderado.getId())
-                    .passwordHash(passwordEncoder.encode(rutNormalizado))
-                    .activo(true)
-                    .build();
-            usuarioRepo.save(usuario);
-        }
+        Apoderado apoderado = apoderadoRepo.findByRut(rutNormalizado)
+            .map(existente -> validarYRetornarApoderadoExistente(existente, request.getAlumnoId()))
+            .orElseGet(() -> crearApoderadoConUsuario(request, rutNormalizado, emailNormalizado));
 
         ApoderadoAlumno vinculo = ApoderadoAlumno.builder()
                 .id(new ApoderadoAlumnoId(apoderado.getId(), alumno.getId()))
@@ -106,6 +68,44 @@ public class CrearApoderadoConUsuario {
         apoderadoAlumnoRepo.save(vinculo);
 
         return buildResponse(apoderado);
+    }
+
+    private Apoderado validarYRetornarApoderadoExistente(Apoderado apoderado, java.util.UUID alumnoId) {
+        if (apoderadoAlumnoRepo.existsByApoderadoIdAndAlumnoId(apoderado.getId(), alumnoId)) {
+            throw new ConflictException("Este apoderado ya está vinculado a este alumno");
+        }
+        return apoderado;
+    }
+
+    private Apoderado crearApoderadoConUsuario(ApoderadoRequest request, String rutNormalizado, String emailNormalizado) {
+        if (Boolean.TRUE.equals(usuarioRepo.existsByEmail(emailNormalizado))) {
+            throw new ConflictException("Ya existe un usuario con el email: " + emailNormalizado);
+        }
+        if (apoderadoRepo.existsByEmail(emailNormalizado)) {
+            throw new ConflictException("Ya existe un apoderado con el email: " + emailNormalizado);
+        }
+
+        Apoderado apoderado = Apoderado.builder()
+            .nombre(request.getNombre())
+            .apellido(request.getApellido())
+            .rut(rutNormalizado)
+            .email(emailNormalizado)
+            .telefono(request.getTelefono())
+            .build();
+        apoderado = apoderadoRepo.save(apoderado);
+
+        Usuario usuario = Usuario.builder()
+            .email(emailNormalizado)
+            .nombre(request.getNombre())
+            .apellido(request.getApellido())
+            .rol(Rol.APODERADO)
+            .rut(rutNormalizado)
+            .apoderadoId(apoderado.getId())
+            .passwordHash(passwordEncoder.encode(rutNormalizado))
+            .activo(true)
+            .build();
+        usuarioRepo.save(usuario);
+        return apoderado;
     }
 
     private String normalizarRut(String rut) {

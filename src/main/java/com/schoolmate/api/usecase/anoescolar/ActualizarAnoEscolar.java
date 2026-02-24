@@ -31,7 +31,9 @@ public class ActualizarAnoEscolar {
 
         AnoEscolarValidaciones.validarOrdenFechas(request);
         AnoEscolarValidaciones.validarAnoCoincideConFechaInicio(request);
-        AnoEscolarValidaciones.validarSinSolapamientos(anoEscolarRepository.findAll(), request, id);
+        if (anoEscolarRepository.existsSolapamientoExcluyendoId(request.getFechaInicio(), request.getFechaFin(), id)) {
+            throw new BusinessException("Las fechas se solapan con un año escolar existente");
+        }
 
         ano.setAno(request.getAno());
         ano.setFechaInicioPlanificacion(request.getFechaInicioPlanificacion());

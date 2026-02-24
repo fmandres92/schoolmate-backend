@@ -1,6 +1,8 @@
 package com.schoolmate.api.repository;
 
 import com.schoolmate.api.entity.Curso;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -13,6 +15,19 @@ public interface CursoRepository extends JpaRepository<Curso, UUID> {
     List<Curso> findByAnoEscolarIdAndGradoIdOrderByLetraAsc(UUID anoEscolarId, UUID gradoId);
     List<Curso> findByActivoTrueAndAnoEscolarIdOrderByNombreAsc(UUID anoEscolarId);
     long countByAnoEscolarIdAndActivoTrue(UUID anoEscolarId);
+
+    @EntityGraph(attributePaths = {"grado", "anoEscolar"})
+    Page<Curso> findPageByAnoEscolarIdAndGradoId(UUID anoEscolarId, UUID gradoId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"grado", "anoEscolar"})
+    Page<Curso> findPageByAnoEscolarId(UUID anoEscolarId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"grado", "anoEscolar"})
+    @Query("""
+        select c
+        from Curso c
+        """)
+    Page<Curso> findPageWithRelaciones(Pageable pageable);
 
     @EntityGraph(attributePaths = {"grado", "anoEscolar"})
     @Query("""

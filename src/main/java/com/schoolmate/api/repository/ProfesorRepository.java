@@ -1,6 +1,8 @@
 package com.schoolmate.api.repository;
 
 import com.schoolmate.api.entity.Profesor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -25,7 +27,22 @@ public interface ProfesorRepository extends JpaRepository<Profesor, UUID> {
     @Query("""
         select p
         from Profesor p
+        order by p.apellido asc
+        """)
+    List<Profesor> findAllOrderByApellidoAscWithMaterias();
+
+    @EntityGraph(attributePaths = {"materias"})
+    @Query("""
+        select p
+        from Profesor p
         where p.id = :id
         """)
     Optional<Profesor> findByIdWithMaterias(UUID id);
+
+    @EntityGraph(attributePaths = {"materias"})
+    @Query("""
+        select p
+        from Profesor p
+        """)
+    Page<Profesor> findPageWithMaterias(Pageable pageable);
 }

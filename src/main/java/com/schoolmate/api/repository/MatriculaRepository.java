@@ -5,6 +5,8 @@ import com.schoolmate.api.enums.EstadoMatricula;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.Collection;
 import java.util.List;
@@ -24,6 +26,19 @@ public interface MatriculaRepository extends JpaRepository<Matricula, UUID> {
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
     List<Matricula> findByAlumnoId(UUID alumnoId);
+
+    @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
+    @Query("""
+        select m
+        from Matricula m
+        where m.alumno.id in :alumnoIds
+          and m.estado = :estado
+        order by m.fechaMatricula desc, m.createdAt desc
+        """)
+    List<Matricula> findByAlumnoIdInAndEstadoOrderByFechaMatriculaDescCreatedAtDesc(
+        Collection<UUID> alumnoIds,
+        EstadoMatricula estado
+    );
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
     List<Matricula> findByCursoIdAndEstado(UUID cursoId, EstadoMatricula estado);
@@ -48,6 +63,12 @@ public interface MatriculaRepository extends JpaRepository<Matricula, UUID> {
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
     List<Matricula> findByCursoIdAndEstadoOrderByAlumnoApellidoAsc(
         UUID cursoId, EstadoMatricula estado);
+
+    @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
+    Page<Matricula> findPageByCursoIdAndEstado(UUID cursoId, EstadoMatricula estado, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
+    Page<Matricula> findPageByAlumnoId(UUID alumnoId, Pageable pageable);
 
     long countByCursoIdAndEstado(UUID cursoId, EstadoMatricula estado);
 

@@ -25,7 +25,9 @@ public class CrearAnoEscolar {
 
         AnoEscolarValidaciones.validarOrdenFechas(request);
         AnoEscolarValidaciones.validarAnoCoincideConFechaInicio(request);
-        AnoEscolarValidaciones.validarSinSolapamientos(anoEscolarRepository.findAll(), request, null);
+        if (anoEscolarRepository.existsSolapamiento(request.getFechaInicio(), request.getFechaFin())) {
+            throw new BusinessException("Las fechas se solapan con un año escolar existente");
+        }
         AnoEscolarValidaciones.validarFechaFinNoPasada(request.getFechaFin(), clockProvider.today());
 
         AnoEscolar anoEscolar = AnoEscolar.builder()

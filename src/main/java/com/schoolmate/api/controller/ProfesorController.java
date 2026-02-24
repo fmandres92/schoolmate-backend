@@ -3,6 +3,7 @@ import java.util.UUID;
 
 import com.schoolmate.api.dto.SesionProfesorPageResponse;
 import com.schoolmate.api.dto.request.ProfesorRequest;
+import com.schoolmate.api.dto.response.ProfesorPageResponse;
 import com.schoolmate.api.dto.response.ProfesorResponse;
 import com.schoolmate.api.entity.Profesor;
 import com.schoolmate.api.usecase.profesor.ActualizarProfesor;
@@ -18,8 +19,6 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/profesores")
 @RequiredArgsConstructor
@@ -33,8 +32,12 @@ public class ProfesorController {
     private final ObtenerSesionesProfesor obtenerSesionesProfesor;
 
     @GetMapping
-    public ResponseEntity<List<ProfesorResponse>> listar() {
-        return ResponseEntity.ok(obtenerProfesores.execute());
+    public ResponseEntity<ProfesorPageResponse> listar(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "apellido") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        return ResponseEntity.ok(obtenerProfesores.execute(page, size, sortBy, sortDir));
     }
 
     @GetMapping("/{id}")

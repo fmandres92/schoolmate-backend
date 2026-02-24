@@ -1,7 +1,6 @@
 package com.schoolmate.api.usecase.alumno;
 
 import com.schoolmate.api.dto.response.AlumnoResponse;
-import com.schoolmate.api.entity.Apoderado;
 import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.enums.EstadoMatricula;
@@ -14,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
 import java.util.UUID;
 
 @Component
@@ -58,28 +56,24 @@ public class ObtenerDetalleAlumno {
         }
 
         ApoderadoAlumno vinculoPrincipal = vinculos.get(0);
-        Optional<Apoderado> apoderadoOpt = apoderadoRepository.findById(vinculoPrincipal.getId().getApoderadoId());
-        if (apoderadoOpt.isEmpty()) {
-            return;
-        }
+        apoderadoRepository.findById(vinculoPrincipal.getId().getApoderadoId()).ifPresent(apoderado -> {
+            String nombreVinculo = vinculoPrincipal.getVinculo() != null
+                ? vinculoPrincipal.getVinculo().name()
+                : "OTRO";
 
-        Apoderado apoderado = apoderadoOpt.get();
-        String nombreVinculo = vinculoPrincipal.getVinculo() != null
-            ? vinculoPrincipal.getVinculo().name()
-            : "OTRO";
+            response.setApoderado(AlumnoResponse.ApoderadoInfo.builder()
+                .id(apoderado.getId())
+                .nombre(apoderado.getNombre())
+                .apellido(apoderado.getApellido())
+                .rut(apoderado.getRut())
+                .vinculo(nombreVinculo)
+                .build());
 
-        response.setApoderado(AlumnoResponse.ApoderadoInfo.builder()
-            .id(apoderado.getId())
-            .nombre(apoderado.getNombre())
-            .apellido(apoderado.getApellido())
-            .rut(apoderado.getRut())
-            .vinculo(nombreVinculo)
-            .build());
-
-        response.setApoderadoNombre(apoderado.getNombre());
-        response.setApoderadoApellido(apoderado.getApellido());
-        response.setApoderadoEmail(apoderado.getEmail());
-        response.setApoderadoTelefono(apoderado.getTelefono());
-        response.setApoderadoVinculo(nombreVinculo);
+            response.setApoderadoNombre(apoderado.getNombre());
+            response.setApoderadoApellido(apoderado.getApellido());
+            response.setApoderadoEmail(apoderado.getEmail());
+            response.setApoderadoTelefono(apoderado.getTelefono());
+            response.setApoderadoVinculo(nombreVinculo);
+        });
     }
 }

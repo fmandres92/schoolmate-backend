@@ -1,15 +1,16 @@
 package com.schoolmate.api.usecase.malla;
 
 import com.schoolmate.api.dto.response.MallaCurricularResponse;
+import com.schoolmate.api.dto.response.MallaCurricularPageResponse;
 import com.schoolmate.api.exception.ApiException;
 import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.repository.MallaCurricularRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -20,13 +21,36 @@ public class ListarMallaCurricularPorGrado {
     private final MallaCurricularRepository mallaCurricularRepository;
 
     @Transactional(readOnly = true)
-    public List<MallaCurricularResponse> execute(UUID anoEscolarHeaderId, UUID gradoId, UUID anoEscolarId) {
+    public MallaCurricularPageResponse execute(
+        UUID anoEscolarHeaderId,
+        UUID gradoId,
+        UUID anoEscolarId,
+        int page,
+        int size
+    ) {
         UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, anoEscolarId);
-
-        return mallaCurricularRepository.findByGradoIdAndAnoEscolarId(gradoId, resolvedAnoEscolarId).stream()
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(1, Math.min(size, 100));
+        var pageResult = mallaCurricularRepository.findPageByGradoIdAndAnoEscolarId(
+            gradoId,
+            resolvedAnoEscolarId,
+            PageRequest.of(safePage, safeSize, Sort.by(Sort.Order.asc("materia.nombre")))
+        );
+        var content = pageResult.getContent().stream()
             .map(MallaCurricularMapper::toResponse)
-            .sorted(Comparator.comparing(MallaCurricularResponse::getMateriaNombre, Comparator.nullsLast(String::compareToIgnoreCase)))
             .toList();
+
+        return MallaCurricularPageResponse.builder()
+            .content(content)
+            .page(pageResult.getNumber())
+            .size(pageResult.getSize())
+            .totalElements(pageResult.getTotalElements())
+            .totalPages(pageResult.getTotalPages())
+            .sortBy("materia.nombre")
+            .sortDir("asc")
+            .hasNext(pageResult.hasNext())
+            .hasPrevious(pageResult.hasPrevious())
+            .build();
     }
 
     private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarId) {

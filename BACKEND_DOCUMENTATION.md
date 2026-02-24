@@ -242,6 +242,22 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
     - dejan de resolver alumnos con `findById(...)` por cada vínculo y reutilizan `findByApoderadoIdWithAlumno(...)`.
   - resultado: menor cantidad de queries por request en portal/gestión de apoderados.
 
+### Actualización técnica reciente (anti-pattern batch: paginación + N+1 + validaciones DB)
+
+- Endpoints de lectura de colecciones ahora paginados para evitar crecimiento no acotado de payload:
+  - `GET /api/cursos` -> `CursoPageResponse`
+  - `GET /api/profesores` -> `ProfesorPageResponse`
+  - `GET /api/malla-curricular` y derivados por `materia/grado` -> `MallaCurricularPageResponse`
+  - `GET /api/matriculas/curso/{cursoId}` y `GET /api/matriculas/alumno/{alumnoId}` -> `MatriculaPageResponse`
+- Nuevos DTOs de paginación agregados en `dto/response`:
+  - `CursoPageResponse`, `ProfesorPageResponse`, `MallaCurricularPageResponse`, `MatriculaPageResponse`.
+- Antipatrón #1 (N+1) adicional corregido:
+  - `BuscarApoderadoPorRut` dejó de consultar matrículas por alumno dentro de `map` y ahora resuelve curso activo por lote con `findByAlumnoIdInAndEstadoOrderByFechaMatriculaDescCreatedAtDesc(...)`.
+- Antipatrón #2 (filtrado en memoria) corregido en años escolares:
+  - `CrearAnoEscolar` y `ActualizarAnoEscolar` validan solapamientos con queries de existencia en BD (`existsSolapamiento*`) en vez de `findAll()` + loop.
+- Antipatrón #6 (acoplamiento temporal) corregido en fallback de entidades insert-only:
+  - `SesionUsuario` y `EventoAuditoria` usan `TimeContext.now()` en `@PrePersist`.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -461,6 +477,7 @@ Clase: `ApiErrorResponse`
   - `DiaNoLectivoResponse`
   - `EstadoClaseHoy`
   - `AuthResponse`
+  - `CursoPageResponse`
   - `GradoResponse`
   - `CursoResponse`
   - `JornadaCursoResponse`
@@ -468,13 +485,16 @@ Clase: `ApiErrorResponse`
   - `JornadaResumenResponse`
   - `MateriaDisponibleResponse`
   - `MallaCurricularResponse`
+  - `MallaCurricularPageResponse`
   - `MateriaPageResponse`
   - `MateriaResponse`
+  - `MatriculaPageResponse`
   - `MatriculaResponse`
   - `ProfesorDisponibleResponse`
   - `ProfesorHorarioResponse`
   - `ProfesorResumenAsignacionResponse`
   - `ProfesoresDisponiblesResponse`
+  - `ProfesorPageResponse`
   - `ProfesorResponse`
   - `RegistroAsistenciaResponse`
 - `com.schoolmate.api.entity`
@@ -1316,9 +1336,9 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/malla-curricular` | Lista malla activa por año (prioridad `header > query`) | `ADMIN` | Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback, obligatorio al menos uno) | - | `List<MallaCurricularResponse>` | `ListarMallaCurricularPorAnoEscolar` | `ACCESS_DENIED`, `VALIDATION_FAILED` |
-| `GET /api/malla-curricular/materia/{materiaId}` | Lista malla por materia y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | `ListarMallaCurricularPorMateria` | `VALIDATION_FAILED` |
-| `GET /api/malla-curricular/grado/{gradoId}` | Lista malla por grado y año (prioridad `header > query`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `List<MallaCurricularResponse>` | `ListarMallaCurricularPorGrado` | `VALIDATION_FAILED` |
+| `GET /api/malla-curricular` | Lista malla activa por año (prioridad `header > query`), paginada | `ADMIN` | Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback, obligatorio al menos uno) + Query `page,size` | - | `MallaCurricularPageResponse` | `ListarMallaCurricularPorAnoEscolar` | `ACCESS_DENIED`, `VALIDATION_FAILED` |
+| `GET /api/malla-curricular/materia/{materiaId}` | Lista malla por materia y año (prioridad `header > query`), paginada | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) + Query `page,size` | - | `MallaCurricularPageResponse` | `ListarMallaCurricularPorMateria` | `VALIDATION_FAILED` |
+| `GET /api/malla-curricular/grado/{gradoId}` | Lista malla por grado y año (prioridad `header > query`), paginada | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) + Query `page,size` | - | `MallaCurricularPageResponse` | `ListarMallaCurricularPorGrado` | `VALIDATION_FAILED` |
 | `POST /api/malla-curricular` | Crea registro malla (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId?,horasPedagogicas}` | `MallaCurricularResponse` | `CrearMallaCurricular` | `409` conflict (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
 | `PUT /api/malla-curricular/{id}` | Actualiza horas/activo | `ADMIN` | Path + Body | `MallaCurricularUpdateRequest {horasPedagogicas,activo}` | `MallaCurricularResponse` | `ActualizarMallaCurricular` | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 | `POST /api/malla-curricular/bulk` | Upsert masivo por materia-año (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularBulkRequest` | `List<MallaCurricularResponse>` | `GuardarMallaCurricularBulk` | `BAD_REQUEST` grados duplicados, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
@@ -1328,7 +1348,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/cursos` | Lista cursos (filtro opcional por año/grado) + matriculados (prioridad `header > query`) | `ADMIN` | Header opcional `X-Ano-Escolar-Id`; Query opcional `anoEscolarId`, `gradoId` | - | `List<CursoResponse>` | `ObtenerCursos` | - |
+| `GET /api/cursos` | Lista cursos (filtro opcional por año/grado) + matriculados (prioridad `header > query`), paginada y ordenable | `ADMIN` | Header opcional `X-Ano-Escolar-Id`; Query opcional `anoEscolarId`,`gradoId`,`page`,`size`,`sortBy`,`sortDir` | - | `CursoPageResponse` | `ObtenerCursos` | - |
 | `GET /api/cursos/{id}` | Detalle enriquecido (malla + conteos) | `ADMIN` | Path `id` | - | `CursoResponse` con `materias`, `cantidadMaterias`, `totalHorasPedagogicas`, `alumnosMatriculados` | `ObtenerDetalleCurso` | `RESOURCE_NOT_FOUND` |
 | `POST /api/cursos` | Crea curso con letra automática (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `CursoRequest {gradoId,anoEscolarId?}` | `CursoResponse` | `CrearCurso` | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
 | `PUT /api/cursos/{id}` | Reasigna curso (recalcula letra si cambia grado/año, prioridad `header > body`) | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Body | `CursoRequest` | `CursoResponse` | `ActualizarCurso` | `RESOURCE_NOT_FOUND`, `CURSO_SIN_SECCION_DISPONIBLE`, `VALIDATION_FAILED` |
@@ -1337,7 +1357,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/profesores` | Lista profesores ordenados por apellido | `ADMIN` | - | - | `List<ProfesorResponse>` | `ObtenerProfesores` | - |
+| `GET /api/profesores` | Lista profesores, paginada y ordenable | `ADMIN` | Query `page,size,sortBy,sortDir` | - | `ProfesorPageResponse` | `ObtenerProfesores` | - |
 | `GET /api/profesores/{id}` | Obtiene profesor con contrato y horas asignadas del año ACTIVO (si existe) | `ADMIN` | Path | - | `ProfesorResponse` | `ObtenerDetalleProfesor` | `RESOURCE_NOT_FOUND` |
 | `GET /api/profesores/{profesorId}/sesiones` | Lista sesiones de login del usuario asociado al profesor (paginado, filtro por fechas) | `ADMIN` | Path `profesorId`; Query opcional `desde`,`hasta`,`page`,`size` | - | `SesionProfesorPageResponse` | `ObtenerSesionesProfesor` | `RESOURCE_NOT_FOUND` |
 | `POST /api/profesores` | Crea profesor con materias, horas de contrato y usuario asociado (`ROL=PROFESOR`); valida formato/DV de RUT y disponibilidad cross-tabla | `ADMIN` | Body | `ProfesorRequest` | `ProfesorResponse` | `CrearProfesorConUsuario` | `PROFESOR_RUT_DUPLICADO`, `PROFESOR_EMAIL_DUPLICADO`, `PROFESOR_TELEFONO_DUPLICADO`, `MATERIAS_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
@@ -1361,8 +1381,8 @@ Implementación actual:
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
 | `POST /api/matriculas` | Matricula alumno en curso/año (prioridad `header > body`); bloquea creación si el año escolar está `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MatriculaRequest {alumnoId,cursoId,anoEscolarId?,fechaMatricula?}` | `MatriculaResponse` | `MatricularAlumno` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `GET /api/matriculas/curso/{cursoId}` | Matrículas activas por curso | `ADMIN`,`PROFESOR` (ownership por curso en año activo) | Path `cursoId` | - | `List<MatriculaResponse>` | `ObtenerMatriculasPorCurso` + `ValidarAccesoMatriculasCursoProfesor` | `ACCESS_DENIED` |
-| `GET /api/matriculas/alumno/{alumnoId}` | Historial de matrículas por alumno | `ADMIN` | Path `alumnoId` | - | `List<MatriculaResponse>` | `ObtenerMatriculasPorAlumno` | - |
+| `GET /api/matriculas/curso/{cursoId}` | Matrículas activas por curso, paginadas y ordenables | `ADMIN`,`PROFESOR` (ownership por curso en año activo) | Path `cursoId` + Query `page,size,sortBy,sortDir` | - | `MatriculaPageResponse` | `ObtenerMatriculasPorCurso` + `ValidarAccesoMatriculasCursoProfesor` | `ACCESS_DENIED` |
+| `GET /api/matriculas/alumno/{alumnoId}` | Historial de matrículas por alumno, paginado y ordenable | `ADMIN` | Path `alumnoId` + Query `page,size,sortBy,sortDir` | - | `MatriculaPageResponse` | `ObtenerMatriculasPorAlumno` | - |
 | `PATCH /api/matriculas/{id}/estado` | Cambia estado (`ACTIVA/RETIRADO/TRASLADADO`) | `ADMIN` | Path + Body | `CambiarEstadoMatriculaRequest {estado}` | `MatriculaResponse` | `CambiarEstadoMatricula` | `VALIDATION_FAILED`, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 
 ### Dominio: Asistencia
@@ -1563,7 +1583,7 @@ Implementación actual:
   - bloquea duplicados por `ano`.
   - valida orden `fechaInicioPlanificacion < fechaInicio < fechaFin`.
   - valida `request.ano == request.fechaInicio.year`.
-  - valida que no se solape con otros años existentes.
+  - valida que no se solape con otros años existentes mediante `existsSolapamiento(...)` en BD.
   - bloquea creación con `fechaFin` en el pasado.
 - Salida:
   - `AnoEscolarResponse`.
@@ -1579,7 +1599,7 @@ Implementación actual:
 - Reglas:
   - valida existencia por id.
   - no permite modificar un año en estado `CERRADO`.
-  - valida orden de fechas, coherencia de año y no solapamiento (excluyendo el propio id).
+  - valida orden de fechas, coherencia de año y no solapamiento por query de existencia (`existsSolapamientoExcluyendoId(...)`).
 - Salida:
   - `AnoEscolarResponse`.
 - Errores:
@@ -1610,17 +1630,21 @@ Implementación actual:
 
 ### `com.schoolmate.api.usecase.curso.ObtenerCursos`
 
-- Función: listar cursos con filtros opcionales por año/grado y enriquecer con total de matrículas activas.
+- Función: listar cursos con filtros opcionales por año/grado, paginación/orden y enriquecer con total de matrículas activas.
 - Repositorios/dependencias:
   - `CursoRepository`, `MatriculaRepository`
 - Reglas:
   - resuelve prioridad de año escolar `header > query`.
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - normaliza orden:
+    - `sortBy` permitido: `nombre`, `letra`, `createdAt`, `updatedAt` (fallback `nombre`).
+    - `sortDir` permitido: `asc|desc` (fallback `asc`).
   - si hay año+grado: consulta por ambos.
   - si hay solo año: consulta por año.
-  - si no hay año: lista global ordenada.
+  - si no hay año: lista global.
   - calcula `alumnosMatriculados` con query agregada `countActivasByCursoIds(...)`.
 - Salida:
-  - `List<CursoResponse>`.
+  - `CursoPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.curso.ObtenerDetalleCurso`
@@ -1735,35 +1759,41 @@ Implementación actual:
 
 ### `com.schoolmate.api.usecase.malla.ListarMallaCurricularPorAnoEscolar`
 
-- Función: listar malla activa por año escolar (`header > query`) ordenada por grado y materia.
+- Función: listar malla activa por año escolar (`header > query`), paginada y ordenada por grado y materia.
 - Repositorios/dependencias:
   - `MallaCurricularRepository`
 - Reglas:
   - requiere `anoEscolarId` resuelto desde header o query.
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - orden fijo: `grado.nivel asc`, `materia.nombre asc`.
 - Salida:
-  - `List<MallaCurricularResponse>`.
+  - `MallaCurricularPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.malla.ListarMallaCurricularPorMateria`
 
-- Función: listar malla por `materiaId` y año escolar (`header > query`).
+- Función: listar malla por `materiaId` y año escolar (`header > query`), paginada.
 - Repositorios/dependencias:
   - `MallaCurricularRepository`
 - Reglas:
   - requiere `anoEscolarId` resuelto desde header o query.
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - orden fijo: `grado.nivel asc`.
 - Salida:
-  - `List<MallaCurricularResponse>`.
+  - `MallaCurricularPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.malla.ListarMallaCurricularPorGrado`
 
-- Función: listar malla por `gradoId` y año escolar (`header > query`).
+- Función: listar malla por `gradoId` y año escolar (`header > query`), paginada.
 - Repositorios/dependencias:
   - `MallaCurricularRepository`
 - Reglas:
   - requiere `anoEscolarId` resuelto desde header o query.
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - orden fijo: `materia.nombre asc`.
 - Salida:
-  - `List<MallaCurricularResponse>`.
+  - `MallaCurricularPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.malla.CrearMallaCurricular`
@@ -1902,6 +1932,7 @@ Implementación actual:
   - normaliza y valida RUT de entrada.
   - requiere existencia de apoderado por RUT.
   - enriquece cada alumno con curso de matrícula `ACTIVA` cuando existe.
+  - evita N+1: resuelve matrículas activas por lote (`alumnoId IN (...)`) y luego mapea en memoria.
 - Salida:
   - `ApoderadoBuscarResponse`.
 - Errores:
@@ -2008,13 +2039,18 @@ Implementación actual:
 
 ### `com.schoolmate.api.usecase.profesor.ObtenerProfesores`
 
-- Función: listar profesores ordenados por apellido.
+- Función: listar profesores paginados y ordenables.
 - Repositorios/dependencias:
   - `ProfesorRepository`
 - Reglas:
   - lectura pura para alimentar `GET /api/profesores`.
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - normaliza orden:
+    - `sortBy` permitido: `apellido`, `nombre`, `email`, `fechaContratacion`, `createdAt` (fallback `apellido`).
+    - `sortDir` permitido: `asc|desc` (fallback `asc`).
+  - usa `findPageWithMaterias(...)` con carga explícita de `materias`.
 - Salida:
-  - `List<ProfesorResponse>`.
+  - `ProfesorPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.profesor.ObtenerDetalleProfesor`
@@ -2149,25 +2185,33 @@ Implementación actual:
 
 ### `com.schoolmate.api.usecase.matricula.ObtenerMatriculasPorCurso`
 
-- Función: listar matrículas activas por curso aplicando ownership para `PROFESOR`.
+- Función: listar matrículas activas por curso aplicando ownership para `PROFESOR`, paginado y ordenable.
 - Repositorios/dependencias:
   - `MatriculaRepository`, `ValidarAccesoMatriculasCursoProfesor`
 - Reglas:
   - valida acceso según rol/ownership antes de consultar.
-  - retorna solo estado `ACTIVA` ordenado por apellido de alumno.
+  - retorna solo estado `ACTIVA`.
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - normaliza orden:
+    - `sortBy` permitido: `alumno.apellido`, `alumno.nombre`, `fechaMatricula`, `createdAt`, `updatedAt` (fallback `alumno.apellido`).
+    - `sortDir` permitido: `asc|desc` (fallback `asc`).
 - Salida:
-  - `List<MatriculaResponse>`.
+  - `MatriculaPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.matricula.ObtenerMatriculasPorAlumno`
 
-- Función: obtener historial de matrículas de un alumno.
+- Función: obtener historial de matrículas de un alumno, paginado y ordenable.
 - Repositorios/dependencias:
   - `MatriculaRepository`
 - Reglas:
   - lectura pura del historial por `alumnoId`.
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - normaliza orden:
+    - `sortBy` permitido: `fechaMatricula`, `createdAt`, `updatedAt`, `estado` (fallback `fechaMatricula`).
+    - `sortDir` permitido: `asc|desc` (fallback `desc`).
 - Salida:
-  - `List<MatriculaResponse>`.
+  - `MatriculaPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.profesor.ObtenerClasesHoyProfesor`
@@ -2401,16 +2445,16 @@ Implementación actual:
 | Repositorio | Entidad | Métodos derivados destacados | `@Query` custom | Specifications |
 |---|---|---|---|---|
 | `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | `findActivoByRutNormalizado` (native SQL con `regexp_replace`) | sí, vía `JpaSpecificationExecutor` |
-| `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual`, `findActivoByFecha` (default) | no | no |
+| `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual`, `findActivoByFecha` (default) | `existsSolapamiento`, `existsSolapamientoExcluyendoId` | no |
 | `AsistenciaClaseRepository` | `AsistenciaClase` | `findByBloqueHorarioIdAndFecha`, `existsByBloqueHorarioIdAndFecha` | no | no |
 | `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findColisionesProfesorConCursoYMateria`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolarConProfesor`, `findClasesProfesorEnDia`, `existsBloqueActivoProfesorEnCurso`, `findDetalleById`, `findActivosByCursoIdWithMateriaAndProfesorOrderByDiaSemanaAscNumeroBloqueAsc`, `findActivosByCursoIdAndDiaSemanaWithMateriaAndProfesorOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor` | no |
-| `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc`, `countByAnoEscolarIdAndActivoTrue` | `findLetrasUsadasByGradoIdAndAnoEscolarId`, `findByIdWithGradoAndAnoEscolar`, `findByAnoEscolarIdOrderByNombreAscWithRelaciones`, `findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones`, `findAllOrderByNombreAscWithRelaciones` | no |
+| `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc`, `countByAnoEscolarIdAndActivoTrue`, `findPageByAnoEscolarIdAndGradoId`, `findPageByAnoEscolarId` | `findLetrasUsadasByGradoIdAndAnoEscolarId`, `findByIdWithGradoAndAnoEscolar`, `findByAnoEscolarIdOrderByNombreAscWithRelaciones`, `findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones`, `findAllOrderByNombreAscWithRelaciones`, `findPageWithRelaciones` | no |
 | `DiaNoLectivoRepository` | `DiaNoLectivo` | `existsByAnoEscolarIdAndFecha`, `findByAnoEscolarIdAndFecha`, `findByAnoEscolarIdOrderByFechaAsc`, `findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc` | no | no |
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
-| `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | `findActivaByGradoIdAndAnoEscolarIdWithMateria` (`JOIN FETCH materia`) | no |
+| `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...`/`findPageBy...` y `existsBy...` combinando materia/grado/año/activo | `findActivaByGradoIdAndAnoEscolarIdWithMateria` (`JOIN FETCH materia`) | no |
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
-| `MatriculaRepository` | `Matricula` | `findByIdWithRelaciones`, `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, `countByAnoEscolarIdAndEstado` | `countActivasByCursoIds` | no |
-| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id`, `findByIdWithMaterias`, `countByActivoTrue` | `findByIdWithMaterias` (JPQL + `@EntityGraph(materias)`) | no |
+| `MatriculaRepository` | `Matricula` | `findByIdWithRelaciones`, `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndEstadoOrderByFechaMatriculaDescCreatedAtDesc`, `findPageByCursoIdAndEstado`, `findPageByAlumnoId`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, `countByAnoEscolarIdAndEstado` | `countActivasByCursoIds` | no |
+| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id`, `findByIdWithMaterias`, `findAllOrderByApellidoAscWithMaterias`, `findPageWithMaterias`, `countByActivoTrue` | `findByIdWithMaterias` (JPQL + `@EntityGraph(materias)`), `findAllOrderByApellidoAscWithMaterias`, `findPageWithMaterias` | no |
 | `SesionUsuarioRepository` | `SesionUsuario` | `findByUsuarioIdAndFechas` (paginado, orden desc por `createdAt`) | JPQL con flags booleanos (`aplicarDesde/aplicarHasta`) para filtros opcionales por rango (`desde`/`hasta`) y tipado estable en PostgreSQL | no |
 | `EventoAuditoriaRepository` | `EventoAuditoria` | `findByFiltros` (paginado por `createdAt DESC`) | JPQL con flags booleanos (`aplicarFiltro`) para filtros opcionales por `usuarioId`, `metodoHttp`, `endpoint LIKE`, `desde/hasta` (evita problemas de tipado con parámetros null en PostgreSQL) | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |
@@ -2489,13 +2533,17 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `MateriaResponse` | `id,nombre,icono,createdAt,updatedAt` | `@Data @Builder` |
 | `MateriaPageResponse` | `content,page,size,totalElements,totalPages,sortBy,sortDir,hasNext,hasPrevious` | `@Data @Builder` |
 | `ProfesorResponse` | `id,rut,nombre,apellido,email,telefono,fechaContratacion,horasPedagogicasContrato,horasAsignadas,activo,materias,createdAt,updatedAt` | `@Data @Builder` |
+| `ProfesorPageResponse` | `content,page,size,totalElements,totalPages,sortBy,sortDir,hasNext,hasPrevious` | `@Data @Builder` |
 | `ProfesorResponse.MateriaInfo` | `id,nombre,icono` | `@Data @Builder` |
 | `CursoResponse` | `id,nombre,letra,gradoId,gradoNombre,anoEscolarId,anoEscolar,activo,alumnosMatriculados,cantidadMaterias,totalHorasPedagogicas,materias,createdAt,updatedAt` | `@Data @Builder` |
+| `CursoPageResponse` | `content,page,size,totalElements,totalPages,sortBy,sortDir,hasNext,hasPrevious` | `@Data @Builder` |
 | `CursoResponse.MateriaCargaResponse` | `materiaId,materiaNombre,materiaIcono,horasPedagogicas` | `@Data @Builder` |
 | `AlumnoResponse` | datos personales + compatibilidad (`apoderadoNombre/apellido/email/telefono/vinculo`) + `apoderado` (objeto) + auditoría + matrícula opcional (`matriculaId,cursoId,cursoNombre,gradoNombre,estadoMatricula,fechaMatricula`) | `@Data @Builder` |
 | `AlumnoResponse.ApoderadoInfo` | `id,nombre,apellido,rut,vinculo` | `@Data @Builder` |
 | `AlumnoPageResponse` | contrato paginado equivalente a materias | `@Data @Builder` |
 | `MallaCurricularResponse` | `id,materiaId,materiaNombre,materiaIcono,gradoId,gradoNombre,gradoNivel,anoEscolarId,anoEscolar,horasPedagogicas,activo,createdAt,updatedAt` | `@Data @Builder` |
+| `MallaCurricularPageResponse` | `content,page,size,totalElements,totalPages,sortBy,sortDir,hasNext,hasPrevious` | `@Data @Builder` |
+| `MatriculaPageResponse` | `content,page,size,totalElements,totalPages,sortBy,sortDir,hasNext,hasPrevious` | `@Data @Builder` |
 | `MatriculaResponse` | `id,alumno*,curso*,gradoNombre,anoEscolar*,fechaMatricula,estado,createdAt,updatedAt` | `@Data @Builder` |
 | `BloqueHorarioResponse` | `id,numeroBloque,horaInicio,horaFin,tipo,materia*,profesor*` | `@Getter/@Setter @Builder` |
 | `JornadaDiaResponse` | `diaSemana,nombreDia,bloques,totalBloquesClase,horaInicio,horaFin` | `@Getter/@Setter @Builder` |
@@ -2721,7 +2769,7 @@ Para alumnos:
 
 ### Paginación
 
-Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`):
+Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`, `CursoPageResponse`, `ProfesorPageResponse`, `MallaCurricularPageResponse`, `MatriculaPageResponse`):
 
 - `content`
 - `page`
@@ -2740,12 +2788,22 @@ Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`):
   - filtros `cursoId`, `gradoId` y año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
 - `GET /api/cursos`:
   - año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback), `gradoId`
+  - paginación/orden: `page,size,sortBy,sortDir`
 - `GET /api/malla-curricular`:
   - año escolar obligatorio por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
+  - paginación: `page,size` (orden fijo backend)
 - `GET /api/malla-curricular/materia/{materiaId}`:
   - año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
+  - paginación: `page,size` (orden fijo backend)
 - `GET /api/malla-curricular/grado/{gradoId}`:
   - año escolar por `X-Ano-Escolar-Id` (o `anoEscolarId` query fallback)
+  - paginación: `page,size` (orden fijo backend)
+- `GET /api/profesores`:
+  - paginación/orden: `page,size,sortBy,sortDir`
+- `GET /api/matriculas/curso/{cursoId}`:
+  - paginación/orden: `page,size,sortBy,sortDir`
+- `GET /api/matriculas/alumno/{alumnoId}`:
+  - paginación/orden: `page,size,sortBy,sortDir`
 - `GET /api/cursos/{cursoId}/jornada`:
   - filtro opcional `diaSemana`
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual`:
@@ -2866,7 +2924,10 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 - OSIV desactivado (`spring.jpa.open-in-view=false`) para evitar lazy loading implícito en serialización.
 - Cargas explícitas de relaciones en curso/jornada con `@EntityGraph` y `JOIN FETCH` para reducir N+1.
+- Listados de `cursos`, `profesores`, `malla curricular` y `matrículas` migrados a paginación en BD para evitar respuestas masivas no acotadas.
+- `ObtenerProfesores` usa `findPageWithMaterias` (`@EntityGraph`) para evitar lazy/N+1 al mapear `materias` en `ProfesorResponse`.
 - `AlumnoController.getMatriculaMap` ahora consulta por `alumno_id IN (...)` (IDs de la página actual) en vez de traer todas las matrículas activas del año.
+- Validación de solapamiento en años escolares movida a queries de existencia (`existsSolapamiento*`) en BD, eliminando `findAll()+loop`.
 - Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
 - Revalidación HTTP en GET con `ETag` + `If-None-Match` (`304`) y políticas `Cache-Control` por endpoint.
 - Auditoría automática de mutaciones HTTP con persistencia desacoplada (AOP + `REQUIRES_NEW`) para trazabilidad operativa.

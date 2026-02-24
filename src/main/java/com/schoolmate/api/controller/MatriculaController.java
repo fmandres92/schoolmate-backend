@@ -4,6 +4,7 @@ import java.util.UUID;
 import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.dto.request.CambiarEstadoMatriculaRequest;
 import com.schoolmate.api.dto.request.MatriculaRequest;
+import com.schoolmate.api.dto.response.MatriculaPageResponse;
 import com.schoolmate.api.dto.response.MatriculaResponse;
 import com.schoolmate.api.usecase.matricula.CambiarEstadoMatricula;
 import com.schoolmate.api.usecase.matricula.MatricularAlumno;
@@ -16,8 +17,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 import com.schoolmate.api.security.UserPrincipal;
 
@@ -48,10 +47,14 @@ public class MatriculaController {
      */
     @GetMapping("/curso/{cursoId}")
     @PreAuthorize("hasAnyRole('ADMIN','PROFESOR')")
-    public ResponseEntity<List<MatriculaResponse>> porCurso(
+    public ResponseEntity<MatriculaPageResponse> porCurso(
             @PathVariable UUID cursoId,
-            @AuthenticationPrincipal UserPrincipal principal) {
-        return ResponseEntity.ok(obtenerMatriculasPorCurso.execute(cursoId, principal));
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "alumno.apellido") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        return ResponseEntity.ok(obtenerMatriculasPorCurso.execute(cursoId, principal, page, size, sortBy, sortDir));
     }
 
     /**
@@ -59,8 +62,13 @@ public class MatriculaController {
      */
     @GetMapping("/alumno/{alumnoId}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<MatriculaResponse>> porAlumno(@PathVariable UUID alumnoId) {
-        return ResponseEntity.ok(obtenerMatriculasPorAlumno.execute(alumnoId));
+    public ResponseEntity<MatriculaPageResponse> porAlumno(
+            @PathVariable UUID alumnoId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "fechaMatricula") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir) {
+        return ResponseEntity.ok(obtenerMatriculasPorAlumno.execute(alumnoId, page, size, sortBy, sortDir));
     }
 
     /**

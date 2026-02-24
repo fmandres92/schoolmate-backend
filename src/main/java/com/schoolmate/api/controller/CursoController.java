@@ -2,6 +2,7 @@ package com.schoolmate.api.controller;
 import java.util.UUID;
 
 import com.schoolmate.api.dto.request.CursoRequest;
+import com.schoolmate.api.dto.response.CursoPageResponse;
 import com.schoolmate.api.dto.response.CursoResponse;
 import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.usecase.curso.ActualizarCurso;
@@ -13,8 +14,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/cursos")
@@ -28,11 +27,17 @@ public class CursoController {
     private final ActualizarCurso actualizarCurso;
 
     @GetMapping
-    public ResponseEntity<List<CursoResponse>> listar(
+    public ResponseEntity<CursoPageResponse> listar(
             @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
             @RequestParam(required = false) UUID anoEscolarId,
-            @RequestParam(required = false) UUID gradoId) {
-        List<CursoResponse> response = obtenerCursos.execute(anoEscolarHeaderId, anoEscolarId, gradoId);
+            @RequestParam(required = false) UUID gradoId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "nombre") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+        CursoPageResponse response = obtenerCursos.execute(
+            anoEscolarHeaderId, anoEscolarId, gradoId, page, size, sortBy, sortDir
+        );
         return ResponseEntity.ok(response);
     }
 

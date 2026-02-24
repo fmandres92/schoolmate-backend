@@ -1,5 +1,6 @@
 package com.schoolmate.api.entity;
 
+import com.schoolmate.api.common.time.TimeContext;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -58,7 +59,7 @@ public class SesionUsuario {
     @PrePersist
     protected void onCreate() {
         if (this.createdAt == null) {
-            this.createdAt = LocalDateTime.now();
+            this.createdAt = TimeContext.now();
         }
     }
 }
