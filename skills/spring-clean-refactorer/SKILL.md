@@ -1,6 +1,6 @@
 ---
 name: spring-clean-refactorer
-description: Ejecuta la refactorización de un componente backend (Controller/UseCase) hacia una Clean Architecture Pragmática. Úsalo cuando el usuario pida "refactorizar X", "limpiar este controller", "aplicar el refactor a Y", o "ejecutar la solución propuesta por el auditor".
+description: Ejecuta la refactorización de un componente backend (Controller/UseCase) hacia una Clean Architecture Pragmática. Úsalo cuando el usuario pida "refactorizar X", "limpiar este controller", "aplicar el refactor a Y", o "ejecutar la solución propuesta por el auditor". Úsalo también cuando el revisor detecte errores en el refactor para aplicar las correcciones solicitadas.
 ---
 
 # Spring Clean Refactorer
@@ -24,3 +24,6 @@ Sigue estrictamente estos pasos al refactorizar un Controller:
    - Elimina todas las inyecciones de `*Repository` del Controller (a menos que sea un GET trivial de 1 línea).
    - Inyecta los nuevos Casos de Uso y haz que el Controller solo delegue.
 6. **Muestra el resultado:** Presenta el código del Controller limpio y uno de los Casos de Uso creados para que el usuario lo apruebe antes de seguir con pruebas unitarias.
+
+## Modo Corrección (Feedback)
+Si el usuario te pasa un listado de errores o una crítica de la skill revisora (`spring-architecture-reviewer`), tu objetivo principal es **corregir esos puntos exactos** en los archivos que acabas de modificar. No rehagas todo de cero, solo aplica los ajustes quirúrgicos que el Senior te está pidiendo, manteniendo las reglas de la arquitectura.

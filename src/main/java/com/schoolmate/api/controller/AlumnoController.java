@@ -1,42 +1,33 @@
 package com.schoolmate.api.controller;
-import java.util.UUID;
 
-import com.schoolmate.api.common.rut.RutNormalizer;
-import com.schoolmate.api.common.rut.RutValidationService;
 import com.schoolmate.api.dto.request.AlumnoRequest;
 import com.schoolmate.api.dto.request.CrearAlumnoConApoderadoRequest;
 import com.schoolmate.api.dto.response.AlumnoPageResponse;
 import com.schoolmate.api.dto.response.AlumnoResponse;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.entity.AnoEscolar;
-import com.schoolmate.api.entity.Apoderado;
-import com.schoolmate.api.entity.ApoderadoAlumno;
-import com.schoolmate.api.entity.Matricula;
-import com.schoolmate.api.enums.EstadoMatricula;
-import com.schoolmate.api.enums.TipoPersona;
-import com.schoolmate.api.exception.ResourceNotFoundException;
-import com.schoolmate.api.repository.AlumnoRepository;
-import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
-import com.schoolmate.api.repository.ApoderadoRepository;
-import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.security.AnoEscolarActivo;
-import com.schoolmate.api.specification.AlumnoSpecifications;
+import com.schoolmate.api.usecase.alumno.ActualizarAlumno;
+import com.schoolmate.api.usecase.alumno.BuscarAlumnoPorRut;
+import com.schoolmate.api.usecase.alumno.CrearAlumno;
 import com.schoolmate.api.usecase.alumno.CrearAlumnoConApoderado;
+import com.schoolmate.api.usecase.alumno.ObtenerAlumnos;
+import com.schoolmate.api.usecase.alumno.ObtenerDetalleAlumno;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/alumnos")
@@ -44,313 +35,82 @@ import java.util.stream.Collectors;
 @PreAuthorize("hasRole('ADMIN')")
 public class AlumnoController {
 
-    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
-            "rut", "apellido", "nombre", "createdAt"
-    );
-
-    private final AlumnoRepository alumnoRepository;
-    private final MatriculaRepository matriculaRepository;
-    private final ApoderadoAlumnoRepository apoderadoAlumnoRepository;
-    private final ApoderadoRepository apoderadoRepository;
+    private final ObtenerAlumnos obtenerAlumnos;
+    private final ObtenerDetalleAlumno obtenerDetalleAlumno;
+    private final BuscarAlumnoPorRut buscarAlumnoPorRut;
+    private final CrearAlumno crearAlumno;
+    private final ActualizarAlumno actualizarAlumno;
     private final CrearAlumnoConApoderado crearAlumnoConApoderado;
-    private final RutValidationService rutValidationService;
 
-    /**
-     * Listar alumnos con paginación.
-     * - Si se pasa anoEscolarId: enriquece con matrícula del año y permite filtrar por cursoId/gradoId
-     * - Si NO se pasa anoEscolarId: lista solo datos personales, ignora filtros cursoId/gradoId
-     */
     @GetMapping
-    @Transactional(readOnly = true)
     public ResponseEntity<AlumnoPageResponse> listar(
-            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
-            @RequestParam(defaultValue = "0") Integer page,
-            @RequestParam(defaultValue = "20") Integer size,
-            @RequestParam(defaultValue = "apellido") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir,
-            @RequestParam(required = false) UUID anoEscolarId,
-            @RequestParam(required = false) UUID cursoId,
-            @RequestParam(required = false) UUID gradoId,
-            @RequestParam(required = false) String q) {
-
-        // Sanitizar paginación
-        page = Math.max(page, 0);
-        size = Math.min(Math.max(size, 1), 100);
-
-        String resolvedSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "apellido";
-        Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
-
-        // Construir specification base
-        Specification<Alumno> spec = Specification.where(AlumnoSpecifications.activoTrue());
-
-        // Búsqueda por texto
-        String trimmedQuery = q == null ? "" : q.trim();
-        if (!trimmedQuery.isEmpty()) {
-            if (isRutSearch(trimmedQuery)) {
-                spec = spec.and(AlumnoSpecifications.searchByRutDigits(trimmedQuery));
-            } else if (trimmedQuery.length() >= 2) {
-                spec = spec.and(AlumnoSpecifications.searchByNombre(trimmedQuery));
-            }
-        }
-
-        // Si hay filtros de curso/grado, necesitamos filtrar por matrícula
-        if (resolvedAnoEscolarId != null) {
-            List<UUID> alumnoIdsFiltrados = getAlumnoIdsByMatriculaFilters(resolvedAnoEscolarId, cursoId, gradoId);
-            if (alumnoIdsFiltrados != null) {
-                if (alumnoIdsFiltrados.isEmpty()) {
-                    // No hay alumnos que cumplan los filtros de matrícula
-                    return ResponseEntity.ok(buildEmptyPage(page, size, resolvedSortBy, direction));
-                }
-                spec = spec.and(AlumnoSpecifications.byIdIn(alumnoIdsFiltrados));
-            }
-        }
-
-        // Ejecutar query de alumnos
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(direction, resolvedSortBy));
-        Page<Alumno> alumnosPage = alumnoRepository.findAll(spec, pageable);
-
-        // Enriquecer con matrícula si hay anoEscolarId
-        List<AlumnoResponse> content;
-        if (resolvedAnoEscolarId != null) {
-            List<UUID> alumnoIds = alumnosPage.getContent().stream()
-                    .map(Alumno::getId)
-                    .toList();
-
-            Map<UUID, Matricula> matriculaMap = getMatriculaMap(alumnoIds, resolvedAnoEscolarId);
-
-            content = alumnosPage.getContent().stream()
-                    .map(alumno -> AlumnoResponse.fromEntityWithMatricula(
-                            alumno, matriculaMap.get(alumno.getId())))
-                    .toList();
-        } else {
-            content = alumnosPage.getContent().stream()
-                    .map(AlumnoResponse::fromEntity)
-                    .toList();
-        }
-
-        AlumnoPageResponse response = AlumnoPageResponse.builder()
-                .content(content)
-                .page(alumnosPage.getNumber())
-                .size(alumnosPage.getSize())
-                .totalElements(alumnosPage.getTotalElements())
-                .totalPages(alumnosPage.getTotalPages())
-                .sortBy(resolvedSortBy)
-                .sortDir(direction.name().toLowerCase(Locale.ROOT))
-                .hasNext(alumnosPage.hasNext())
-                .hasPrevious(alumnosPage.hasPrevious())
-                .build();
-
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestParam(defaultValue = "0") Integer page,
+        @RequestParam(defaultValue = "20") Integer size,
+        @RequestParam(defaultValue = "apellido") String sortBy,
+        @RequestParam(defaultValue = "asc") String sortDir,
+        @RequestParam(required = false) UUID anoEscolarId,
+        @RequestParam(required = false) UUID cursoId,
+        @RequestParam(required = false) UUID gradoId,
+        @RequestParam(required = false) String q
+    ) {
+        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
+        AlumnoPageResponse response = obtenerAlumnos.execute(
+            anoEscolarHeaderId,
+            page,
+            size,
+            sortBy,
+            sortDir,
+            anoEscolarId,
+            cursoId,
+            gradoId,
+            q
+        );
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")
-    @Transactional(readOnly = true)
     public ResponseEntity<AlumnoResponse> obtener(
-            @PathVariable UUID id,
-            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
-            @RequestParam(required = false) UUID anoEscolarId) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
-
-        Alumno alumno = alumnoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
-
-        if (resolvedAnoEscolarId != null) {
-            Matricula matricula = matriculaRepository
-                    .findByAlumnoIdAndAnoEscolarIdAndEstado(id, resolvedAnoEscolarId, EstadoMatricula.ACTIVA)
-                    .orElse(null);
-            AlumnoResponse response = AlumnoResponse.fromEntityWithMatricula(alumno, matricula);
-            enriquecerConApoderado(id, response);
-            return ResponseEntity.ok(response);
-        }
-
-        AlumnoResponse response = AlumnoResponse.fromEntity(alumno);
-        enriquecerConApoderado(id, response);
+        @PathVariable UUID id,
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestParam(required = false) UUID anoEscolarId
+    ) {
+        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
+        AlumnoResponse response = obtenerDetalleAlumno.execute(id, anoEscolarHeaderId, anoEscolarId);
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Endpoint dedicado para búsqueda exacta por RUT (admite formato con/sin puntos y guion).
-     * Ejemplo: /api/alumnos/buscar-por-rut?rut=9.057.419-9&anoEscolarId=2
-     */
     @GetMapping("/buscar-por-rut")
-    @Transactional(readOnly = true)
     public ResponseEntity<AlumnoResponse> buscarPorRut(
-            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
-            @RequestParam String rut,
-            @RequestParam(required = false) UUID anoEscolarId) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeader, anoEscolarId);
-
-        Alumno alumno = alumnoRepository.findActivoByRutNormalizado(rut)
-                .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado para RUT: " + rut));
-
-        if (resolvedAnoEscolarId != null) {
-            Matricula matricula = matriculaRepository
-                    .findByAlumnoIdAndAnoEscolarIdAndEstado(alumno.getId(), resolvedAnoEscolarId, EstadoMatricula.ACTIVA)
-                    .orElse(null);
-            return ResponseEntity.ok(AlumnoResponse.fromEntityWithMatricula(alumno, matricula));
-        }
-
-        return ResponseEntity.ok(AlumnoResponse.fromEntity(alumno));
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestParam String rut,
+        @RequestParam(required = false) UUID anoEscolarId
+    ) {
+        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
+        AlumnoResponse response = buscarAlumnoPorRut.execute(rut, anoEscolarHeaderId, anoEscolarId);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping
     public ResponseEntity<AlumnoResponse> crear(@Valid @RequestBody AlumnoRequest request) {
-        String rutNormalizado = RutNormalizer.normalize(request.getRut());
-        rutValidationService.validarFormatoRut(rutNormalizado);
-        rutValidationService.validarRutDisponible(rutNormalizado, TipoPersona.ALUMNO, null);
-
-        if (alumnoRepository.existsByRut(request.getRut())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un alumno con ese RUT");
-        }
-
-        Alumno alumno = Alumno.builder()
-                .rut(request.getRut())
-                .nombre(request.getNombre())
-                .apellido(request.getApellido())
-                .fechaNacimiento(request.getFechaNacimiento())
-                .activo(true)
-                .build();
-
-        Alumno saved = alumnoRepository.save(alumno);
+        Alumno saved = crearAlumno.execute(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(AlumnoResponse.fromEntity(saved));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<AlumnoResponse> actualizar(
-            @PathVariable UUID id,
-            @Valid @RequestBody AlumnoRequest request) {
-
-        String rutNormalizado = RutNormalizer.normalize(request.getRut());
-        rutValidationService.validarFormatoRut(rutNormalizado);
-        rutValidationService.validarRutDisponible(rutNormalizado, TipoPersona.ALUMNO, id);
-
-        Alumno alumno = alumnoRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
-
-        if (alumnoRepository.existsByRutAndIdNot(request.getRut(), id)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un alumno con ese RUT");
-        }
-
-        alumno.setRut(request.getRut());
-        alumno.setNombre(request.getNombre());
-        alumno.setApellido(request.getApellido());
-        alumno.setFechaNacimiento(request.getFechaNacimiento());
-
-        Alumno saved = alumnoRepository.save(alumno);
+        @PathVariable UUID id,
+        @Valid @RequestBody AlumnoRequest request
+    ) {
+        Alumno saved = actualizarAlumno.execute(id, request);
         return ResponseEntity.ok(AlumnoResponse.fromEntity(saved));
     }
 
     @PostMapping("/con-apoderado")
     public ResponseEntity<AlumnoResponse> crearConApoderado(
-            @Valid @RequestBody CrearAlumnoConApoderadoRequest request) {
+        @Valid @RequestBody CrearAlumnoConApoderadoRequest request
+    ) {
         AlumnoResponse response = crearAlumnoConApoderado.ejecutar(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
-    }
-
-    // ── Helpers privados ──────────────────────────────────────
-
-    /**
-     * Obtiene IDs de alumnos filtrados por matrícula.
-     * Retorna null si no hay filtros de curso/grado (no restringir).
-     * Retorna lista vacía si hay filtros pero ningún alumno cumple.
-     */
-    private List<UUID> getAlumnoIdsByMatriculaFilters(UUID anoEscolarId, UUID cursoId, UUID gradoId) {
-        boolean hasCursoFilter = cursoId != null;
-        boolean hasGradoFilter = gradoId != null;
-
-        if (!hasCursoFilter && !hasGradoFilter) {
-            return null; // Sin filtros de matrícula, no restringir
-        }
-
-        List<Matricula> matriculas;
-        if (hasCursoFilter) {
-            matriculas = matriculaRepository.findByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA);
-        } else {
-            // Filtrar por grado: obtener matrículas activas del año, filtrar por grado del curso
-            matriculas = matriculaRepository.findByAnoEscolarIdAndEstado(anoEscolarId, EstadoMatricula.ACTIVA)
-                    .stream()
-                    .filter(m -> m.getCurso().getGrado().getId().equals(gradoId))
-                    .toList();
-        }
-
-        return matriculas.stream()
-                .map(m -> m.getAlumno().getId())
-                .distinct()
-                .toList();
-    }
-
-    /**
-     * Construye mapa alumnoId → Matricula para enriquecer responses en batch.
-     */
-    private Map<UUID, Matricula> getMatriculaMap(List<UUID> alumnoIds, UUID anoEscolarId) {
-        if (alumnoIds.isEmpty()) return Map.of();
-
-        List<Matricula> matriculas = matriculaRepository
-                .findByAlumnoIdInAndAnoEscolarIdAndEstado(alumnoIds, anoEscolarId, EstadoMatricula.ACTIVA);
-
-        return matriculas.stream()
-                .collect(Collectors.toMap(
-                        m -> m.getAlumno().getId(),
-                        m -> m,
-                        (m1, m2) -> m1 // En caso de duplicado, tomar primero
-                ));
-    }
-
-    private AlumnoPageResponse buildEmptyPage(int page, int size, String sortBy, Sort.Direction direction) {
-        return AlumnoPageResponse.builder()
-                .content(List.of())
-                .page(page)
-                .size(size)
-                .totalElements(0L)
-                .totalPages(0)
-                .sortBy(sortBy)
-                .sortDir(direction.name().toLowerCase(Locale.ROOT))
-                .hasNext(false)
-                .hasPrevious(false)
-                .build();
-    }
-
-    private boolean isRutSearch(String q) {
-        return q.matches("^[0-9]+$") && q.length() >= 5;
-    }
-
-    private UUID resolveAnoEscolarId(AnoEscolar anoEscolarHeader, UUID anoEscolarId) {
-        if (anoEscolarHeader != null) {
-            return anoEscolarHeader.getId();
-        }
-        return anoEscolarId;
-    }
-
-    private void enriquecerConApoderado(UUID alumnoId, AlumnoResponse response) {
-        List<ApoderadoAlumno> vinculos = apoderadoAlumnoRepository.findByAlumnoId(alumnoId);
-        if (vinculos.isEmpty()) {
-            return;
-        }
-
-        ApoderadoAlumno vinculoPrincipal = vinculos.get(0);
-        Optional<Apoderado> apoderadoOpt = apoderadoRepository.findById(vinculoPrincipal.getId().getApoderadoId());
-        if (apoderadoOpt.isEmpty()) {
-            return;
-        }
-
-        Apoderado apoderado = apoderadoOpt.get();
-        String nombreVinculo = vinculoPrincipal.getVinculo() != null
-                ? vinculoPrincipal.getVinculo().name()
-                : "OTRO";
-
-        response.setApoderado(AlumnoResponse.ApoderadoInfo.builder()
-                .id(apoderado.getId())
-                .nombre(apoderado.getNombre())
-                .apellido(apoderado.getApellido())
-                .rut(apoderado.getRut())
-                .vinculo(nombreVinculo)
-                .build());
-
-        response.setApoderadoNombre(apoderado.getNombre());
-        response.setApoderadoApellido(apoderado.getApellido());
-        response.setApoderadoEmail(apoderado.getEmail());
-        response.setApoderadoTelefono(apoderado.getTelefono());
-        response.setApoderadoVinculo(nombreVinculo);
     }
 }

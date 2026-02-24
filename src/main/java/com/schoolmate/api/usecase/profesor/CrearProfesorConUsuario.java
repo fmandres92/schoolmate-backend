@@ -79,7 +79,9 @@ public class CrearProfesorConUsuario {
             .build();
 
         usuarioRepository.save(usuario);
-        return savedProfesor;
+
+        return profesorRepository.findByIdWithMaterias(savedProfesor.getId())
+            .orElseThrow(() -> new BusinessException("Profesor recién creado no encontrado"));
     }
 
     private void validarUnicidadEnCreacion(ProfesorRequest request) {

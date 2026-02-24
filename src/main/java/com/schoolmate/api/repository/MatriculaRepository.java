@@ -15,6 +15,14 @@ import java.util.UUID;
 public interface MatriculaRepository extends JpaRepository<Matricula, UUID> {
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
+    @Query("""
+        select m
+        from Matricula m
+        where m.id = :id
+        """)
+    Optional<Matricula> findByIdWithRelaciones(UUID id);
+
+    @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
     List<Matricula> findByAlumnoId(UUID alumnoId);
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})

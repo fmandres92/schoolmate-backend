@@ -80,6 +80,10 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - Guard defensivo en controller para responder `401` si principal nulo.
 - Correcciones N+1 en curso/jornada mediante `@EntityGraph` y queries con `JOIN FETCH` en `CursoRepository`, `MallaCurricularRepository`, `BloqueHorarioRepository`, y ajuste de consumo en use cases/controladores de jornada.
 - `AlumnoController.getMatriculaMap` ahora consulta solo matrículas de alumnos de la página (`alumno_id IN (...)`) vía `MatriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(...)`.
+- Hardening adicional contra `LazyInitializationException` en mutaciones:
+  - `CrearCurso` y `ActualizarCurso` recargan curso con `grado` y `anoEscolar` (`findByIdWithGradoAndAnoEscolar`) antes del mapeo a `CursoResponse`.
+  - `CrearProfesorConUsuario` y `PUT /api/profesores/{id}` recargan profesor con `materias` (`findByIdWithMaterias`) antes del mapeo a `ProfesorResponse`.
+  - `CambiarEstadoMatricula` usa `findByIdWithRelaciones` para devolver `MatriculaResponse` sin depender de OSIV.
 - Caching HTTP:
   - `CacheConfig` registra `ShallowEtagHeaderFilter` para `/api/*` (ETag automático por body en GET).
   - `CacheControlInterceptor` aplica `Cache-Control` por grupo de rutas (catálogos/configuración vs transaccional/sensible).
@@ -1426,6 +1430,7 @@ Implementación actual:
   - bloquea escritura si `anoEscolar` está `CERRADO`.
   - selecciona primera letra libre desde `seccion_catalogo` (orden ascendente).
   - delega armado de identidad académica en `Curso.actualizarIdentidadAcademica(...)`.
+  - tras guardar, recarga curso con `grado` y `anoEscolar` usando `findByIdWithGradoAndAnoEscolar`.
 - Errores:
   - `ResourceNotFoundException`, `ApiException(CURSO_SIN_SECCION_DISPONIBLE)`, `ApiException(VALIDATION_FAILED)`, `ApiException(BUSINESS_RULE)`
 - `@Transactional`: sí.
@@ -1441,6 +1446,7 @@ Implementación actual:
   - si mantiene mismo `grado + año`, conserva la letra actual.
   - si cambia asignación, toma primera letra disponible del catálogo.
   - actualiza identidad del curso vía `Curso.actualizarIdentidadAcademica(...)`.
+  - tras guardar, recarga curso con `grado` y `anoEscolar` usando `findByIdWithGradoAndAnoEscolar`.
 - Errores:
   - `ResourceNotFoundException`, `ApiException(CURSO_SIN_SECCION_DISPONIBLE)`, `ApiException(VALIDATION_FAILED)`
 - `@Transactional`: sí.
@@ -1585,6 +1591,7 @@ Implementación actual:
   - mantiene validaciones de duplicados de `Profesor` (rut/email/teléfono)
   - valida duplicados en `Usuario` por email y RUT normalizado
   - si falla creación de usuario, rollback completo de profesor
+  - tras persistir profesor/usuario, recarga profesor con `materias` usando `findByIdWithMaterias`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.matricula.MatricularAlumno`
@@ -1598,7 +1605,7 @@ Implementación actual:
   - curso pertenece al año indicado
   - alumno no tiene matrícula activa en ese año
 - Flujo:
-  1. carga entidades
+  1. carga entidades (curso con `findByIdWithGradoAndAnoEscolar`)
   2. valida estado del año escolar (`!= CERRADO`)
   3. valida pertenencia curso-año
   4. valida unicidad de matrícula activa
@@ -1620,7 +1627,7 @@ Implementación actual:
     - `RETIRADO|TRASLADADO -> ACTIVA`
   - no repetir mismo estado
 - Flujo:
-  1. carga matrícula
+  1. carga matrícula con relaciones (`findByIdWithRelaciones`)
   2. valida transición
   3. setea nuevo estado
   4. guarda
@@ -1869,8 +1876,8 @@ Implementación actual:
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
 | `MallaCurricularRepository` | `MallaCurricular` | múltiples `findBy...` y `existsBy...` combinando materia/grado/año/activo | `findActivaByGradoIdAndAnoEscolarIdWithMateria` (`JOIN FETCH materia`) | no |
 | `MateriaRepository` | `Materia` | `findAllByOrderByNombreAsc`, `existsByNombre` | no | no |
-| `MatriculaRepository` | `Matricula` | `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, `countByAnoEscolarIdAndEstado` | `countActivasByCursoIds` | no |
-| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id`, `countByActivoTrue` | no | no |
+| `MatriculaRepository` | `Matricula` | `findByIdWithRelaciones`, `findByAlumnoId`, `findByCursoIdAndEstado`, `findByAlumnoIdAndAnoEscolarIdAndEstado`, `findByAlumnoIdInAndAnoEscolarIdAndEstado`, `existsByAlumnoIdAndAnoEscolarIdAndEstado`, `existsByCursoIdAndEstadoAndAlumnoIdIn`, `countByCursoIdAndEstado`, `countByAnoEscolarIdAndEstado` | `countActivasByCursoIds` | no |
+| `ProfesorRepository` | `Profesor` | unicidad por rut/email/teléfono + listas ordenadas, `findByActivoTrueAndMaterias_Id`, `findByIdWithMaterias`, `countByActivoTrue` | no | no |
 | `SesionUsuarioRepository` | `SesionUsuario` | `findByUsuarioIdAndFechas` (paginado, orden desc por `createdAt`) | JPQL con flags booleanos (`aplicarDesde/aplicarHasta`) para filtros opcionales por rango (`desde`/`hasta`) y tipado estable en PostgreSQL | no |
 | `EventoAuditoriaRepository` | `EventoAuditoria` | `findByFiltros` (paginado por `createdAt DESC`) | JPQL con flags booleanos (`aplicarFiltro`) para filtros opcionales por `usuarioId`, `metodoHttp`, `endpoint LIKE`, `desde/hasta` (evita problemas de tipado con parámetros null en PostgreSQL) | no |
 | `ApoderadoRepository` | `Apoderado` | `findByEmail`, `findByRut`, `existsByEmail`, `existsByRut` | no | no |

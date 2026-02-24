@@ -54,4 +54,16 @@ public class Alumno {
     protected void onUpdate() {
         updatedAt = TimeContext.now();
     }
+
+    public void actualizarDatosPersonales(
+        String rut,
+        String nombre,
+        String apellido,
+        LocalDate fechaNacimiento
+    ) {
+        this.rut = rut;
+        this.nombre = nombre;
+        this.apellido = apellido;
+        this.fechaNacimiento = fechaNacimiento;
+    }
 }

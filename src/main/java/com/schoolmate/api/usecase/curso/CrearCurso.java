@@ -52,7 +52,9 @@ public class CrearCurso {
             .build();
         curso.actualizarIdentidadAcademica(grado, anoEscolar, letraAsignada);
 
-        return cursoRepository.save(curso);
+        Curso saved = cursoRepository.save(curso);
+        return cursoRepository.findByIdWithGradoAndAnoEscolar(saved.getId())
+            .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
     }
 
     private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarIdRequest) {

@@ -122,7 +122,9 @@ public class ProfesorController {
         profesor.setMaterias(materias);
 
         Profesor saved = profesorRepository.save(profesor);
-        return ResponseEntity.ok(ProfesorResponse.fromEntity(saved));
+        Profesor hydrated = profesorRepository.findByIdWithMaterias(saved.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
+        return ResponseEntity.ok(ProfesorResponse.fromEntity(hydrated));
     }
 
     @GetMapping("/{profesorId}/sesiones")

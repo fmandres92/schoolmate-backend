@@ -19,7 +19,7 @@ public class CambiarEstadoMatricula {
 
     @Transactional
     public Matricula execute(UUID matriculaId, EstadoMatricula nuevoEstado) {
-        Matricula matricula = matriculaRepository.findById(matriculaId)
+        Matricula matricula = matriculaRepository.findByIdWithRelaciones(matriculaId)
                 .orElseThrow(() -> new ResourceNotFoundException("Matrícula no encontrada"));
 
         // Validar transición

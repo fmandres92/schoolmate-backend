@@ -36,7 +36,7 @@ public class MatricularAlumno {
         Alumno alumno = alumnoRepository.findById(request.getAlumnoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
 
-        Curso curso = cursoRepository.findById(request.getCursoId())
+        Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(request.getCursoId())
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
 
         AnoEscolar anoEscolar = anoEscolarRepository.findById(request.getAnoEscolarId())
