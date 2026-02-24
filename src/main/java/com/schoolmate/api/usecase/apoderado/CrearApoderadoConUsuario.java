@@ -24,8 +24,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -117,16 +117,17 @@ public class CrearApoderadoConUsuario {
     }
 
     private ApoderadoResponse buildResponse(Apoderado apoderado) {
-        List<ApoderadoResponse.AlumnoResumen> alumnosResumen = apoderadoAlumnoRepo.findByApoderadoId(apoderado.getId())
-                .stream()
-                .map(v -> alumnoRepo.findById(v.getId().getAlumnoId()).orElse(null))
-                .filter(java.util.Objects::nonNull)
-                .map(al -> ApoderadoResponse.AlumnoResumen.builder()
-                        .id(al.getId())
-                        .nombre(al.getNombre())
-                        .apellido(al.getApellido())
-                        .build())
-                .collect(Collectors.toList());
+        List<ApoderadoResponse.AlumnoResumen> alumnosResumen = apoderadoAlumnoRepo
+            .findByApoderadoIdWithAlumno(apoderado.getId())
+            .stream()
+            .map(v -> v.getAlumno())
+            .filter(Objects::nonNull)
+            .map(al -> ApoderadoResponse.AlumnoResumen.builder()
+                .id(al.getId())
+                .nombre(al.getNombre())
+                .apellido(al.getApellido())
+                .build())
+            .toList();
 
         Usuario usuario = usuarioRepo.findByApoderadoId(apoderado.getId()).orElse(null);
 

@@ -229,6 +229,19 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - Excepción explícita:
   - `ApoderadoAlumnoId` mantiene `@Data` por ser clave embebida (`@Embeddable`) y requerir `equals/hashCode` de valor para identidad compuesta.
 
+### Actualización técnica reciente (anti-pattern fixes: fuga de entidad + N+1 apoderado)
+
+- Antipatrón #5 (fuga de entidad REST) corregido en grados:
+  - `GET /api/grados` y `GET /api/grados/{id}` ahora responden `GradoResponse` (ya no entidad `Grado` directa).
+  - nuevo DTO: `dto/response/GradoResponse`.
+- Antipatrón #1 (N+1 en stream/map) corregido en flujos de apoderado:
+  - `ObtenerAlumnosApoderado`: reemplaza `findById` por iteración y lookup de matrícula por alumno por consultas batch:
+    - vínculos con alumno via `findByApoderadoIdWithAlumno(...)`
+    - matrículas activas por lote via `findByAlumnoIdInAndAnoEscolarIdAndEstado(...)`
+  - `ObtenerApoderadoPorAlumno` y `CrearApoderadoConUsuario`:
+    - dejan de resolver alumnos con `findById(...)` por cada vínculo y reutilizan `findByApoderadoIdWithAlumno(...)`.
+  - resultado: menor cantidad de queries por request en portal/gestión de apoderados.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -448,6 +461,7 @@ Clase: `ApiErrorResponse`
   - `DiaNoLectivoResponse`
   - `EstadoClaseHoy`
   - `AuthResponse`
+  - `GradoResponse`
   - `CursoResponse`
   - `JornadaCursoResponse`
   - `JornadaDiaResponse`
@@ -1285,8 +1299,8 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/grados` | Lista grados por nivel | `ADMIN` | - | - | `List<Grado>` (entidad directa) | `ListarGrados` | `ACCESS_DENIED` |
-| `GET /api/grados/{id}` | Obtiene grado por id | `ADMIN` | Path `id` | - | `Grado` | `ObtenerGrado` | `RESOURCE_NOT_FOUND` |
+| `GET /api/grados` | Lista grados por nivel | `ADMIN` | - | - | `List<GradoResponse>` | `ListarGrados` | `ACCESS_DENIED` |
+| `GET /api/grados/{id}` | Obtiene grado por id | `ADMIN` | Path `id` | - | `GradoResponse` | `ObtenerGrado` | `RESOURCE_NOT_FOUND` |
 
 ### Dominio: Materias
 
@@ -2492,6 +2506,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `AsignacionMateriaResumenResponse` | resumen curso + `materias[]` + bloques asignados por materia | `@Data @Builder` |
 | `ConflictoHorarioResponse` | `cursoNombre,materiaNombre,horaInicio,horaFin,bloqueId` | `@Data @Builder` |
 | `DashboardAdminResponse` | `totalAlumnos,totalCursos,totalProfesores` | `@Data @Builder` |
+| `GradoResponse` | `id,nombre,nivel,createdAt,updatedAt` | `@Data @Builder` |
 | `EstadoClaseHoy` | `PENDIENTE,DISPONIBLE,EXPIRADA` | `enum` |
 | `ClaseHoyResponse` | `bloqueId,numeroBloque,horaInicio,horaFin,cursoId,cursoNombre,materiaId,materiaNombre,materiaIcono,cantidadAlumnos,estado,asistenciaTomada` | `@Data @Builder` |
 | `ClasesHoyResponse` | `fecha,diaSemana,nombreDia,diaNoLectivo?,clases[]` | `@Data @Builder` |

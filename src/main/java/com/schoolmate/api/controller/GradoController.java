@@ -1,7 +1,7 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
-import com.schoolmate.api.entity.Grado;
+import com.schoolmate.api.dto.response.GradoResponse;
 import com.schoolmate.api.usecase.grado.ListarGrados;
 import com.schoolmate.api.usecase.grado.ObtenerGrado;
 import lombok.RequiredArgsConstructor;
@@ -21,14 +21,16 @@ public class GradoController {
     // Listar todos (ordenados por nivel)
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public List<Grado> listar() {
-        return listarGrados.execute();
+    public List<GradoResponse> listar() {
+        return listarGrados.execute().stream()
+            .map(GradoResponse::fromEntity)
+            .toList();
     }
 
     // Obtener uno por ID
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public Grado obtener(@PathVariable UUID id) {
-        return obtenerGrado.execute(id);
+    public GradoResponse obtener(@PathVariable UUID id) {
+        return GradoResponse.fromEntity(obtenerGrado.execute(id));
     }
 }

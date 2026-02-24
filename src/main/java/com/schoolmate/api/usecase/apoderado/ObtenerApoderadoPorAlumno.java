@@ -38,9 +38,9 @@ public class ObtenerApoderadoPorAlumno {
         var apoderado = apoderadoRepository.findById(vinculo.getId().getApoderadoId())
             .orElseThrow(() -> new ResourceNotFoundException("Apoderado no encontrado"));
 
-        var alumnosResumen = apoderadoAlumnoRepository.findByApoderadoId(apoderado.getId())
+        var alumnosResumen = apoderadoAlumnoRepository.findByApoderadoIdWithAlumno(apoderado.getId())
             .stream()
-            .map(relacion -> alumnoRepository.findById(relacion.getId().getAlumnoId()).orElse(null))
+            .map(relacion -> relacion.getAlumno())
             .filter(Objects::nonNull)
             .map(alumno -> ApoderadoResponse.AlumnoResumen.builder()
                 .id(alumno.getId())
