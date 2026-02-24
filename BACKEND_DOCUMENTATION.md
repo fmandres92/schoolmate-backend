@@ -219,6 +219,16 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - DTO extraído desde controller:
   - `MallaCurricularUpdateRequest` ahora vive en `dto/request` (ya no inner class en `MallaCurricularController`).
 
+### Actualización técnica reciente (hardening JPA: Lombok en entidades)
+
+- Se eliminó `@Data` de entidades JPA para evitar generación automática de `equals/hashCode/toString` sobre relaciones LAZY.
+- Entidades migradas a combinación segura:
+  - `@Getter` + `@Setter` + constructores (`@NoArgsConstructor`, `@AllArgsConstructor`) + `@Builder` donde aplica.
+- Alcance aplicado:
+  - `Alumno`, `AnoEscolar`, `Apoderado`, `ApoderadoAlumno`, `Curso`, `EventoAuditoria`, `Grado`, `MallaCurricular`, `Materia`, `Matricula`, `Profesor`, `SeccionCatalogo`, `SesionUsuario`, `Usuario`.
+- Excepción explícita:
+  - `ApoderadoAlumnoId` mantiene `@Data` por ser clave embebida (`@Embeddable`) y requerir `equals/hashCode` de valor para identidad compuesta.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -2900,6 +2910,12 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - Use cases: verbo + sustantivo (`MatricularAlumno`, `GuardarJornadaDia`).
 - Controllers: `{Dominio}Controller`.
 - DTOs: `{Dominio}Request` / `{Dominio}Response`.
+
+### Convención Lombok en entidades JPA
+
+- No usar `@Data` en clases `@Entity` con relaciones JPA.
+- Usar `@Getter` + `@Setter` y constructores explícitos.
+- Reservar `@Data` para DTOs o value objects; en claves embebidas (`@Embeddable`) se permite cuando se requiere igualdad por valor.
 
 ### Estilo de API
 

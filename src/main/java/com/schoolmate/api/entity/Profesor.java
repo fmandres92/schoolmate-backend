@@ -10,7 +10,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "profesor")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
