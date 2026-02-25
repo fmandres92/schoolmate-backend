@@ -21,8 +21,7 @@ public class ActualizarMateria {
         var existente = materiaRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
 
-        existente.setNombre(request.getNombre());
-        existente.setIcono(request.getIcono());
+        existente.actualizarDatos(request.getNombre(), request.getIcono());
 
         return MateriaResponse.fromEntity(materiaRepository.save(existente));
     }

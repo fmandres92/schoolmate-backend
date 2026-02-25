@@ -50,8 +50,7 @@ public class QuitarMateriaBloque {
             throw new ApiException(ErrorCode.BLOQUE_SIN_MATERIA);
         }
 
-        bloque.setMateria(null);
-        bloque.setProfesor(null);
+        bloque.quitarMateriaYProfesor();
         BloqueHorario saved = bloqueHorarioRepository.save(bloque);
 
         return BloqueHorarioResponse.builder()

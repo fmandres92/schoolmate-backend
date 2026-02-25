@@ -83,8 +83,7 @@ public class GuardarMallaCurricularBulk {
         for (MallaCurricularBulkRequest.GradoHoras gradoHoras : request.getGrados()) {
             MallaCurricular existente = existentesPorGrado.get(gradoHoras.getGradoId());
             if (existente != null) {
-                existente.setHorasPedagogicas(gradoHoras.getHorasPedagogicas());
-                existente.setActivo(true);
+                existente.activarConHoras(gradoHoras.getHorasPedagogicas());
                 aPersistir.add(existente);
                 continue;
             }
@@ -102,7 +101,7 @@ public class GuardarMallaCurricularBulk {
         for (MallaCurricular existente : existentes) {
             UUID gradoId = existente.getGrado().getId();
             if (!gradoIdsEntrada.contains(gradoId)) {
-                existente.setActivo(false);
+                existente.desactivar();
                 aPersistir.add(existente);
             }
         }

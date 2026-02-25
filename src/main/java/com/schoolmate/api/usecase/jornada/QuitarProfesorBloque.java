@@ -54,7 +54,7 @@ public class QuitarProfesorBloque {
             throw new BusinessException("El bloque no tiene profesor asignado");
         }
 
-        bloque.setProfesor(null);
+        bloque.quitarProfesor();
         bloqueHorarioRepository.save(bloque);
 
         return BloqueHorarioResponse.builder()

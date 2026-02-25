@@ -88,4 +88,32 @@ public class BloqueHorario {
     protected void onUpdate() {
         this.updatedAt = TimeContext.now();
     }
+
+    public void asignarMateria(Materia materia) {
+        this.materia = materia;
+    }
+
+    public void limpiarProfesorSiNoEnsenaMateria() {
+        if (this.profesor == null || this.materia == null) {
+            return;
+        }
+        boolean ensenaMateria = this.profesor.getMaterias().stream()
+            .anyMatch(m -> m.getId().equals(this.materia.getId()));
+        if (!ensenaMateria) {
+            this.profesor = null;
+        }
+    }
+
+    public void quitarMateriaYProfesor() {
+        this.materia = null;
+        this.profesor = null;
+    }
+
+    public void asignarProfesor(Profesor profesor) {
+        this.profesor = profesor;
+    }
+
+    public void quitarProfesor() {
+        this.profesor = null;
+    }
 }

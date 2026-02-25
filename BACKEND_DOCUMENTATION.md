@@ -330,6 +330,19 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `DashboardController` dejó de validar `X-Ano-Escolar-Id`; la validación vive en `ObtenerDashboardAdmin`.
 - Contratos HTTP/DTO: sin cambios.
 
+### Actualización técnica reciente (anti-pattern #11: dominio rico en mutaciones críticas)
+
+- Se encapsularon mutaciones en entidades para reducir setters directos en use cases:
+  - `BloqueHorario`: `asignarMateria(...)`, `limpiarProfesorSiNoEnsenaMateria()`, `quitarMateriaYProfesor()`, `asignarProfesor(...)`, `quitarProfesor()`.
+  - `Materia`: `actualizarDatos(...)`.
+  - `MallaCurricular`: `actualizarConfiguracion(...)`, `activarConHoras(...)`, `desactivar()`.
+  - `AsistenciaClase`: `marcarRegistradaPor(...)`.
+  - `RegistroAsistencia`: `actualizarRegistro(...)`.
+  - `Usuario`: `actualizarRefreshToken(...)`.
+- Use cases alineados:
+  - `GuardarAsistenciaClase`, `LoginUsuario`, `RefrescarToken`, `ActualizarMateria`, `ActualizarMallaCurricular`, `GuardarMallaCurricularBulk`, `EliminarMallaCurricular`, `AsignarMateriaBloque`, `QuitarMateriaBloque`, `AsignarProfesorBloque` y `QuitarProfesorBloque` delegan mutaciones a métodos de dominio.
+- Contratos HTTP/DTO: sin cambios.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -740,6 +753,10 @@ Clase: `ApiErrorResponse`
 
 Relaciones JPA: no hay relaciones `@ManyToOne`; `profesorId/apoderadoId` son campos planos.
 
+Métodos de dominio relevantes:
+
+- `actualizarRefreshToken(String refreshToken)`: centraliza la rotación de token refresh en login/refresh.
+
 Nota de integridad:
 
 - En migraciones históricas (`V1`/`V2`) `usuario.profesor_id` y `usuario.alumno_id` se usaron como referencias lógicas.
@@ -838,6 +855,10 @@ Restricciones esperadas de BD:
 | `activo` | `Boolean` | `activo` | `BOOLEAN` | NOT NULL DEFAULT TRUE |
 | `createdAt` | `LocalDateTime` | `created_at` | `TIMESTAMP` | NOT NULL |
 | `updatedAt` | `LocalDateTime` | `updated_at` | `TIMESTAMP` | NOT NULL |
+
+Métodos de dominio relevantes:
+
+- `actualizarDatos(String nombre, String icono)`: encapsula mutación de identidad visual de materia.
 
 ### `Profesor` (`profesor`)
 
@@ -948,6 +969,12 @@ Relaciones:
 
 Constraint: `uq_malla_materia_grado_ano`.
 
+Métodos de dominio relevantes:
+
+- `actualizarConfiguracion(Integer horasPedagogicas, Boolean activo)`.
+- `activarConHoras(Integer horasPedagogicas)`.
+- `desactivar()`.
+
 ### `BloqueHorario` (`bloque_horario`)
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
@@ -976,6 +1003,14 @@ Constraints DB adicionales:
 - jornada modelada por día (`dia_semana`) y secuencia (`numero_bloque`).
 - `materia_id` y `profesor_id` se mantienen null al configurar estructura base.
 
+Métodos de dominio relevantes:
+
+- `asignarMateria(Materia materia)`.
+- `limpiarProfesorSiNoEnsenaMateria()`.
+- `quitarMateriaYProfesor()`.
+- `asignarProfesor(Profesor profesor)`.
+- `quitarProfesor()`.
+
 ### `AsistenciaClase` (`asistencia_clase`)
 
 | Campo Java | Tipo Java | Columna BD | Tipo BD | Constraints |
@@ -993,6 +1028,8 @@ Relaciones:
 - `@ManyToOne` -> `Usuario` (`registradoPor`, lazy)
 - `@OneToMany` -> `RegistroAsistencia` (`cascade = ALL`, `orphanRemoval = true`)
 - la colección `registros` se expone inmodificable; la mutación se realiza por métodos de dominio (`addRegistro`, `removeRegistrosIf`).
+- actualización de metadata encapsulada en `marcarRegistradaPor(Usuario, LocalDateTime)`.
+- `RegistroAsistencia` encapsula edición con `actualizarRegistro(EstadoAsistencia, String, LocalDateTime)`.
 
 ### `SesionUsuario` (`sesion_usuario`)
 
@@ -1517,10 +1554,10 @@ Implementación actual:
     - bypass de ownership de bloque para gestión excepcional
 - Comportamiento de persistencia:
   - si no existe asistencia para `(bloque,fechaRequest)`, crea `asistencia_clase`
-  - si ya existe, actualiza metadata (`updatedAt`, `registradoPor`)
+  - si ya existe, actualiza metadata vía método de dominio `AsistenciaClase.marcarRegistradaPor(...)`
   - conciliación in-place de `registro_asistencia` por `alumnoId`:
     - elimina huérfanos de la colección (`orphanRemoval`)
-    - actualiza existentes (`estado`, `observacion`, `updatedAt`)
+    - actualiza existentes vía `RegistroAsistencia.actualizarRegistro(...)`
     - inserta solo nuevos alumnos
   - preserva UUID de registros existentes (sin `DELETE + INSERT` masivo)
 - Manejo de concurrencia:
@@ -1562,7 +1599,7 @@ Implementación actual:
   3. valida password
   4. construye `UserPrincipal`
   5. genera `accessToken` (JWT)
-  6. genera `refreshToken` (`UUID`) y persiste en `usuario.refreshToken`
+  6. genera `refreshToken` (`UUID`) y persiste vía `Usuario.actualizarRefreshToken(...)`
   7. registra `SesionUsuario` con ip/user-agent/geolocalización opcional
   8. retorna `AuthResponse` con `token` (alias), `accessToken` y `refreshToken`
 - Errores:
@@ -1579,7 +1616,7 @@ Implementación actual:
 - Flujo `execute()`:
   1. busca usuario por `refreshToken` (`findByRefreshToken`)
   2. si no existe o usuario inactivo, lanza `ApiException(SESSION_REVOKED)`
-  3. rota refresh token (`UUID`) y persiste usuario
+  3. rota refresh token (`UUID`) vía `Usuario.actualizarRefreshToken(...)` y persiste usuario
   4. genera nuevo `accessToken` JWT y retorna `AuthResponse`
 - Errores:
   - `ApiException(SESSION_REVOKED)`
@@ -1821,6 +1858,7 @@ Implementación actual:
   - `MateriaRepository`
 - Reglas:
   - valida existencia por id.
+  - delega mutación a `Materia.actualizarDatos(...)` (sin setters directos en use case).
 - Salida:
   - `MateriaResponse`.
 - Errores:
@@ -1900,6 +1938,7 @@ Implementación actual:
   - `MallaCurricularRepository`
 - Reglas:
   - valida existencia por `id`.
+  - delega mutación a `MallaCurricular.actualizarConfiguracion(...)`.
 - Salida:
   - `MallaCurricularResponse`.
 - `@Transactional`: sí.
@@ -1914,7 +1953,7 @@ Implementación actual:
   - valida existencia de materia/año y bloqueo por año `CERRADO`.
   - valida que no haya `gradoId` duplicados en el request (`BusinessException`).
   - resuelve grados del request en lote con `findAllById(...)` (evita N+1 de búsqueda por grado).
-  - reactiva/actualiza existentes, crea nuevos y desactiva ausentes (`activo=false`).
+  - reactiva/actualiza existentes con `MallaCurricular.activarConHoras(...)`, crea nuevos y desactiva ausentes con `MallaCurricular.desactivar()`.
   - persiste cambios consolidados con `saveAll(...)` al final del merge bulk.
 - Salida:
   - `List<MallaCurricularResponse>`.
@@ -1929,6 +1968,7 @@ Implementación actual:
   - `MallaCurricularRepository`
 - Reglas:
   - valida existencia por `id`.
+  - aplica baja lógica con `MallaCurricular.desactivar()`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.dashboard.ObtenerDashboardAdmin`
@@ -2471,7 +2511,7 @@ Implementación actual:
   - materia debe existir y pertenecer a malla activa del grado/año del curso
   - `minutosAsignados + duracionBloque <= minutosPermitidos`
   - no-op si bloque ya tiene la misma materia
-  - al reemplazar materia, si el profesor asignado no enseña la nueva materia, se limpia `profesor`
+  - asignación y limpieza del profesor encapsuladas en `BloqueHorario.asignarMateria(...)` + `limpiarProfesorSiNoEnsenaMateria()`
 - Errores relevantes:
   - `MATERIA_NO_EN_MALLA`
   - `MATERIA_EXCEDE_MINUTOS_MALLA` (409 con `details`)
@@ -2490,6 +2530,8 @@ Implementación actual:
 - Errores relevantes:
   - `BLOQUE_NO_ES_CLASE`
   - `BLOQUE_SIN_MATERIA`
+- Mutación:
+  - delega limpieza de materia/profesor en `BloqueHorario.quitarMateriaYProfesor()`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.jornada.ObtenerResumenAsignacionMaterias`
@@ -2540,6 +2582,8 @@ Implementación actual:
   - `BLOQUE_SIN_MATERIA_PARA_PROFESOR`
   - `PROFESOR_NO_ENSENA_MATERIA` (409 con `details`)
   - `PROFESOR_COLISION_HORARIO` (409 con `details`)
+- Mutación:
+  - delega asignación en `BloqueHorario.asignarProfesor(...)`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.jornada.QuitarProfesorBloque`
@@ -2552,6 +2596,8 @@ Implementación actual:
   - bloque activo y del curso
   - bloque tipo `CLASE`
   - bloque debe tener profesor asignado
+- Mutación:
+  - delega remoción en `BloqueHorario.quitarProfesor()`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.jornada.ObtenerResumenAsignacionProfesores`
@@ -3076,6 +3122,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - Validación de solapamiento en años escolares movida a queries de existencia (`existsSolapamiento*`) en BD, eliminando `findAll()+loop`.
 - Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
 - Use cases de lectura de jornada/apoderado marcados con `@Transactional(readOnly = true)` para reducir costo de dirty-checking en consultas complejas.
+- Mutaciones críticas de asistencia/auth/jornada/malla/materia delegadas a métodos de dominio en entidad (reducción de dominio anémico y setters dispersos en use cases).
 - Revalidación HTTP en GET con `ETag` + `If-None-Match` (`304`) y políticas `Cache-Control` por endpoint.
 - Auditoría automática de mutaciones HTTP con persistencia desacoplada (AOP + `REQUIRES_NEW`) para trazabilidad operativa.
 - Guardado de asistencia refactorizado a merge in-place de `registro_asistencia` (sin `DELETE + INSERT` masivo), preservando UUIDs y trazabilidad.

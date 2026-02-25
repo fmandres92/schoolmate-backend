@@ -100,4 +100,9 @@ public class AsistenciaClase {
         }
         registros.add(registro);
     }
+
+    public void marcarRegistradaPor(Usuario usuario, LocalDateTime updatedAt) {
+        this.registradoPor = usuario;
+        this.updatedAt = updatedAt;
+    }
 }

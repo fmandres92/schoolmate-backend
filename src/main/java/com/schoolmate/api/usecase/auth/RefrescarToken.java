@@ -31,7 +31,7 @@ public class RefrescarToken {
         }
 
         String newRefreshToken = UUID.randomUUID().toString();
-        usuario.setRefreshToken(newRefreshToken);
+        usuario.actualizarRefreshToken(newRefreshToken);
         usuarioRepository.save(usuario);
 
         UserPrincipal principal = UserPrincipal.fromUsuario(usuario);

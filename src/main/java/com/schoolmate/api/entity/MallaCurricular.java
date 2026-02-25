@@ -73,4 +73,18 @@ public class MallaCurricular {
     protected void onUpdate() {
         this.updatedAt = TimeContext.now();
     }
+
+    public void actualizarConfiguracion(Integer horasPedagogicas, Boolean activo) {
+        this.horasPedagogicas = horasPedagogicas;
+        this.activo = activo;
+    }
+
+    public void activarConHoras(Integer horasPedagogicas) {
+        this.horasPedagogicas = horasPedagogicas;
+        this.activo = true;
+    }
+
+    public void desactivar() {
+        this.activo = false;
+    }
 }

@@ -118,7 +118,7 @@ public class AsignarProfesorBloque {
             );
         }
 
-        bloque.setProfesor(profesor);
+        bloque.asignarProfesor(profesor);
         bloqueHorarioRepository.save(bloque);
 
         return buildResponse(bloque);

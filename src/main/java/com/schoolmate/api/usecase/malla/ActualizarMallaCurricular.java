@@ -21,8 +21,7 @@ public class ActualizarMallaCurricular {
         MallaCurricular existente = mallaCurricularRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Registro de malla curricular no encontrado"));
 
-        existente.setHorasPedagogicas(horasPedagogicas);
-        existente.setActivo(activo);
+        existente.actualizarConfiguracion(horasPedagogicas, activo);
 
         MallaCurricular guardada = mallaCurricularRepository.save(existente);
         return MallaCurricularMapper.toResponse(guardada);

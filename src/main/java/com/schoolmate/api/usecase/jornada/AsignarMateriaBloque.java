@@ -105,15 +105,8 @@ public class AsignarMateriaBloque {
             );
         }
 
-        bloque.setMateria(materia);
-        if (bloque.getProfesor() != null) {
-            UUID nuevaMateriaId = materia.getId();
-            boolean profesorEnsenaNuevaMateria = bloque.getProfesor().getMaterias().stream()
-                .anyMatch(m -> m.getId().equals(nuevaMateriaId));
-            if (!profesorEnsenaNuevaMateria) {
-                bloque.setProfesor(null);
-            }
-        }
+        bloque.asignarMateria(materia);
+        bloque.limpiarProfesorSiNoEnsenaMateria();
         BloqueHorario saved = bloqueHorarioRepository.save(bloque);
         return buildResponse(saved);
     }

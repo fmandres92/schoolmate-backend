@@ -47,7 +47,7 @@ public class LoginUsuario {
         String accessToken = tokenProvider.generateToken(principal);
         String refreshToken = UUID.randomUUID().toString();
 
-        usuario.setRefreshToken(refreshToken);
+        usuario.actualizarRefreshToken(refreshToken);
         usuarioRepository.save(usuario);
 
         SesionUsuario sesion = SesionUsuario.builder()

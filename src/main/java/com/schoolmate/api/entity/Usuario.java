@@ -72,4 +72,8 @@ public class Usuario {
     protected void onUpdate() {
         updatedAt = TimeContext.now();
     }
+
+    public void actualizarRefreshToken(String refreshToken) {
+        this.refreshToken = refreshToken;
+    }
 }

@@ -140,13 +140,11 @@ public class GuardarAsistenciaClase {
                 savedAsistencia = asistenciaClaseRepository
                     .findByBloqueHorarioIdAndFecha(bloque.getId(), fechaRequest)
                     .orElseThrow(() -> new BusinessException("No se pudo guardar la asistencia"));
-                savedAsistencia.setRegistradoPor(usuarioRepository.getReferenceById(usuarioId));
-                savedAsistencia.setUpdatedAt(ahora);
+                savedAsistencia.marcarRegistradaPor(usuarioRepository.getReferenceById(usuarioId), ahora);
                 savedAsistencia = asistenciaClaseRepository.save(savedAsistencia);
             }
         } else {
-            existente.setRegistradoPor(usuarioRepository.getReferenceById(usuarioId));
-            existente.setUpdatedAt(ahora);
+            existente.marcarRegistradaPor(usuarioRepository.getReferenceById(usuarioId), ahora);
             savedAsistencia = asistenciaClaseRepository.save(existente);
         }
 
@@ -202,9 +200,7 @@ public class GuardarAsistenciaClase {
             if (req == null) {
                 continue;
             }
-            registro.setEstado(req.getEstado());
-            registro.setObservacion(req.getObservacion());
-            registro.setUpdatedAt(ahora);
+            registro.actualizarRegistro(req.getEstado(), req.getObservacion(), ahora);
         }
 
         for (RegistroAlumnoRequest req : requestMap.values()) {

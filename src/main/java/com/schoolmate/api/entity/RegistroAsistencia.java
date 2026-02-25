@@ -72,4 +72,10 @@ public class RegistroAsistencia {
     protected void onUpdate() {
         this.updatedAt = TimeContext.now();
     }
+
+    public void actualizarRegistro(EstadoAsistencia estado, String observacion, LocalDateTime updatedAt) {
+        this.estado = estado;
+        this.observacion = observacion;
+        this.updatedAt = updatedAt;
+    }
 }

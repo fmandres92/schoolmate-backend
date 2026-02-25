@@ -20,7 +20,7 @@ public class EliminarMallaCurricular {
         MallaCurricular existente = mallaCurricularRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Registro de malla curricular no encontrado"));
 
-        existente.setActivo(false);
+        existente.desactivar();
         mallaCurricularRepository.save(existente);
     }
 }

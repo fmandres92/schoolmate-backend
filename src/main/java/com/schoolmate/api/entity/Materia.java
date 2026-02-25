@@ -53,4 +53,9 @@ public class Materia {
     protected void onUpdate() {
         this.updatedAt = TimeContext.now();
     }
+
+    public void actualizarDatos(String nombre, String icono) {
+        this.nombre = nombre;
+        this.icono = icono;
+    }
 }
