@@ -27,9 +27,86 @@ Si detectas ALGUNO de los siguientes antipatrones en el código evaluado, debes 
 - **Solución exigida:** En entidades JPA solo permitir `@Getter`, `@Setter` y constructores.
 
 ### 4. El Falso Funcional (Mal uso de Optional)
-- **Síntoma:** Hacer `.orElse(null)` seguido de un `if (var != null)`, o usar `.get()` sin comprobar `.isPresent()`.
-- **Por qué está mal:** Rompe el propósito del `Optional` y arriesga `NullPointerException`.
-- **Solución exigida:** Usar encadenamiento funcional (`.map()`, `.flatMap()`, `.orElseThrow()`).
+
+Este antipatrón tiene **3 variantes** que dependen del contexto. No existe una única forma correcta de resolver un `Optional` — depende de qué necesitas hacer después con el valor.
+
+#### ❌ Variante PROHIBIDA: Optional Teatro (`.orElse(null)` + null check)
+- **Síntoma:** Hacer `.orElse(null)` y después `if (variable == null)`.
+- **Por qué está mal:** Destruye el `Optional` para volver a hacer null-checking manual. Es peor que no usar `Optional` en absoluto porque añade complejidad sin beneficio.
+- **Ejemplo prohibido:**
+```java
+// ❌ NUNCA HACER ESTO — es el peor de todos los patrones
+AnoEscolar anoActivo = anoEscolarRepository.findActivoByFecha(today).orElse(null);
+if (anoActivo == null) {
+    return buildVacio(today, diaSemana);
+}
+```
+
+#### ❌ Variante PROHIBIDA: `.get()` sin protección
+- **Síntoma:** Llamar a `.get()` sin que exista un `isEmpty()` + `return` / `throw` ANTES en el mismo bloque.
+- **Por qué está mal:** Riesgo directo de `NoSuchElementException` en runtime.
+- **Ejemplo prohibido:**
+```java
+// ❌ El get() no está protegido por nada
+if (opt.isPresent()) {
+    var x = opt.get();
+    // ... 20 líneas de lógica
+    // si alguien mueve este código fuera del if, explota
+}
+```
+
+#### ✅ Contexto 1: Transformación directa (una sola operación) → Encadenamiento funcional
+- **Cuándo:** El valor del `Optional` solo se necesita para una transformación o mapeo inmediato, sin lógica posterior.
+- **Patrón correcto:**
+```java
+// El Optional se transforma y resuelve en una expresión. Limpio y seguro.
+DiaNoLectivoResponse diaNoLectivo = diaNoLectivoRepository
+    .findByAnoEscolarIdAndFecha(anoActivo.getId(), today)
+    .map(this::mapDiaNoLectivo)
+    .orElse(null);  // permitido si el contrato del DTO acepta null en este campo
+```
+
+#### ✅ Contexto 2: Early return (si no existe, corto el flujo) → `isEmpty()` + early return + `get()`
+- **Cuándo:** Necesitas el valor desempaquetado para **varias operaciones posteriores**. Forzar todo dentro de un `.map()` crearía lambdas enormes e ilegibles.
+- **Patrón correcto:**
+```java
+// El get() es SEGURO porque está protegido por el early return de arriba.
+var anoActivoOpt = anoEscolarRepository.findActivoByFecha(today);
+if (anoActivoOpt.isEmpty()) {
+    return buildVacio(today, diaSemana);
+}
+var anoActivo = anoActivoOpt.get();
+
+// Ahora uso anoActivo libremente para múltiples operaciones
+var diaNoLectivo = diaNoLectivoRepository
+    .findByAnoEscolarIdAndFecha(anoActivo.getId(), today)
+    .map(this::mapDiaNoLectivo)
+    .orElse(null);
+var horario = horarioRepository.findByAnoEscolarId(anoActivo.getId());
+```
+- **Regla clave:** `isPresent()/isEmpty()` + `get()` es PERMITIDO **únicamente** cuando el `get()` está protegido por un early return o un throw inmediatamente antes. El `get()` nunca debe estar dentro de un `if (isPresent())` — siempre debe ser código que se ejecuta después de haber salido del método si el Optional estaba vacío.
+
+#### ✅ Contexto 3: La ausencia es un error de negocio → `orElseThrow()`
+- **Cuándo:** Si el valor no existe, es un error y no hay fallback posible.
+- **Patrón correcto:**
+```java
+var alumno = alumnoRepository.findById(alumnoId)
+    .orElseThrow(() -> new ResourceNotFoundException("Alumno", alumnoId));
+```
+
+#### 🚫 Prohibiciones absolutas (aplican en TODOS los contextos)
+1. **Nunca** hacer `.orElse(null)` seguido de `if (x == null)`.
+2. **Nunca** usar `Optional` como parámetro de método: `public void procesar(Optional<Alumno> alumno)`.
+3. **Nunca** usar `Optional` como campo de una entidad o DTO.
+4. **Nunca** hacer `.get()` dentro de un bloque `if (opt.isPresent()) { ... }`. Si necesitas el valor, usa early return + get, o usa map/flatMap.
+
+#### Regla de decisión rápida para el agente
+Cuando encuentres un `Optional` en el código, pregúntate:
+1. ¿Solo necesito transformar el valor? → `.map().orElse()` / `.map().orElseGet()`
+2. ¿Necesito el valor para varias líneas posteriores? → `isEmpty()` + early return + `.get()`
+3. ¿La ausencia es un error? → `.orElseThrow()`
+
+**Si la respuesta no encaja en ninguno de los 3, NO refactorices. Deja el código como está y consulta.**
 
 ### 5. Fuga de Entidades en REST
 - **Síntoma:** Un Controller que devuelve directamente un objeto `@Entity`.
