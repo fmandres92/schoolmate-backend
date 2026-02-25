@@ -48,7 +48,11 @@ public class ObtenerAlumnosApoderado {
             .filter(alumno -> alumno != null)
             .toList();
 
-        AnoEscolar anoActivo = anoEscolarRepo.findActivoByFecha(clockProvider.today()).orElse(null);
+        AnoEscolar anoActivo = null;
+        var anoActivoOpt = anoEscolarRepo.findActivoByFecha(clockProvider.today());
+        if (anoActivoOpt.isPresent()) {
+            anoActivo = anoActivoOpt.get();
+        }
         Map<UUID, Matricula> matriculasActivasPorAlumno = Map.of();
         if (anoActivo != null && !alumnosActivos.isEmpty()) {
             List<UUID> alumnoIds = alumnosActivos.stream().map(Alumno::getId).toList();

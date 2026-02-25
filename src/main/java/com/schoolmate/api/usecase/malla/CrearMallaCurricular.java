@@ -9,6 +9,7 @@ import com.schoolmate.api.entity.MallaCurricular;
 import com.schoolmate.api.entity.Materia;
 import com.schoolmate.api.enums.EstadoAnoEscolar;
 import com.schoolmate.api.exception.ApiException;
+import com.schoolmate.api.exception.ConflictException;
 import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AnoEscolarRepository;
@@ -16,10 +17,8 @@ import com.schoolmate.api.repository.GradoRepository;
 import com.schoolmate.api.repository.MallaCurricularRepository;
 import com.schoolmate.api.repository.MateriaRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 import java.util.UUID;
@@ -43,8 +42,7 @@ public class CrearMallaCurricular {
             request.getGradoId(),
             resolvedAnoEscolarId
         )) {
-            throw new ResponseStatusException(
-                HttpStatus.CONFLICT,
+            throw new ConflictException(
                 "Ya existe un registro de malla curricular para la combinación materia + grado + año escolar"
             );
         }

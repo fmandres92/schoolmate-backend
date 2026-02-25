@@ -1,11 +1,10 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
+import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.dto.AsistenciaMensualResponse;
 import com.schoolmate.api.dto.ResumenAsistenciaResponse;
 import com.schoolmate.api.dto.response.AlumnoApoderadoPageResponse;
-import com.schoolmate.api.entity.AnoEscolar;
-import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.security.UserPrincipal;
 import com.schoolmate.api.usecase.apoderado.ObtenerAlumnosApoderado;
 import com.schoolmate.api.usecase.apoderado.ObtenerAsistenciaMensualAlumno;
@@ -17,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -54,13 +54,13 @@ public class ApoderadoPortalController {
     @GetMapping("/alumnos/{alumnoId}/asistencia/resumen")
     @PreAuthorize("hasRole('APODERADO')")
     public ResponseEntity<ResumenAsistenciaResponse> resumenAsistencia(
-            @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+            @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
             @PathVariable UUID alumnoId,
             @RequestParam(required = false) UUID anoEscolarId,
             @AuthenticationPrincipal UserPrincipal user) {
         ResumenAsistenciaResponse resultado = obtenerResumenAsistenciaAlumno.execute(
                 alumnoId,
-                anoEscolarHeader != null ? anoEscolarHeader.getId() : null,
+                anoEscolarHeaderId,
                 anoEscolarId,
                 user.getApoderadoId()
         );

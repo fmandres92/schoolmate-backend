@@ -1,12 +1,10 @@
 package com.schoolmate.api.controller;
 
+import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.dto.request.AlumnoRequest;
 import com.schoolmate.api.dto.request.CrearAlumnoConApoderadoRequest;
 import com.schoolmate.api.dto.response.AlumnoPageResponse;
 import com.schoolmate.api.dto.response.AlumnoResponse;
-import com.schoolmate.api.entity.Alumno;
-import com.schoolmate.api.entity.AnoEscolar;
-import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.usecase.alumno.ActualizarAlumno;
 import com.schoolmate.api.usecase.alumno.BuscarAlumnoPorRut;
 import com.schoolmate.api.usecase.alumno.CrearAlumno;
@@ -24,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -44,7 +43,7 @@ public class AlumnoController {
 
     @GetMapping
     public ResponseEntity<AlumnoPageResponse> listar(
-        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @RequestParam(defaultValue = "0") Integer page,
         @RequestParam(defaultValue = "20") Integer size,
         @RequestParam(defaultValue = "apellido") String sortBy,
@@ -54,7 +53,6 @@ public class AlumnoController {
         @RequestParam(required = false) UUID gradoId,
         @RequestParam(required = false) String q
     ) {
-        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
         AlumnoPageResponse response = obtenerAlumnos.execute(
             anoEscolarHeaderId,
             page,
@@ -72,29 +70,27 @@ public class AlumnoController {
     @GetMapping("/{id}")
     public ResponseEntity<AlumnoResponse> obtener(
         @PathVariable UUID id,
-        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @RequestParam(required = false) UUID anoEscolarId
     ) {
-        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
         AlumnoResponse response = obtenerDetalleAlumno.execute(id, anoEscolarHeaderId, anoEscolarId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/buscar-por-rut")
     public ResponseEntity<AlumnoResponse> buscarPorRut(
-        @AnoEscolarActivo(required = false) AnoEscolar anoEscolarHeader,
+        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @RequestParam String rut,
         @RequestParam(required = false) UUID anoEscolarId
     ) {
-        UUID anoEscolarHeaderId = anoEscolarHeader != null ? anoEscolarHeader.getId() : null;
         AlumnoResponse response = buscarAlumnoPorRut.execute(rut, anoEscolarHeaderId, anoEscolarId);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping
     public ResponseEntity<AlumnoResponse> crear(@Valid @RequestBody AlumnoRequest request) {
-        Alumno saved = crearAlumno.execute(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(AlumnoResponse.fromEntity(saved));
+        AlumnoResponse response = crearAlumno.execute(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PutMapping("/{id}")
@@ -102,8 +98,8 @@ public class AlumnoController {
         @PathVariable UUID id,
         @Valid @RequestBody AlumnoRequest request
     ) {
-        Alumno saved = actualizarAlumno.execute(id, request);
-        return ResponseEntity.ok(AlumnoResponse.fromEntity(saved));
+        AlumnoResponse response = actualizarAlumno.execute(id, request);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/con-apoderado")

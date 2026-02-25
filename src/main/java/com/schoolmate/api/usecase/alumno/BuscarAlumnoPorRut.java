@@ -26,10 +26,14 @@ public class BuscarAlumnoPorRut {
             .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado para RUT: " + rut));
 
         if (resolvedAnoEscolarId != null) {
-            var matricula = matriculaRepository
-                .findByAlumnoIdAndAnoEscolarIdAndEstado(alumno.getId(), resolvedAnoEscolarId, EstadoMatricula.ACTIVA)
-                .orElse(null);
-            return AlumnoResponse.fromEntityWithMatricula(alumno, matricula);
+            var matriculaOpt = matriculaRepository.findByAlumnoIdAndAnoEscolarIdAndEstado(
+                    alumno.getId(),
+                    resolvedAnoEscolarId,
+                    EstadoMatricula.ACTIVA
+            );
+            return matriculaOpt
+                    .map(matricula -> AlumnoResponse.fromEntityWithMatricula(alumno, matricula))
+                    .orElseGet(() -> AlumnoResponse.fromEntity(alumno));
         }
 
         return AlumnoResponse.fromEntity(alumno);

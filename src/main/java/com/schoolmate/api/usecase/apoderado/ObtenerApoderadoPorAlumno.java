@@ -49,7 +49,14 @@ public class ObtenerApoderadoPorAlumno {
                 .build())
             .toList();
 
-        var usuario = usuarioRepository.findByApoderadoId(apoderado.getId()).orElse(null);
+        var usuarioOpt = usuarioRepository.findByApoderadoId(apoderado.getId());
+        UUID usuarioId = null;
+        boolean cuentaActiva = false;
+        if (usuarioOpt.isPresent()) {
+            var usuario = usuarioOpt.get();
+            usuarioId = usuario.getId();
+            cuentaActiva = Boolean.TRUE.equals(usuario.getActivo());
+        }
 
         return Optional.of(ApoderadoResponse.builder()
             .id(apoderado.getId())
@@ -58,8 +65,8 @@ public class ObtenerApoderadoPorAlumno {
             .rut(apoderado.getRut())
             .email(apoderado.getEmail())
             .telefono(apoderado.getTelefono())
-            .usuarioId(usuario != null ? usuario.getId() : null)
-            .cuentaActiva(usuario != null && Boolean.TRUE.equals(usuario.getActivo()))
+            .usuarioId(usuarioId)
+            .cuentaActiva(cuentaActiva)
             .alumnos(alumnosResumen)
             .build());
     }

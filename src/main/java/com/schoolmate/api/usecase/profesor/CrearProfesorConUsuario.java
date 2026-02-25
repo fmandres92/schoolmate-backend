@@ -3,6 +3,7 @@ package com.schoolmate.api.usecase.profesor;
 import com.schoolmate.api.common.rut.RutNormalizer;
 import com.schoolmate.api.common.rut.RutValidationService;
 import com.schoolmate.api.dto.request.ProfesorRequest;
+import com.schoolmate.api.dto.response.ProfesorResponse;
 import com.schoolmate.api.entity.Materia;
 import com.schoolmate.api.entity.Profesor;
 import com.schoolmate.api.entity.Usuario;
@@ -37,7 +38,7 @@ public class CrearProfesorConUsuario {
     private final RutValidationService rutValidationService;
 
     @Transactional
-    public Profesor execute(ProfesorRequest request) {
+    public ProfesorResponse execute(ProfesorRequest request) {
         String rutNormalizado = RutNormalizer.normalize(request.getRut());
         rutValidationService.validarFormatoRut(rutNormalizado);
         rutValidationService.validarRutDisponible(rutNormalizado, TipoPersona.PROFESOR, null);
@@ -80,8 +81,9 @@ public class CrearProfesorConUsuario {
 
         usuarioRepository.save(usuario);
 
-        return profesorRepository.findByIdWithMaterias(savedProfesor.getId())
+        Profesor profesorConMaterias = profesorRepository.findByIdWithMaterias(savedProfesor.getId())
             .orElseThrow(() -> new BusinessException("Profesor recién creado no encontrado"));
+        return ProfesorResponse.fromEntity(profesorConMaterias);
     }
 
     private void validarUnicidadEnCreacion(ProfesorRequest request) {

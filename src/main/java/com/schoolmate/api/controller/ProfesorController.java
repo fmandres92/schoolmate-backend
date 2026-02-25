@@ -5,7 +5,6 @@ import com.schoolmate.api.dto.SesionProfesorPageResponse;
 import com.schoolmate.api.dto.request.ProfesorRequest;
 import com.schoolmate.api.dto.response.ProfesorPageResponse;
 import com.schoolmate.api.dto.response.ProfesorResponse;
-import com.schoolmate.api.entity.Profesor;
 import com.schoolmate.api.usecase.profesor.ActualizarProfesor;
 import com.schoolmate.api.usecase.profesor.CrearProfesorConUsuario;
 import com.schoolmate.api.usecase.profesor.ObtenerDetalleProfesor;
@@ -47,16 +46,14 @@ public class ProfesorController {
 
     @PostMapping
     public ResponseEntity<ProfesorResponse> crear(@Valid @RequestBody ProfesorRequest request) {
-        Profesor saved = crearProfesorConUsuario.execute(request);
-        return ResponseEntity.ok(ProfesorResponse.fromEntity(saved));
+        return ResponseEntity.ok(crearProfesorConUsuario.execute(request));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ProfesorResponse> actualizar(
             @PathVariable UUID id,
             @Valid @RequestBody ProfesorRequest request) {
-        Profesor saved = actualizarProfesor.execute(id, request);
-        return ResponseEntity.ok(ProfesorResponse.fromEntity(saved));
+        return ResponseEntity.ok(actualizarProfesor.execute(id, request));
     }
 
     @GetMapping("/{profesorId}/sesiones")

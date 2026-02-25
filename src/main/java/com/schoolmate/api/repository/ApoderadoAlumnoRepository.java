@@ -18,6 +18,7 @@ public interface ApoderadoAlumnoRepository extends JpaRepository<ApoderadoAlumno
     List<ApoderadoAlumno> findByIdApoderadoId(UUID apoderadoId);
 
     List<ApoderadoAlumno> findByIdAlumnoId(UUID alumnoId);
+    boolean existsByIdAlumnoId(UUID alumnoId);
 
     default List<ApoderadoAlumno> findByApoderadoId(UUID apoderadoId) {
         return findByIdApoderadoId(apoderadoId);
@@ -28,7 +29,7 @@ public interface ApoderadoAlumnoRepository extends JpaRepository<ApoderadoAlumno
     }
 
     default boolean existsByAlumnoId(UUID alumnoId) {
-        return !findByIdAlumnoId(alumnoId).isEmpty();
+        return existsByIdAlumnoId(alumnoId);
     }
 
     default boolean existsByApoderadoIdAndAlumnoId(UUID apoderadoId, UUID alumnoId) {

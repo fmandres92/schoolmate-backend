@@ -30,10 +30,12 @@ public class ObtenerDetalleProfesor {
         Profesor profesor = profesorRepository.findByIdWithMaterias(id)
             .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
 
-        Integer horasAsignadas = anoEscolarRepository.findActivoByFecha(clockProvider.today())
-            .map(anoActivo -> bloqueHorarioRepository.findHorarioProfesorEnAnoEscolar(id, anoActivo.getId()))
-            .map(this::calcularHorasAsignadasDesdeBloques)
-            .orElse(null);
+        Integer horasAsignadas = null;
+        var anoActivoOpt = anoEscolarRepository.findActivoByFecha(clockProvider.today());
+        if (anoActivoOpt.isPresent()) {
+            var bloques = bloqueHorarioRepository.findHorarioProfesorEnAnoEscolar(id, anoActivoOpt.get().getId());
+            horasAsignadas = calcularHorasAsignadasDesdeBloques(bloques);
+        }
 
         return ProfesorResponse.fromEntity(profesor, horasAsignadas);
     }

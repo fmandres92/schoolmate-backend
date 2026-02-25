@@ -33,10 +33,14 @@ public class ObtenerDetalleAlumno {
 
         AlumnoResponse response;
         if (resolvedAnoEscolarId != null) {
-            Matricula matricula = matriculaRepository
-                .findByAlumnoIdAndAnoEscolarIdAndEstado(alumnoId, resolvedAnoEscolarId, EstadoMatricula.ACTIVA)
-                .orElse(null);
-            response = AlumnoResponse.fromEntityWithMatricula(alumno, matricula);
+            var matriculaOpt = matriculaRepository.findByAlumnoIdAndAnoEscolarIdAndEstado(
+                alumnoId,
+                resolvedAnoEscolarId,
+                EstadoMatricula.ACTIVA
+            );
+            response = matriculaOpt
+                .map(matricula -> AlumnoResponse.fromEntityWithMatricula(alumno, matricula))
+                .orElseGet(() -> AlumnoResponse.fromEntity(alumno));
         } else {
             response = AlumnoResponse.fromEntity(alumno);
         }

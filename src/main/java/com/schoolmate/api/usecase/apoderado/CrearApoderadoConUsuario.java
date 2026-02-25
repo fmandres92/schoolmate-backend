@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
@@ -120,7 +121,7 @@ public class CrearApoderadoConUsuario {
         List<ApoderadoResponse.AlumnoResumen> alumnosResumen = apoderadoAlumnoRepo
             .findByApoderadoIdWithAlumno(apoderado.getId())
             .stream()
-            .map(v -> v.getAlumno())
+            .map(ApoderadoAlumno::getAlumno)
             .filter(Objects::nonNull)
             .map(al -> ApoderadoResponse.AlumnoResumen.builder()
                 .id(al.getId())
@@ -129,7 +130,14 @@ public class CrearApoderadoConUsuario {
                 .build())
             .toList();
 
-        Usuario usuario = usuarioRepo.findByApoderadoId(apoderado.getId()).orElse(null);
+        var usuarioOpt = usuarioRepo.findByApoderadoId(apoderado.getId());
+        UUID usuarioId = null;
+        boolean cuentaActiva = false;
+        if (usuarioOpt.isPresent()) {
+            Usuario usuario = usuarioOpt.get();
+            usuarioId = usuario.getId();
+            cuentaActiva = Boolean.TRUE.equals(usuario.getActivo());
+        }
 
         return ApoderadoResponse.builder()
                 .id(apoderado.getId())
@@ -138,8 +146,8 @@ public class CrearApoderadoConUsuario {
                 .rut(apoderado.getRut())
                 .email(apoderado.getEmail())
                 .telefono(apoderado.getTelefono())
-                .usuarioId(usuario != null ? usuario.getId() : null)
-                .cuentaActiva(usuario != null && Boolean.TRUE.equals(usuario.getActivo()))
+                .usuarioId(usuarioId)
+                .cuentaActiva(cuentaActiva)
                 .alumnos(alumnosResumen)
                 .build();
     }

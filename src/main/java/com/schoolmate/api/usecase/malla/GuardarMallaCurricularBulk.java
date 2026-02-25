@@ -9,6 +9,7 @@ import com.schoolmate.api.entity.MallaCurricular;
 import com.schoolmate.api.entity.Materia;
 import com.schoolmate.api.enums.EstadoAnoEscolar;
 import com.schoolmate.api.exception.ApiException;
+import com.schoolmate.api.exception.BusinessException;
 import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AnoEscolarRepository;
@@ -16,10 +17,8 @@ import com.schoolmate.api.repository.GradoRepository;
 import com.schoolmate.api.repository.MallaCurricularRepository;
 import com.schoolmate.api.repository.MateriaRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -53,7 +52,7 @@ public class GuardarMallaCurricularBulk {
         Set<UUID> gradoIdsEntrada = new HashSet<>();
         for (MallaCurricularBulkRequest.GradoHoras gradoHoras : request.getGrados()) {
             if (!gradoIdsEntrada.add(gradoHoras.getGradoId())) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La lista de grados contiene IDs duplicados");
+                throw new BusinessException("La lista de grados contiene IDs duplicados");
             }
         }
 
@@ -63,10 +62,10 @@ public class GuardarMallaCurricularBulk {
             grados.put(grado.getId(), grado);
         }
         if (grados.size() != gradoIdsEntrada.size()) {
-            UUID gradoFaltante = gradoIdsEntrada.stream()
+            List<UUID> gradosFaltantes = gradoIdsEntrada.stream()
                 .filter(id -> !grados.containsKey(id))
-                .findFirst()
-                .orElse(null);
+                .toList();
+            UUID gradoFaltante = gradosFaltantes.getFirst();
             throw new ResourceNotFoundException("Grado no encontrado: " + gradoFaltante);
         }
 

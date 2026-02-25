@@ -29,7 +29,7 @@ import com.schoolmate.api.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
@@ -45,7 +45,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-@Service
+@Component
 @RequiredArgsConstructor
 public class GuardarAsistenciaClase {
 
@@ -119,9 +119,11 @@ public class GuardarAsistenciaClase {
 
         LocalDateTime ahora = clockProvider.now();
         AsistenciaClase savedAsistencia;
-        AsistenciaClase existente = asistenciaClaseRepository
-            .findByBloqueHorarioIdAndFecha(bloque.getId(), fechaRequest)
-            .orElse(null);
+        AsistenciaClase existente = null;
+        var existenteOpt = asistenciaClaseRepository.findByBloqueHorarioIdAndFecha(bloque.getId(), fechaRequest);
+        if (existenteOpt.isPresent()) {
+            existente = existenteOpt.get();
+        }
 
         if (existente == null) {
             AsistenciaClase nuevaAsistencia = AsistenciaClase.builder()

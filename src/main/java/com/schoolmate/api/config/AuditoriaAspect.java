@@ -16,6 +16,7 @@ import org.aspectj.lang.annotation.Pointcut;
 import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -120,7 +121,7 @@ public class AuditoriaAspect {
                     .build();
 
             auditoriaRepository.save(evento);
-        } catch (RuntimeException e) {
+        } catch (IllegalStateException | ClassCastException | DataAccessException e) {
             log.warn("Error al registrar evento de auditoria: {}", e.getMessage(), e);
         }
     }
@@ -187,7 +188,7 @@ public class AuditoriaAspect {
         } catch (JsonProcessingException e) {
             log.warn("Error al serializar request body para auditoria: {}", e.getMessage());
             return null;
-        } catch (RuntimeException e) {
+        } catch (IllegalArgumentException | ClassCastException e) {
             log.warn("Error inesperado al serializar request body para auditoria: {}", e.getMessage(), e);
             return null;
         }

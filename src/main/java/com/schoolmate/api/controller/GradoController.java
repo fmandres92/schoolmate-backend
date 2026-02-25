@@ -1,14 +1,13 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
+import com.schoolmate.api.dto.response.GradoPageResponse;
 import com.schoolmate.api.dto.response.GradoResponse;
 import com.schoolmate.api.usecase.grado.ListarGrados;
 import com.schoolmate.api.usecase.grado.ObtenerGrado;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/grados")
@@ -21,8 +20,12 @@ public class GradoController {
     // Listar todos (ordenados por nivel)
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public List<GradoResponse> listar() {
-        return listarGrados.execute();
+    public GradoPageResponse listar(
+        @RequestParam(defaultValue = "0") Integer page,
+        @RequestParam(defaultValue = "20") Integer size,
+        @RequestParam(defaultValue = "asc") String sortDir
+    ) {
+        return listarGrados.execute(page, size, sortDir);
     }
 
     // Obtener uno por ID

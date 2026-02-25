@@ -59,15 +59,17 @@ public class ObtenerClasesHoyProfesor {
             return buildVacio(today, diaSemana);
         }
 
-        AnoEscolar anoActivo = anoEscolarRepository.findActivoByFecha(today).orElse(null);
-        if (anoActivo == null) {
+        var anoActivoOpt = anoEscolarRepository.findActivoByFecha(today);
+        if (anoActivoOpt.isEmpty()) {
             return buildVacio(today, diaSemana);
         }
+        AnoEscolar anoActivo = anoActivoOpt.get();
 
-        DiaNoLectivoResponse diaNoLectivo = diaNoLectivoRepository
-            .findByAnoEscolarIdAndFecha(anoActivo.getId(), today)
-            .map(this::mapDiaNoLectivo)
-            .orElse(null);
+        DiaNoLectivoResponse diaNoLectivo = null;
+        var diaNoLectivoOpt = diaNoLectivoRepository.findByAnoEscolarIdAndFecha(anoActivo.getId(), today);
+        if (diaNoLectivoOpt.isPresent()) {
+            diaNoLectivo = mapDiaNoLectivo(diaNoLectivoOpt.get());
+        }
 
         List<BloqueHorario> bloques = bloqueHorarioRepository.findClasesProfesorEnDia(
             profesorId, diaSemana, anoActivo.getId());

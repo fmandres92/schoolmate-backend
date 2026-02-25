@@ -3,6 +3,7 @@ package com.schoolmate.api.usecase.profesor;
 import com.schoolmate.api.common.rut.RutNormalizer;
 import com.schoolmate.api.common.rut.RutValidationService;
 import com.schoolmate.api.dto.request.ProfesorRequest;
+import com.schoolmate.api.dto.response.ProfesorResponse;
 import com.schoolmate.api.entity.Materia;
 import com.schoolmate.api.entity.Profesor;
 import com.schoolmate.api.exception.ApiException;
@@ -30,7 +31,7 @@ public class ActualizarProfesor {
     private final RutValidationService rutValidationService;
 
     @Transactional
-    public Profesor execute(UUID id, ProfesorRequest request) {
+    public ProfesorResponse execute(UUID id, ProfesorRequest request) {
         String rutNormalizado = RutNormalizer.normalize(request.getRut());
         rutValidationService.validarFormatoRut(rutNormalizado);
 
@@ -54,8 +55,9 @@ public class ActualizarProfesor {
         profesor.setMaterias(materias);
 
         Profesor saved = profesorRepository.save(profesor);
-        return profesorRepository.findByIdWithMaterias(saved.getId())
+        Profesor profesorConMaterias = profesorRepository.findByIdWithMaterias(saved.getId())
             .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
+        return ProfesorResponse.fromEntity(profesorConMaterias);
     }
 
     private void validarUnicidadEnActualizacion(ProfesorRequest request, UUID profesorId) {

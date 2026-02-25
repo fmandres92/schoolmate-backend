@@ -180,7 +180,7 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - Se incorporó endpoint de KPIs base para administración:
   - `GET /api/dashboard/admin/resumen` (`ADMIN`).
   - response `DashboardAdminResponse` con `totalAlumnos`, `totalCursos`, `totalProfesores`.
-  - lectura por año escolar resuelto vía `@AnoEscolarActivo`.
+  - lectura por año escolar resuelto desde header `X-Ano-Escolar-Id` (UUID requerido en el endpoint).
 - Nuevo caso de uso `ObtenerDashboardAdmin`:
   - conteo en BD (sin cargar entidades en memoria) usando:
     - `MatriculaRepository.countByAnoEscolarIdAndEstado(..., ACTIVA)`
@@ -199,6 +199,7 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `ListarMaterias`, `ObtenerMateria`, `CrearMateria`, `ActualizarMateria`, `EliminarMateria`.
 - `GradoController` quedó delgado y delega lecturas en:
   - `ListarGrados`, `ObtenerGrado`.
+  - `GET /api/grados` ahora es paginado (`GradoPageResponse`).
 - `AuditoriaController` quedó delgado y delega filtros/paginación/mapeo JSON en:
   - `ConsultarEventosAuditoria`.
 - `AuthController` delega `GET /api/auth/me` en:
@@ -232,8 +233,8 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 ### Actualización técnica reciente (anti-pattern fixes: fuga de entidad + N+1 apoderado)
 
 - Antipatrón #5 (fuga de entidad REST) corregido en grados:
-  - `GET /api/grados` y `GET /api/grados/{id}` ahora responden `GradoResponse` (ya no entidad `Grado` directa).
-  - nuevo DTO: `dto/response/GradoResponse`.
+  - `GET /api/grados` y `GET /api/grados/{id}` ya no exponen entidad `Grado` directa.
+  - contratos actuales: `GradoPageResponse` (listado paginado) y `GradoResponse` (detalle).
 - Antipatrón #1 (N+1 en stream/map) corregido en flujos de apoderado:
   - `ObtenerAlumnosApoderado`: reemplaza `findById` por iteración y lookup de matrícula por alumno por consultas batch:
     - vínculos con alumno via `findByApoderadoIdWithAlumno(...)`
@@ -291,6 +292,18 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - Antipatrón #16 (lógica en controller) reducido en grados:
   - mapping a `GradoResponse` movido del controller a use cases (`ListarGrados`, `ObtenerGrado`).
 
+### Actualización técnica reciente (anti-patterns: frontera, errores y contratos internos)
+
+- Se eliminó acoplamiento HTTP en capa de negocio:
+  - `CrearAlumno`, `ActualizarAlumno`, `CrearMallaCurricular`, `GuardarMallaCurricularBulk` reemplazan `ResponseStatusException` por excepciones de dominio (`ConflictException` / `BusinessException`).
+- Mutaciones de alumno/profesor dejaron de retornar entidades JPA:
+  - `CrearAlumno`, `ActualizarAlumno`, `CrearProfesorConUsuario`, `ActualizarProfesor` ahora retornan DTO (`AlumnoResponse` / `ProfesorResponse`).
+- Optimización de repositorio en apoderado-alumno:
+  - `existsByAlumnoId(...)` pasó de cargar lista completa a `existsByIdAlumnoId(...)` directo en BD.
+- `AuditoriaAspect` dejó de capturar `RuntimeException` genérica:
+  - captura específica por tipo para mejorar observabilidad sin bloquear flujo funcional.
+- `GuardarAsistenciaClase` normalizado a `@Component` para consistencia con convención de use cases.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -323,13 +336,12 @@ Regla observada en código:
 
 Ejemplos reales:
 
-- CRUD directo:
-  - `/api/alumnos` en `AlumnoController` (listado, detalle, búsqueda por RUT y mutaciones simples).
 - Use case explícito:
   - `/api/materias` en `MateriaController` (`ListarMaterias`, `ObtenerMateria`, `CrearMateria`, `ActualizarMateria`, `EliminarMateria`).
   - `/api/grados` en `GradoController` (`ListarGrados`, `ObtenerGrado`).
   - `/api/auditoria` en `AuditoriaController` (`ConsultarEventosAuditoria`).
   - `/api/auth/me` en `AuthController` (`ObtenerPerfilAutenticado`).
+  - `/api/alumnos` en `AlumnoController` (`ObtenerAlumnos`, `ObtenerDetalleAlumno`, `BuscarAlumnoPorRut`, `CrearAlumno`, `ActualizarAlumno`, `CrearAlumnoConApoderado`).
   - `/api/cursos` en `CursoController` (`ObtenerCursos`, `ObtenerDetalleCurso`, `CrearCurso`, `ActualizarCurso`).
   - `/api/profesores` en `ProfesorController` (`ObtenerProfesores`, `ObtenerDetalleProfesor`, `ActualizarProfesor`, `ObtenerSesionesProfesor`, `CrearProfesorConUsuario`).
   - `/api/malla-curricular` en `MallaCurricularController` (`ListarMallaCurricularPorAnoEscolar`, `ListarMallaCurricularPorMateria`, `ListarMallaCurricularPorGrado`, `CrearMallaCurricular`, `ActualizarMallaCurricular`, `GuardarMallaCurricularBulk`, `EliminarMallaCurricular`).
@@ -511,6 +523,7 @@ Clase: `ApiErrorResponse`
   - `EstadoClaseHoy`
   - `AuthResponse`
   - `CursoPageResponse`
+  - `GradoPageResponse`
   - `GradoResponse`
   - `CursoResponse`
   - `JornadaCursoResponse`
@@ -1226,6 +1239,7 @@ Importante:
 
 - El header usa el tipo real de `ano_escolar.id` en el modelo actual (`UUID`), por lo que se valida formato UUID.
 - Los endpoints migrados usan estrategia gradual: prioridad `header > query/body` para mantener compatibilidad temporal con frontend anterior.
+- En endpoints refactorizados recientes, el controller recibe directamente `UUID` por `@RequestHeader("X-Ano-Escolar-Id")` y evita pasar entidades JPA en frontera HTTP.
 
 ### `JwtAuthenticationFilter`
 
@@ -1304,7 +1318,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/dashboard/admin/resumen` | KPIs administrativos base del año escolar activo/resuelto (`alumnos activos`, `cursos activos`, `profesores activos`) | `ADMIN` | Header `X-Ano-Escolar-Id` (resuelto por `@AnoEscolarActivo`) | - | `DashboardAdminResponse` | `ObtenerDashboardAdmin` | `ACCESS_DENIED`, `VALIDATION_FAILED` |
+| `GET /api/dashboard/admin/resumen` | KPIs administrativos base del año escolar activo/resuelto (`alumnos activos`, `cursos activos`, `profesores activos`) | `ADMIN` | Header requerido `X-Ano-Escolar-Id` (UUID) | - | `DashboardAdminResponse` | `ObtenerDashboardAdmin` | `ACCESS_DENIED`, `VALIDATION_FAILED` |
 
 ### Dominio: Apoderados (Admin)
 
@@ -1352,7 +1366,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/grados` | Lista grados por nivel | `ADMIN` | - | - | `List<GradoResponse>` | `ListarGrados` | `ACCESS_DENIED` |
+| `GET /api/grados` | Lista grados por nivel (paginado) | `ADMIN` | Query opcional `page,size,sortDir` | - | `GradoPageResponse` | `ListarGrados` | `ACCESS_DENIED` |
 | `GET /api/grados/{id}` | Obtiene grado por id | `ADMIN` | Path `id` | - | `GradoResponse` | `ObtenerGrado` | `RESOURCE_NOT_FOUND` |
 
 ### Dominio: Materias
@@ -1372,9 +1386,9 @@ Implementación actual:
 | `GET /api/malla-curricular` | Lista malla activa por año (prioridad `header > query`), paginada | `ADMIN` | Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback, obligatorio al menos uno) + Query `page,size` | - | `MallaCurricularPageResponse` | `ListarMallaCurricularPorAnoEscolar` | `ACCESS_DENIED`, `VALIDATION_FAILED` |
 | `GET /api/malla-curricular/materia/{materiaId}` | Lista malla por materia y año (prioridad `header > query`), paginada | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) + Query `page,size` | - | `MallaCurricularPageResponse` | `ListarMallaCurricularPorMateria` | `VALIDATION_FAILED` |
 | `GET /api/malla-curricular/grado/{gradoId}` | Lista malla por grado y año (prioridad `header > query`), paginada | `ADMIN` | Path + Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) + Query `page,size` | - | `MallaCurricularPageResponse` | `ListarMallaCurricularPorGrado` | `VALIDATION_FAILED` |
-| `POST /api/malla-curricular` | Crea registro malla (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId?,horasPedagogicas}` | `MallaCurricularResponse` | `CrearMallaCurricular` | `409` conflict (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `POST /api/malla-curricular` | Crea registro malla (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularRequest {materiaId,gradoId,anoEscolarId?,horasPedagogicas}` | `MallaCurricularResponse` | `CrearMallaCurricular` | `CONFLICT` (duplicate), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
 | `PUT /api/malla-curricular/{id}` | Actualiza horas/activo | `ADMIN` | Path + Body | `MallaCurricularUpdateRequest {horasPedagogicas,activo}` | `MallaCurricularResponse` | `ActualizarMallaCurricular` | `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
-| `POST /api/malla-curricular/bulk` | Upsert masivo por materia-año (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularBulkRequest` | `List<MallaCurricularResponse>` | `GuardarMallaCurricularBulk` | `BAD_REQUEST` grados duplicados, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `POST /api/malla-curricular/bulk` | Upsert masivo por materia-año (prioridad `header > body`) y bloquea escritura en año `CERRADO` | `ADMIN` | Header `X-Ano-Escolar-Id` o Body | `MallaCurricularBulkRequest` | `List<MallaCurricularResponse>` | `GuardarMallaCurricularBulk` | `BUSINESS_RULE` (grados duplicados), `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 | `DELETE /api/malla-curricular/{id}` | Baja lógica (`activo=false`) | `ADMIN` | Path | - | `204` | `EliminarMallaCurricular` | `RESOURCE_NOT_FOUND` |
 
 ### Dominio: Cursos
@@ -1402,12 +1416,12 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/alumnos` | Lista paginada con búsqueda y enriquecimiento opcional por matrícula (prioridad `header > query`) | `ADMIN` | Query: `page,size,sortBy,sortDir,anoEscolarId,cursoId,gradoId,q` + Header opcional `X-Ano-Escolar-Id` | - | `AlumnoPageResponse` | directo + `AlumnoSpecifications` | - |
-| `GET /api/alumnos/{id}` | Obtiene alumno; opcional matrícula activa por año y apoderado principal vinculado (si existe), prioridad `header > query` | `ADMIN` | Path + Header opcional `X-Ano-Escolar-Id` + Query opcional `anoEscolarId` | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `GET /api/alumnos/buscar-por-rut` | Búsqueda exacta por RUT + matrícula opcional por año, prioridad `header > query` | `ADMIN` | Query: `rut` (obligatorio), `anoEscolarId` (opcional) + Header opcional `X-Ano-Escolar-Id` | - | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND` |
-| `POST /api/alumnos` | Crea alumno; valida formato/DV de RUT y disponibilidad cross-tabla antes de la unicidad interna de alumno | `ADMIN` | Body | `AlumnoRequest` | `AlumnoResponse` | directo | `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `GET /api/alumnos` | Lista paginada con búsqueda y enriquecimiento opcional por matrícula (prioridad `header > query`) | `ADMIN` | Query: `page,size,sortBy,sortDir,anoEscolarId,cursoId,gradoId,q` + Header opcional `X-Ano-Escolar-Id` | - | `AlumnoPageResponse` | `ObtenerAlumnos` | - |
+| `GET /api/alumnos/{id}` | Obtiene alumno; opcional matrícula activa por año y apoderado principal vinculado (si existe), prioridad `header > query` | `ADMIN` | Path + Header opcional `X-Ano-Escolar-Id` + Query opcional `anoEscolarId` | - | `AlumnoResponse` | `ObtenerDetalleAlumno` | `RESOURCE_NOT_FOUND` |
+| `GET /api/alumnos/buscar-por-rut` | Búsqueda exacta por RUT + matrícula opcional por año, prioridad `header > query` | `ADMIN` | Query: `rut` (obligatorio), `anoEscolarId` (opcional) + Header opcional `X-Ano-Escolar-Id` | - | `AlumnoResponse` | `BuscarAlumnoPorRut` | `RESOURCE_NOT_FOUND` |
+| `POST /api/alumnos` | Crea alumno; valida formato/DV de RUT y disponibilidad cross-tabla antes de la unicidad interna de alumno | `ADMIN` | Body | `AlumnoRequest` | `AlumnoResponse` | `CrearAlumno` | `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `POST /api/alumnos/con-apoderado` | Crea alumno y vincula/crea apoderado en una transacción; valida formato de ambos RUT y cross-tabla (apoderado solo si es nuevo) | `ADMIN` | Body | `CrearAlumnoConApoderadoRequest` | `AlumnoResponse` (`201`) | `CrearAlumnoConApoderado` | `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
-| `PUT /api/alumnos/{id}` | Actualiza alumno; valida formato/DV de RUT y disponibilidad cross-tabla antes de la unicidad interna | `ADMIN` | Path + Body | `AlumnoRequest` | `AlumnoResponse` | directo | `RESOURCE_NOT_FOUND`, `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
+| `PUT /api/alumnos/{id}` | Actualiza alumno; valida formato/DV de RUT y disponibilidad cross-tabla antes de la unicidad interna | `ADMIN` | Path + Body | `AlumnoRequest` | `AlumnoResponse` | `ActualizarAlumno` | `RESOURCE_NOT_FOUND`, `CONFLICT`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 
 ### Dominio: Matrículas
 
@@ -1642,11 +1656,14 @@ Implementación actual:
 
 ### `com.schoolmate.api.usecase.grado.ListarGrados`
 
-- Función: listar grados en orden ascendente por nivel.
+- Función: listar grados por nivel, paginados y ordenables.
 - Repositorios/dependencias:
   - `GradoRepository`
+- Reglas:
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - orden por `nivel` con `sortDir` (`asc|desc`, fallback `asc`).
 - Salida:
-  - `List<GradoResponse>`.
+  - `GradoPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.grado.ObtenerGrado`
@@ -1837,11 +1854,13 @@ Implementación actual:
   - `MallaCurricularRepository`, `MateriaRepository`, `GradoRepository`, `AnoEscolarRepository`, `ClockProvider`
 - Reglas:
   - resuelve prioridad `header > body` para `anoEscolarId`.
-  - valida duplicado por combinación `(materiaId, gradoId, anoEscolarId)` (409).
+  - valida duplicado por combinación `(materiaId, gradoId, anoEscolarId)` con `ConflictException`.
   - valida existencia de materia/grado/año.
   - bloquea escritura si el año escolar está `CERRADO`.
 - Salida:
   - `MallaCurricularResponse`.
+- Errores:
+  - `ConflictException`, `ResourceNotFoundException`, `ApiException`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.malla.ActualizarMallaCurricular`
@@ -1863,12 +1882,14 @@ Implementación actual:
 - Reglas:
   - resuelve prioridad `header > body` para `anoEscolarId`.
   - valida existencia de materia/año y bloqueo por año `CERRADO`.
-  - valida que no haya `gradoId` duplicados en el request (400).
+  - valida que no haya `gradoId` duplicados en el request (`BusinessException`).
   - resuelve grados del request en lote con `findAllById(...)` (evita N+1 de búsqueda por grado).
   - reactiva/actualiza existentes, crea nuevos y desactiva ausentes (`activo=false`).
   - persiste cambios consolidados con `saveAll(...)` al final del merge bulk.
 - Salida:
   - `List<MallaCurricularResponse>`.
+- Errores:
+  - `BusinessException`, `ResourceNotFoundException`, `ApiException`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.malla.EliminarMallaCurricular`
@@ -2039,6 +2060,38 @@ Implementación actual:
   - `ResourceNotFoundException`
 - `@Transactional`: no.
 
+### `com.schoolmate.api.usecase.alumno.CrearAlumno`
+
+- Función: crear alumno con validación de RUT y unicidad.
+- Repositorios/dependencias:
+  - `AlumnoRepository`, `RutValidationService`
+- Reglas:
+  - normaliza RUT y valida formato + dígito verificador.
+  - valida disponibilidad cross-tabla (`TipoPersona.ALUMNO`).
+  - valida unicidad de RUT dentro de alumno (`existsByRut(...)`), lanzando `ConflictException` en duplicado.
+- Salida:
+  - `AlumnoResponse`.
+- Errores:
+  - `ConflictException`, `BusinessException`.
+- `@Transactional`: sí.
+
+### `com.schoolmate.api.usecase.alumno.ActualizarAlumno`
+
+- Función: actualizar datos personales de alumno con validación de RUT.
+- Repositorios/dependencias:
+  - `AlumnoRepository`, `RutValidationService`
+- Reglas:
+  - valida existencia de alumno.
+  - normaliza RUT y valida formato + dígito verificador.
+  - valida disponibilidad cross-tabla (`TipoPersona.ALUMNO`, excluyendo `alumnoId`).
+  - valida unicidad interna de RUT (`existsByRutAndIdNot(...)`), lanzando `ConflictException` en duplicado.
+  - aplica cambios por método de dominio `alumno.actualizarDatosPersonales(...)`.
+- Salida:
+  - `AlumnoResponse`.
+- Errores:
+  - `ResourceNotFoundException`, `ConflictException`, `BusinessException`.
+- `@Transactional`: sí.
+
 ### `com.schoolmate.api.usecase.alumno.CrearAlumnoConApoderado`
 
 - Función: crear alumno y gestionar su apoderado principal en una sola transacción.
@@ -2074,6 +2127,8 @@ Implementación actual:
   - valida duplicados en `Usuario` por email y RUT normalizado
   - si falla creación de usuario, rollback completo de profesor
   - tras persistir profesor/usuario, recarga profesor con `materias` usando `findByIdWithMaterias`.
+- Salida:
+  - `ProfesorResponse`.
 - `@Transactional`: sí.
 
 ### `com.schoolmate.api.usecase.profesor.ObtenerProfesores`
@@ -2119,7 +2174,7 @@ Implementación actual:
   - valida `materiaIds` existentes; si faltan -> `MATERIAS_NOT_FOUND`.
   - persiste y recarga con materias (`findByIdWithMaterias`) para mapeo seguro de respuesta.
 - Salida:
-  - `Profesor`.
+  - `ProfesorResponse`.
 - Errores:
   - `ResourceNotFoundException`, `ApiException` (`PROFESOR_RUT_INMUTABLE`, duplicados, `MATERIAS_NOT_FOUND`).
 - `@Transactional`: sí.
