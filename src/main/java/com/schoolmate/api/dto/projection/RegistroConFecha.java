@@ -1,4 +1,4 @@
-package com.schoolmate.api.dto;
+package com.schoolmate.api.dto.projection;
 import java.util.UUID;
 
 import com.schoolmate.api.enums.EstadoAsistencia;

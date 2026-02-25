@@ -2,8 +2,8 @@ package com.schoolmate.api.controller;
 import java.util.UUID;
 
 import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
-import com.schoolmate.api.dto.AsistenciaMensualResponse;
-import com.schoolmate.api.dto.ResumenAsistenciaResponse;
+import com.schoolmate.api.dto.response.AsistenciaMensualResponse;
+import com.schoolmate.api.dto.response.ResumenAsistenciaResponse;
 import com.schoolmate.api.dto.response.AlumnoApoderadoPageResponse;
 import com.schoolmate.api.security.UserPrincipal;
 import com.schoolmate.api.usecase.apoderado.ObtenerAlumnosApoderado;

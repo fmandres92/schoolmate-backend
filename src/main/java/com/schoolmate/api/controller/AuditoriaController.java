@@ -1,6 +1,6 @@
 package com.schoolmate.api.controller;
 
-import com.schoolmate.api.dto.EventoAuditoriaPageResponse;
+import com.schoolmate.api.dto.response.EventoAuditoriaPageResponse;
 import com.schoolmate.api.usecase.auditoria.ConsultarEventosAuditoria;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;

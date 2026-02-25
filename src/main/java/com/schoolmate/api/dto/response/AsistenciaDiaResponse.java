@@ -1,4 +1,4 @@
-package com.schoolmate.api.dto;
+package com.schoolmate.api.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

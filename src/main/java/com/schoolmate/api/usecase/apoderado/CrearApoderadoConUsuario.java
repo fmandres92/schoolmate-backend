@@ -2,8 +2,8 @@ package com.schoolmate.api.usecase.apoderado;
 
 import com.schoolmate.api.common.rut.RutNormalizer;
 import com.schoolmate.api.common.rut.RutValidationService;
-import com.schoolmate.api.dto.ApoderadoRequest;
-import com.schoolmate.api.dto.ApoderadoResponse;
+import com.schoolmate.api.dto.request.ApoderadoRequest;
+import com.schoolmate.api.dto.response.ApoderadoResponse;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.entity.Apoderado;
 import com.schoolmate.api.entity.ApoderadoAlumno;
@@ -131,13 +131,11 @@ public class CrearApoderadoConUsuario {
             .toList();
 
         var usuarioOpt = usuarioRepo.findByApoderadoId(apoderado.getId());
-        UUID usuarioId = null;
-        boolean cuentaActiva = false;
-        if (usuarioOpt.isPresent()) {
-            Usuario usuario = usuarioOpt.get();
-            usuarioId = usuario.getId();
-            cuentaActiva = Boolean.TRUE.equals(usuario.getActivo());
-        }
+        UUID usuarioId = usuarioOpt.map(Usuario::getId).orElse(null);
+        boolean cuentaActiva = usuarioOpt
+            .map(Usuario::getActivo)
+            .map(Boolean.TRUE::equals)
+            .orElse(false);
 
         return ApoderadoResponse.builder()
                 .id(apoderado.getId())

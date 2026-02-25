@@ -30,9 +30,10 @@ Current inventory:
 - Use cases: 72
 - Entities: 19
 - Repositories: 18
-- Request DTOs: 21
-- Response DTOs (`dto/response`): 42
-- Additional DTOs in `dto/`: 12
+- Request DTOs (`dto/request`): 22
+- Response DTOs (`dto/response`): 52
+- Projection DTOs (`dto/projection`): 1
+- Additional DTOs in `dto/`: 0
 - Flyway migrations in repo: 22 (`V1` to `V23`, with gaps intentionally not present)
 
 ---
@@ -112,7 +113,8 @@ No generic service layer (`*Service`) is used for business orchestration.
 - `common/time`: central time provider + overridable time context (dev tooling)
 - `config`: security/web/cache/interceptors/aspect
 - `controller`: all REST API endpoints
-- `dto`, `dto/request`, `dto/response`: API contracts
+- `dto/request`, `dto/response`: API contracts
+- `dto/projection`: DTOs internos para proyecciones de repositorio (no contratos HTTP)
 - `entity`: JPA entities
 - `enums`: domain and security enums
 - `exception`: error model and global exception handling
@@ -677,6 +679,7 @@ Note: most classes use method `execute(...)`; a few use `ejecutar(...)` (legacy 
 ## 13) DTO catalog
 
 ## 13.1 Request DTOs (`dto/request`)
+- `ApoderadoRequest`
 - `AlumnoRequest`
 - `AnoEscolarRequest`
 - `AsignarMateriaRequest`
@@ -708,18 +711,16 @@ Includes paginated wrappers and domain responses, among others:
 - materia: `MateriaResponse`, `MateriaPageResponse`, `MateriaDisponibleResponse`, `MateriasDisponiblesResponse`
 - malla: `MallaCurricularResponse`, `MallaCurricularPageResponse`
 - profesor: `ProfesorResponse`, `ProfesorPageResponse`, `ProfesorHorarioResponse`, `ProfesorDisponibleResponse`, `ProfesorResumenAsignacionResponse`, `ProfesoresDisponiblesResponse`
+- profesor sesiones/auditoria: `SesionProfesorResponse`, `SesionProfesorPageResponse`, `EventoAuditoriaResponse`, `EventoAuditoriaPageResponse`
 - matricula: `MatriculaResponse`, `MatriculaPageResponse`
 - asistencia/jornada: `AsistenciaClaseResponse`, `RegistroAsistenciaResponse`, `JornadaDiaResponse`, `JornadaCursoResponse`, `JornadaResumenResponse`, `BloqueHorarioResponse`, `AsignacionMateriaResumenResponse`, `AsignacionProfesoresResumenResponse`, `BloquePendienteProfesorResponse`, `BloqueProfesorResumenResponse`
+- apoderado/portal: `ApoderadoResponse`, `ApoderadoBuscarResponse`, `AlumnoApoderadoResponse`, `AlumnoApoderadoPageResponse`, `AsistenciaDiaResponse`, `AsistenciaMensualResponse`, `ResumenAsistenciaResponse`
 - auth/error: `AuthResponse`, `ApiErrorResponse`
 - calendario/dashboard: `DiaNoLectivoResponse`, `DiaNoLectivoPageResponse`, `DashboardAdminResponse`
 - profesor me: `ClaseHoyResponse`, `ClasesHoyResponse`, `EstadoClaseHoy`
 
-## 13.3 Additional DTOs in `dto/`
-- `ApoderadoRequest`, `ApoderadoResponse`, `ApoderadoBuscarResponse`
-- `AlumnoApoderadoResponse`
-- `AsistenciaDiaResponse`, `AsistenciaMensualResponse`, `ResumenAsistenciaResponse`, `RegistroConFecha`
-- `SesionProfesorResponse`, `SesionProfesorPageResponse`
-- `EventoAuditoriaResponse`, `EventoAuditoriaPageResponse`
+## 13.3 Projection DTOs (`dto/projection`)
+- `RegistroConFecha` (proyección interna usada por repositorio de asistencia; no expuesto como contrato REST)
 
 ---
 

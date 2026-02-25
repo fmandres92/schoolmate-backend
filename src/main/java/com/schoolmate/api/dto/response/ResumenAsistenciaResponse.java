@@ -1,4 +1,4 @@
-package com.schoolmate.api.dto;
+package com.schoolmate.api.dto.response;
 import java.util.UUID;
 
 import lombok.AllArgsConstructor;

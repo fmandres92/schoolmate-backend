@@ -1,4 +1,4 @@
-package com.schoolmate.api.dto;
+package com.schoolmate.api.dto.request;
 import java.util.UUID;
 
 import jakarta.validation.constraints.Email;

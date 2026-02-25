@@ -1,1 +1,59 @@
+# =========================
+# Build artifacts
+# =========================
 /target/
+/out/
+/build/
+
+# Maven / Java
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.log
+hs_err_pid*
+replay_pid*
+
+# Maven wrapper backup / release files
+dependency-reduced-pom.xml
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+release.properties
+
+# Test / coverage reports
+surefire-reports/
+failsafe-reports/
+jacoco.exec
+site/
+
+# =========================
+# IDEs
+# =========================
+.idea/
+*.iml
+*.ipr
+*.iws
+
+.vscode/
+.classpath
+.project
+.settings/
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Env / local-only files
+# =========================
+.env
+.env.*
+!.env.example
+
+# Local runtime folders
+logs/
+tmp/

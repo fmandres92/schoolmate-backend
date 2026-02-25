@@ -1,8 +1,8 @@
 package com.schoolmate.api.usecase.apoderado;
 
-import com.schoolmate.api.dto.AsistenciaDiaResponse;
-import com.schoolmate.api.dto.AsistenciaMensualResponse;
-import com.schoolmate.api.dto.RegistroConFecha;
+import com.schoolmate.api.dto.response.AsistenciaDiaResponse;
+import com.schoolmate.api.dto.response.AsistenciaMensualResponse;
+import com.schoolmate.api.dto.projection.RegistroConFecha;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.dto.response.DiaNoLectivoResponse;
 import com.schoolmate.api.enums.EstadoAsistencia;

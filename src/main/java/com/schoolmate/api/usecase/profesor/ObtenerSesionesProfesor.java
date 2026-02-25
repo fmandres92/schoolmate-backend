@@ -1,7 +1,7 @@
 package com.schoolmate.api.usecase.profesor;
 
-import com.schoolmate.api.dto.SesionProfesorPageResponse;
-import com.schoolmate.api.dto.SesionProfesorResponse;
+import com.schoolmate.api.dto.response.SesionProfesorPageResponse;
+import com.schoolmate.api.dto.response.SesionProfesorResponse;
 import com.schoolmate.api.entity.Profesor;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.ProfesorRepository;

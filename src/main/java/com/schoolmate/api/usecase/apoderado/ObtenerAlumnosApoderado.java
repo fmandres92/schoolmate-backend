@@ -1,7 +1,7 @@
 package com.schoolmate.api.usecase.apoderado;
 
 import com.schoolmate.api.common.time.ClockProvider;
-import com.schoolmate.api.dto.AlumnoApoderadoResponse;
+import com.schoolmate.api.dto.response.AlumnoApoderadoResponse;
 import com.schoolmate.api.dto.response.AlumnoApoderadoPageResponse;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.entity.AnoEscolar;
@@ -48,13 +48,25 @@ public class ObtenerAlumnosApoderado {
             .filter(alumno -> alumno != null)
             .toList();
 
-        AnoEscolar anoActivo = null;
         var anoActivoOpt = anoEscolarRepo.findActivoByFecha(clockProvider.today());
-        if (anoActivoOpt.isPresent()) {
-            anoActivo = anoActivoOpt.get();
+        if (anoActivoOpt.isEmpty()) {
+            var content = alumnosActivos.stream()
+                .map(alumno -> mapAlumno(alumno, null, Map.of()))
+                .toList();
+            return AlumnoApoderadoPageResponse.builder()
+                .content(content)
+                .page(vinculosPage.getNumber())
+                .size(vinculosPage.getSize())
+                .totalElements(vinculosPage.getTotalElements())
+                .totalPages(vinculosPage.getTotalPages())
+                .hasNext(vinculosPage.hasNext())
+                .hasPrevious(vinculosPage.hasPrevious())
+                .build();
         }
+
+        AnoEscolar anoActivo = anoActivoOpt.get();
         Map<UUID, Matricula> matriculasActivasPorAlumno = Map.of();
-        if (anoActivo != null && !alumnosActivos.isEmpty()) {
+        if (!alumnosActivos.isEmpty()) {
             List<UUID> alumnoIds = alumnosActivos.stream().map(Alumno::getId).toList();
             matriculasActivasPorAlumno = matriculaRepo
                 .findByAlumnoIdInAndAnoEscolarIdAndEstado(alumnoIds, anoActivo.getId(), EstadoMatricula.ACTIVA)

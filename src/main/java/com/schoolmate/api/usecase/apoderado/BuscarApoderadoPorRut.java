@@ -1,7 +1,7 @@
 package com.schoolmate.api.usecase.apoderado;
 
 import com.schoolmate.api.common.rut.RutNormalizer;
-import com.schoolmate.api.dto.ApoderadoBuscarResponse;
+import com.schoolmate.api.dto.response.ApoderadoBuscarResponse;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.exception.BusinessException;

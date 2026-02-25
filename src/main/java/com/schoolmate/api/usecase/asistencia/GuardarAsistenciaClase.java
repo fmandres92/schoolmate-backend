@@ -119,13 +119,8 @@ public class GuardarAsistenciaClase {
 
         LocalDateTime ahora = clockProvider.now();
         AsistenciaClase savedAsistencia;
-        AsistenciaClase existente = null;
         var existenteOpt = asistenciaClaseRepository.findByBloqueHorarioIdAndFecha(bloque.getId(), fechaRequest);
-        if (existenteOpt.isPresent()) {
-            existente = existenteOpt.get();
-        }
-
-        if (existente == null) {
+        if (existenteOpt.isEmpty()) {
             AsistenciaClase nuevaAsistencia = AsistenciaClase.builder()
                 .bloqueHorario(bloque)
                 .registradoPor(usuarioRepository.getReferenceById(usuarioId))
@@ -144,6 +139,7 @@ public class GuardarAsistenciaClase {
                 savedAsistencia = asistenciaClaseRepository.save(savedAsistencia);
             }
         } else {
+            AsistenciaClase existente = existenteOpt.get();
             existente.marcarRegistradaPor(usuarioRepository.getReferenceById(usuarioId), ahora);
             savedAsistencia = asistenciaClaseRepository.save(existente);
         }

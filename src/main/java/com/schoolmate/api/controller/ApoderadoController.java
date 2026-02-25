@@ -1,9 +1,9 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
-import com.schoolmate.api.dto.ApoderadoBuscarResponse;
-import com.schoolmate.api.dto.ApoderadoRequest;
-import com.schoolmate.api.dto.ApoderadoResponse;
+import com.schoolmate.api.dto.response.ApoderadoBuscarResponse;
+import com.schoolmate.api.dto.request.ApoderadoRequest;
+import com.schoolmate.api.dto.response.ApoderadoResponse;
 import com.schoolmate.api.usecase.apoderado.BuscarApoderadoPorRut;
 import com.schoolmate.api.usecase.apoderado.CrearApoderadoConUsuario;
 import com.schoolmate.api.usecase.apoderado.ObtenerApoderadoPorAlumno;

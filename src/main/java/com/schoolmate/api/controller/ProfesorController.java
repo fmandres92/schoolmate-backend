@@ -1,7 +1,7 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
-import com.schoolmate.api.dto.SesionProfesorPageResponse;
+import com.schoolmate.api.dto.response.SesionProfesorPageResponse;
 import com.schoolmate.api.dto.request.ProfesorRequest;
 import com.schoolmate.api.dto.response.ProfesorPageResponse;
 import com.schoolmate.api.dto.response.ProfesorResponse;

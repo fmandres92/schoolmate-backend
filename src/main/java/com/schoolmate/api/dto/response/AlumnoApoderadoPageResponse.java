@@ -1,6 +1,5 @@
 package com.schoolmate.api.dto.response;
 
-import com.schoolmate.api.dto.AlumnoApoderadoResponse;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

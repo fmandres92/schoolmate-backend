@@ -1,6 +1,6 @@
 package com.schoolmate.api.usecase.apoderado;
 
-import com.schoolmate.api.dto.ResumenAsistenciaResponse;
+import com.schoolmate.api.dto.response.ResumenAsistenciaResponse;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.enums.EstadoAsistencia;
 import com.schoolmate.api.exception.ApiException;

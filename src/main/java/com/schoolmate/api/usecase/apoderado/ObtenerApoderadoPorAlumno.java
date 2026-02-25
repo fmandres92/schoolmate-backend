@@ -1,6 +1,8 @@
 package com.schoolmate.api.usecase.apoderado;
 
-import com.schoolmate.api.dto.ApoderadoResponse;
+import com.schoolmate.api.dto.response.ApoderadoResponse;
+import com.schoolmate.api.entity.ApoderadoAlumno;
+import com.schoolmate.api.entity.Usuario;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AlumnoRepository;
 import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
@@ -34,13 +36,13 @@ public class ObtenerApoderadoPorAlumno {
             return Optional.empty();
         }
 
-        var vinculo = vinculos.get(0);
+        var vinculo = vinculos.getFirst();
         var apoderado = apoderadoRepository.findById(vinculo.getId().getApoderadoId())
             .orElseThrow(() -> new ResourceNotFoundException("Apoderado no encontrado"));
 
         var alumnosResumen = apoderadoAlumnoRepository.findByApoderadoIdWithAlumno(apoderado.getId())
             .stream()
-            .map(relacion -> relacion.getAlumno())
+            .map(ApoderadoAlumno::getAlumno)
             .filter(Objects::nonNull)
             .map(alumno -> ApoderadoResponse.AlumnoResumen.builder()
                 .id(alumno.getId())
@@ -50,13 +52,11 @@ public class ObtenerApoderadoPorAlumno {
             .toList();
 
         var usuarioOpt = usuarioRepository.findByApoderadoId(apoderado.getId());
-        UUID usuarioId = null;
-        boolean cuentaActiva = false;
-        if (usuarioOpt.isPresent()) {
-            var usuario = usuarioOpt.get();
-            usuarioId = usuario.getId();
-            cuentaActiva = Boolean.TRUE.equals(usuario.getActivo());
-        }
+        UUID usuarioId = usuarioOpt.map(Usuario::getId).orElse(null);
+        boolean cuentaActiva = usuarioOpt
+            .map(Usuario::getActivo)
+            .map(Boolean.TRUE::equals)
+            .orElse(false);
 
         return Optional.of(ApoderadoResponse.builder()
             .id(apoderado.getId())

@@ -1,6 +1,6 @@
 package com.schoolmate.api.repository;
 
-import com.schoolmate.api.dto.RegistroConFecha;
+import com.schoolmate.api.dto.projection.RegistroConFecha;
 import com.schoolmate.api.entity.RegistroAsistencia;
 import com.schoolmate.api.enums.EstadoAsistencia;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -23,7 +23,7 @@ public interface RegistroAsistenciaRepository extends JpaRepository<RegistroAsis
     int deleteByAsistenciaClaseId(@Param("asistenciaClaseId") UUID asistenciaClaseId);
 
     @Query("""
-        SELECT new com.schoolmate.api.dto.RegistroConFecha(
+        SELECT new com.schoolmate.api.dto.projection.RegistroConFecha(
             ra.id, ra.alumno.id, ra.estado, ac.fecha
         )
         FROM RegistroAsistencia ra

@@ -2,8 +2,8 @@ package com.schoolmate.api.usecase.auditoria;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.schoolmate.api.dto.EventoAuditoriaPageResponse;
-import com.schoolmate.api.dto.EventoAuditoriaResponse;
+import com.schoolmate.api.dto.response.EventoAuditoriaPageResponse;
+import com.schoolmate.api.dto.response.EventoAuditoriaResponse;
 import com.schoolmate.api.repository.EventoAuditoriaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
