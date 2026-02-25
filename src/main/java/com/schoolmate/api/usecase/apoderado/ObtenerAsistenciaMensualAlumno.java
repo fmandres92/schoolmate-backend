@@ -4,6 +4,7 @@ import com.schoolmate.api.dto.response.AsistenciaDiaResponse;
 import com.schoolmate.api.dto.response.AsistenciaMensualResponse;
 import com.schoolmate.api.dto.projection.RegistroConFecha;
 import com.schoolmate.api.entity.Alumno;
+import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.dto.response.DiaNoLectivoResponse;
 import com.schoolmate.api.enums.EstadoAsistencia;
 import com.schoolmate.api.exception.BusinessException;
@@ -37,7 +38,7 @@ public class ObtenerAsistenciaMensualAlumno {
     private final DiaNoLectivoRepository diaNoLectivoRepository;
 
     @Transactional(readOnly = true)
-    public AsistenciaMensualResponse execute(UUID alumnoId, int mes, int anio, UUID apoderadoId) {
+    public AsistenciaMensualResponse execute(UUID alumnoId, int mes, int anio, UUID apoderadoId, UUID anoEscolarId) {
         if (!apoderadoAlumnoRepo.existsByApoderadoIdAndAlumnoId(apoderadoId, alumnoId)) {
             throw new AccessDeniedException("No tienes acceso a este alumno");
         }
@@ -52,6 +53,8 @@ public class ObtenerAsistenciaMensualAlumno {
             throw new BusinessException("Mes o anio invalido");
         }
         LocalDate finMes = inicioMes.withDayOfMonth(inicioMes.lengthOfMonth());
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(anoEscolarId)
+            .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
 
         List<RegistroConFecha> registros = registroAsistenciaRepo
                 .findByAlumnoIdAndFechaEntre(alumnoId, inicioMes, finMes);
@@ -82,18 +85,16 @@ public class ObtenerAsistenciaMensualAlumno {
                 .sorted(Comparator.comparing(AsistenciaDiaResponse::getFecha))
                 .toList();
 
-        List<DiaNoLectivoResponse> diasNoLectivos = anoEscolarRepository.findActivoByFecha(inicioMes)
-                .map(anoEscolar -> diaNoLectivoRepository
-                        .findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc(anoEscolar.getId(), inicioMes, finMes)
-                        .stream()
-                        .map(d -> DiaNoLectivoResponse.builder()
-                                .id(d.getId())
-                                .fecha(d.getFecha())
-                                .tipo(d.getTipo().name())
-                                .descripcion(d.getDescripcion())
-                                .build())
-                        .toList())
-                .orElse(List.of());
+        List<DiaNoLectivoResponse> diasNoLectivos = diaNoLectivoRepository
+            .findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc(anoEscolar.getId(), inicioMes, finMes)
+            .stream()
+            .map(d -> DiaNoLectivoResponse.builder()
+                .id(d.getId())
+                .fecha(d.getFecha())
+                .tipo(d.getTipo().name())
+                .descripcion(d.getDescripcion())
+                .build())
+            .toList();
 
         return AsistenciaMensualResponse.builder()
                 .alumnoId(alumnoId)

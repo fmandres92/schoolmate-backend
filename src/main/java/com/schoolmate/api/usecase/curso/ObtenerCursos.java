@@ -28,7 +28,6 @@ public class ObtenerCursos {
 
     @Transactional(readOnly = true)
     public CursoPageResponse execute(
-        UUID anoEscolarHeaderId,
         UUID anoEscolarId,
         UUID gradoId,
         int page,
@@ -36,20 +35,17 @@ public class ObtenerCursos {
         String sortBy,
         String sortDir
     ) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, anoEscolarId);
         Pageable pageable = buildPageable(page, size, sortBy, sortDir);
 
         Page<Curso> cursosPage;
-        if (resolvedAnoEscolarId != null && gradoId != null) {
+        if (gradoId != null) {
             cursosPage = cursoRepository.findPageByAnoEscolarIdAndGradoId(
-                resolvedAnoEscolarId,
+                anoEscolarId,
                 gradoId,
                 pageable
             );
-        } else if (resolvedAnoEscolarId != null) {
-            cursosPage = cursoRepository.findPageByAnoEscolarId(resolvedAnoEscolarId, pageable);
         } else {
-            cursosPage = cursoRepository.findPageWithRelaciones(pageable);
+            cursosPage = cursoRepository.findPageByAnoEscolarId(anoEscolarId, pageable);
         }
 
         Map<UUID, Long> matriculadosPorCurso = obtenerMatriculadosPorCurso(cursosPage.getContent());
@@ -71,10 +67,6 @@ public class ObtenerCursos {
             .hasNext(cursosPage.hasNext())
             .hasPrevious(cursosPage.hasPrevious())
             .build();
-    }
-
-    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarIdRequest) {
-        return anoEscolarHeaderId != null ? anoEscolarHeaderId : anoEscolarIdRequest;
     }
 
     private Pageable buildPageable(int page, int size, String sortBy, String sortDir) {

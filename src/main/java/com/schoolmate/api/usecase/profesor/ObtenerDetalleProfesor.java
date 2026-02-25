@@ -1,6 +1,5 @@
 package com.schoolmate.api.usecase.profesor;
 
-import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.response.ProfesorResponse;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.entity.Profesor;
@@ -23,20 +22,19 @@ public class ObtenerDetalleProfesor {
     private final ProfesorRepository profesorRepository;
     private final AnoEscolarRepository anoEscolarRepository;
     private final BloqueHorarioRepository bloqueHorarioRepository;
-    private final ClockProvider clockProvider;
 
     @Transactional(readOnly = true)
-    public ProfesorResponse execute(UUID id) {
+    public ProfesorResponse execute(UUID id, UUID anoEscolarId) {
         Profesor profesor = profesorRepository.findByIdWithMaterias(id)
             .orElseThrow(() -> new ResourceNotFoundException("Profesor no encontrado"));
 
-        var anoActivoOpt = anoEscolarRepository.findActivoByFecha(clockProvider.today());
-        if (anoActivoOpt.isEmpty()) {
+        if (anoEscolarId == null) {
             return ProfesorResponse.fromEntity(profesor, null);
         }
 
-        var anoActivo = anoActivoOpt.get();
-        var bloques = bloqueHorarioRepository.findHorarioProfesorEnAnoEscolar(id, anoActivo.getId());
+        var anoEscolar = anoEscolarRepository.findById(anoEscolarId)
+            .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
+        var bloques = bloqueHorarioRepository.findHorarioProfesorEnAnoEscolar(id, anoEscolar.getId());
         Integer horasAsignadas = calcularHorasAsignadasDesdeBloques(bloques);
 
         return ProfesorResponse.fromEntity(profesor, horasAsignadas);

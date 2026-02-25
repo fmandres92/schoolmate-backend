@@ -1,6 +1,5 @@
 package com.schoolmate.api.usecase.apoderado;
 
-import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.response.AlumnoApoderadoResponse;
 import com.schoolmate.api.dto.response.AlumnoApoderadoPageResponse;
 import com.schoolmate.api.entity.Alumno;
@@ -8,6 +7,7 @@ import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
@@ -30,10 +30,9 @@ public class ObtenerAlumnosApoderado {
     private final ApoderadoAlumnoRepository apoderadoAlumnoRepo;
     private final MatriculaRepository matriculaRepo;
     private final AnoEscolarRepository anoEscolarRepo;
-    private final ClockProvider clockProvider;
 
     @Transactional(readOnly = true)
-    public AlumnoApoderadoPageResponse execute(UUID apoderadoId, Integer page, Integer size) {
+    public AlumnoApoderadoPageResponse execute(UUID apoderadoId, UUID anoEscolarId, Integer page, Integer size) {
         int resolvedPage = Math.max(page != null ? page : 0, 0);
         int resolvedSize = Math.min(Math.max(size != null ? size : 20, 1), 100);
         var pageable = PageRequest.of(
@@ -48,23 +47,8 @@ public class ObtenerAlumnosApoderado {
             .filter(alumno -> alumno != null)
             .toList();
 
-        var anoActivoOpt = anoEscolarRepo.findActivoByFecha(clockProvider.today());
-        if (anoActivoOpt.isEmpty()) {
-            var content = alumnosActivos.stream()
-                .map(alumno -> mapAlumno(alumno, null, Map.of()))
-                .toList();
-            return AlumnoApoderadoPageResponse.builder()
-                .content(content)
-                .page(vinculosPage.getNumber())
-                .size(vinculosPage.getSize())
-                .totalElements(vinculosPage.getTotalElements())
-                .totalPages(vinculosPage.getTotalPages())
-                .hasNext(vinculosPage.hasNext())
-                .hasPrevious(vinculosPage.hasPrevious())
-                .build();
-        }
-
-        AnoEscolar anoActivo = anoActivoOpt.get();
+        AnoEscolar anoActivo = anoEscolarRepo.findById(anoEscolarId)
+            .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
         Map<UUID, Matricula> matriculasActivasPorAlumno = Map.of();
         if (!alumnosActivos.isEmpty()) {
             List<UUID> alumnoIds = alumnosActivos.stream().map(Alumno::getId).toList();

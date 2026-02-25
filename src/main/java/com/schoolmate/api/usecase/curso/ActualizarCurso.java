@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -33,14 +32,12 @@ public class ActualizarCurso {
     private final SeccionCatalogoRepository seccionCatalogoRepository;
 
     @Transactional
-    public CursoResponse execute(UUID cursoId, UUID anoEscolarHeaderId, CursoRequest request) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, request.getAnoEscolarId());
-
+    public CursoResponse execute(UUID cursoId, UUID anoEscolarId, CursoRequest request) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
         Grado grado = gradoRepository.findById(request.getGradoId())
             .orElseThrow(() -> new ResourceNotFoundException("Grado no encontrado"));
-        AnoEscolar anoEscolar = anoEscolarRepository.findById(resolvedAnoEscolarId)
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(anoEscolarId)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
 
         boolean mismaAsignacion = curso.getGrado().getId().equals(grado.getId())
@@ -55,22 +52,6 @@ public class ActualizarCurso {
         Curso reloaded = cursoRepository.findByIdWithGradoAndAnoEscolar(saved.getId())
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
         return CursoResponse.fromEntity(reloaded);
-    }
-
-    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarIdRequest) {
-        UUID resolvedAnoEscolarId = anoEscolarHeaderId != null
-            ? anoEscolarHeaderId
-            : anoEscolarIdRequest;
-
-        if (resolvedAnoEscolarId == null) {
-            throw new ApiException(
-                ErrorCode.VALIDATION_FAILED,
-                "Se requiere año escolar (header X-Ano-Escolar-Id o campo anoEscolarId)",
-                Map.of()
-            );
-        }
-
-        return resolvedAnoEscolarId;
     }
 
     private String resolverLetraDisponible(UUID gradoId, UUID anoEscolarId) {

@@ -1,6 +1,8 @@
 package com.schoolmate.api.controller;
 
 import com.schoolmate.api.dto.response.ClasesHoyResponse;
+import com.schoolmate.api.entity.AnoEscolar;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.security.UserPrincipal;
 import com.schoolmate.api.usecase.profesor.ObtenerClasesHoyProfesor;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +21,10 @@ public class ProfesorMeController {
 
     @GetMapping("/mis-clases-hoy")
     @PreAuthorize("hasRole('PROFESOR')")
-    public ClasesHoyResponse misClasesHoy(@AuthenticationPrincipal UserPrincipal principal) {
-        return obtenerClasesHoyProfesor.execute(principal);
+    public ClasesHoyResponse misClasesHoy(
+        @AuthenticationPrincipal UserPrincipal principal,
+        @AnoEscolarActivo AnoEscolar anoEscolar
+    ) {
+        return obtenerClasesHoyProfesor.execute(principal, anoEscolar.getId());
     }
 }

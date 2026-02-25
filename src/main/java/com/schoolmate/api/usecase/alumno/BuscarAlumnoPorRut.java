@@ -19,16 +19,14 @@ public class BuscarAlumnoPorRut {
     private final MatriculaRepository matriculaRepository;
 
     @Transactional(readOnly = true)
-    public AlumnoResponse execute(String rut, UUID anoEscolarHeaderId, UUID anoEscolarId) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, anoEscolarId);
-
+    public AlumnoResponse execute(String rut, UUID anoEscolarId) {
         var alumno = alumnoRepository.findActivoByRutNormalizado(rut)
             .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado para RUT: " + rut));
 
-        if (resolvedAnoEscolarId != null) {
+        if (anoEscolarId != null) {
             var matriculaOpt = matriculaRepository.findByAlumnoIdAndAnoEscolarIdAndEstado(
                     alumno.getId(),
-                    resolvedAnoEscolarId,
+                    anoEscolarId,
                     EstadoMatricula.ACTIVA
             );
             return matriculaOpt
@@ -37,9 +35,5 @@ public class BuscarAlumnoPorRut {
         }
 
         return AlumnoResponse.fromEntity(alumno);
-    }
-
-    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarId) {
-        return anoEscolarHeaderId != null ? anoEscolarHeaderId : anoEscolarId;
     }
 }

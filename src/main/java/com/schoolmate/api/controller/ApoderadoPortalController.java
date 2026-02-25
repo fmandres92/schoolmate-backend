@@ -1,10 +1,11 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
-import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.dto.response.AsistenciaMensualResponse;
 import com.schoolmate.api.dto.response.ResumenAsistenciaResponse;
 import com.schoolmate.api.dto.response.AlumnoApoderadoPageResponse;
+import com.schoolmate.api.entity.AnoEscolar;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.security.UserPrincipal;
 import com.schoolmate.api.usecase.apoderado.ObtenerAlumnosApoderado;
 import com.schoolmate.api.usecase.apoderado.ObtenerAsistenciaMensualAlumno;
@@ -16,7 +17,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -33,9 +33,10 @@ public class ApoderadoPortalController {
     @PreAuthorize("hasRole('APODERADO')")
     public ResponseEntity<AlumnoApoderadoPageResponse> misAlumnos(
             @AuthenticationPrincipal UserPrincipal user,
+            @AnoEscolarActivo AnoEscolar anoEscolar,
             @RequestParam(defaultValue = "0") Integer page,
             @RequestParam(defaultValue = "20") Integer size) {
-        AlumnoApoderadoPageResponse alumnos = obtenerAlumnosApoderado.execute(user.getApoderadoId(), page, size);
+        AlumnoApoderadoPageResponse alumnos = obtenerAlumnosApoderado.execute(user.getApoderadoId(), anoEscolar.getId(), page, size);
         return ResponseEntity.ok(alumnos);
     }
 
@@ -45,23 +46,22 @@ public class ApoderadoPortalController {
             @PathVariable UUID alumnoId,
             @RequestParam int mes,
             @RequestParam int anio,
+            @AnoEscolarActivo AnoEscolar anoEscolar,
             @AuthenticationPrincipal UserPrincipal user) {
         AsistenciaMensualResponse resultado = obtenerAsistenciaMensualAlumno.execute(
-                alumnoId, mes, anio, user.getApoderadoId());
+                alumnoId, mes, anio, user.getApoderadoId(), anoEscolar.getId());
         return ResponseEntity.ok(resultado);
     }
 
     @GetMapping("/alumnos/{alumnoId}/asistencia/resumen")
     @PreAuthorize("hasRole('APODERADO')")
     public ResponseEntity<ResumenAsistenciaResponse> resumenAsistencia(
-            @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
+            @AnoEscolarActivo AnoEscolar anoEscolar,
             @PathVariable UUID alumnoId,
-            @RequestParam(required = false) UUID anoEscolarId,
             @AuthenticationPrincipal UserPrincipal user) {
         ResumenAsistenciaResponse resultado = obtenerResumenAsistenciaAlumno.execute(
                 alumnoId,
-                anoEscolarHeaderId,
-                anoEscolarId,
+                anoEscolar.getId(),
                 user.getApoderadoId()
         );
         return ResponseEntity.ok(resultado);

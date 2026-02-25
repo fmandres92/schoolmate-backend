@@ -25,17 +25,15 @@ public class ObtenerDetalleAlumno {
     private final ApoderadoRepository apoderadoRepository;
 
     @Transactional(readOnly = true)
-    public AlumnoResponse execute(UUID alumnoId, UUID anoEscolarHeaderId, UUID anoEscolarId) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, anoEscolarId);
-
+    public AlumnoResponse execute(UUID alumnoId, UUID anoEscolarId) {
         var alumno = alumnoRepository.findById(alumnoId)
             .orElseThrow(() -> new ResourceNotFoundException("Alumno no encontrado"));
 
         AlumnoResponse response;
-        if (resolvedAnoEscolarId != null) {
+        if (anoEscolarId != null) {
             var matriculaOpt = matriculaRepository.findByAlumnoIdAndAnoEscolarIdAndEstado(
                 alumnoId,
-                resolvedAnoEscolarId,
+                anoEscolarId,
                 EstadoMatricula.ACTIVA
             );
             response = matriculaOpt
@@ -47,10 +45,6 @@ public class ObtenerDetalleAlumno {
 
         enriquecerConApoderado(alumnoId, response);
         return response;
-    }
-
-    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarId) {
-        return anoEscolarHeaderId != null ? anoEscolarHeaderId : anoEscolarId;
     }
 
     private void enriquecerConApoderado(UUID alumnoId, AlumnoResponse response) {

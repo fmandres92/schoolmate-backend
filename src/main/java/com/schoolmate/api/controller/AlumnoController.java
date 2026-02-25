@@ -1,10 +1,11 @@
 package com.schoolmate.api.controller;
 
-import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.dto.request.AlumnoRequest;
 import com.schoolmate.api.dto.request.CrearAlumnoConApoderadoRequest;
 import com.schoolmate.api.dto.response.AlumnoPageResponse;
 import com.schoolmate.api.dto.response.AlumnoResponse;
+import com.schoolmate.api.entity.AnoEscolar;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.usecase.alumno.ActualizarAlumno;
 import com.schoolmate.api.usecase.alumno.BuscarAlumnoPorRut;
 import com.schoolmate.api.usecase.alumno.CrearAlumno;
@@ -22,7 +23,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,23 +43,21 @@ public class AlumnoController {
 
     @GetMapping
     public ResponseEntity<AlumnoPageResponse> listar(
-        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
+        @AnoEscolarActivo AnoEscolar anoEscolar,
         @RequestParam(defaultValue = "0") Integer page,
         @RequestParam(defaultValue = "20") Integer size,
         @RequestParam(defaultValue = "apellido") String sortBy,
         @RequestParam(defaultValue = "asc") String sortDir,
-        @RequestParam(required = false) UUID anoEscolarId,
         @RequestParam(required = false) UUID cursoId,
         @RequestParam(required = false) UUID gradoId,
         @RequestParam(required = false) String q
     ) {
         AlumnoPageResponse response = obtenerAlumnos.execute(
-            anoEscolarHeaderId,
+            anoEscolar.getId(),
             page,
             size,
             sortBy,
             sortDir,
-            anoEscolarId,
             cursoId,
             gradoId,
             q
@@ -70,20 +68,18 @@ public class AlumnoController {
     @GetMapping("/{id}")
     public ResponseEntity<AlumnoResponse> obtener(
         @PathVariable UUID id,
-        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
-        @RequestParam(required = false) UUID anoEscolarId
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolar
     ) {
-        AlumnoResponse response = obtenerDetalleAlumno.execute(id, anoEscolarHeaderId, anoEscolarId);
+        AlumnoResponse response = obtenerDetalleAlumno.execute(id, anoEscolar != null ? anoEscolar.getId() : null);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/buscar-por-rut")
     public ResponseEntity<AlumnoResponse> buscarPorRut(
-        @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
         @RequestParam String rut,
-        @RequestParam(required = false) UUID anoEscolarId
+        @AnoEscolarActivo(required = false) AnoEscolar anoEscolar
     ) {
-        AlumnoResponse response = buscarAlumnoPorRut.execute(rut, anoEscolarHeaderId, anoEscolarId);
+        AlumnoResponse response = buscarAlumnoPorRut.execute(rut, anoEscolar != null ? anoEscolar.getId() : null);
         return ResponseEntity.ok(response);
     }
 

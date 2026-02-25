@@ -3,8 +3,6 @@ package com.schoolmate.api.usecase.profesor;
 import com.schoolmate.api.dto.response.ProfesorHorarioResponse;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.enums.Rol;
-import com.schoolmate.api.exception.ApiException;
-import com.schoolmate.api.exception.ErrorCode;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
@@ -33,11 +31,9 @@ public class ObtenerHorarioProfesor {
     @Transactional(readOnly = true)
     public ProfesorHorarioResponse execute(
         UUID profesorId,
-        UUID anoEscolarHeaderId,
-        UUID anoEscolarQueryId,
+        UUID anoEscolarId,
         UserPrincipal principal
     ) {
-        UUID anoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, anoEscolarQueryId);
         validarOwnershipProfesor(principal, profesorId);
 
         var profesor = profesorRepository.findById(profesorId)
@@ -86,18 +82,6 @@ public class ObtenerHorarioProfesor {
                 .build())
             .dias(dias)
             .build();
-    }
-
-    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarQueryId) {
-        UUID resolvedAnoEscolarId = anoEscolarHeaderId != null ? anoEscolarHeaderId : anoEscolarQueryId;
-        if (resolvedAnoEscolarId == null) {
-            throw new ApiException(
-                ErrorCode.VALIDATION_FAILED,
-                "Se requiere año escolar (header X-Ano-Escolar-Id o query param anoEscolarId)",
-                Map.of()
-            );
-        }
-        return resolvedAnoEscolarId;
     }
 
     private void validarOwnershipProfesor(UserPrincipal principal, UUID profesorId) {

@@ -34,13 +34,12 @@ public class CrearMallaCurricular {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public MallaCurricularResponse execute(UUID anoEscolarHeaderId, MallaCurricularRequest request) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, request.getAnoEscolarId());
+    public MallaCurricularResponse execute(UUID anoEscolarId, MallaCurricularRequest request) {
 
         if (mallaCurricularRepository.existsByMateriaIdAndGradoIdAndAnoEscolarId(
             request.getMateriaId(),
             request.getGradoId(),
-            resolvedAnoEscolarId
+            anoEscolarId
         )) {
             throw new ConflictException(
                 "Ya existe un registro de malla curricular para la combinación materia + grado + año escolar"
@@ -51,7 +50,7 @@ public class CrearMallaCurricular {
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
         Grado grado = gradoRepository.findById(request.getGradoId())
             .orElseThrow(() -> new ResourceNotFoundException("Grado no encontrado"));
-        AnoEscolar anoEscolar = anoEscolarRepository.findById(resolvedAnoEscolarId)
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(anoEscolarId)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
 
         validarAnoEscolarEscribible(anoEscolar);
@@ -68,17 +67,6 @@ public class CrearMallaCurricular {
         return MallaCurricularMapper.toResponse(guardada);
     }
 
-    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarId) {
-        UUID resolvedAnoEscolarId = anoEscolarHeaderId != null ? anoEscolarHeaderId : anoEscolarId;
-        if (resolvedAnoEscolarId == null) {
-            throw new ApiException(
-                ErrorCode.VALIDATION_FAILED,
-                "Se requiere año escolar (header X-Ano-Escolar-Id o campo anoEscolarId)",
-                Map.of()
-            );
-        }
-        return resolvedAnoEscolarId;
-    }
 
     private void validarAnoEscolarEscribible(AnoEscolar anoEscolar) {
         if (anoEscolar.calcularEstado(clockProvider.today()) == EstadoAnoEscolar.CERRADO) {

@@ -183,10 +183,12 @@ Implication:
 - Interceptor: `AnoEscolarHeaderInterceptor`
 - Resolver: `AnoEscolarArgumentResolver` for `@AnoEscolarActivo`
 - Behavior:
-  - If header missing: request continues (unless endpoint requires it).
+  - The header is resolved in controllers through `@AnoEscolarActivo`; use cases receive `UUID anoEscolarId` already resolved.
+  - If header missing: request continues only for endpoints marked with `@AnoEscolarActivo(required = false)`.
   - If header invalid UUID: `VALIDATION_FAILED`.
   - If year not found: `ResourceNotFoundException`.
   - If principal is PROFESOR/APODERADO and selected year is not ACTIVO: `ACCESS_DENIED`.
+  - For write/list flows scoped by school year (`cursos`, `alumnos`, `malla`, `matriculas`, `profesor/apoderado portal`, `dashboard`, `dias-no-lectivos`), header is required.
 
 ## 7.7 HTTP cache behavior
 By `CacheControlInterceptor` (GET + HTTP 200 only):
@@ -390,7 +392,7 @@ These are generated from live catalog and include Supabase-managed schemas (`aut
 
 - `GET /api/dashboard/admin/resumen`  
   - Role: ADMIN  
-  - Header optional: `X-Ano-Escolar-Id`  
+  - Header required: `X-Ano-Escolar-Id`  
   - Returns: `DashboardAdminResponse` (200)
 
 ## 10.4 Anos escolares
@@ -436,45 +438,45 @@ These are generated from live catalog and include Supabase-managed schemas (`aut
 
 All ADMIN (class-level)
 
-- `GET /api/malla-curricular`
-- `GET /api/malla-curricular/materia/{materiaId}`
-- `GET /api/malla-curricular/grado/{gradoId}`
-- `POST /api/malla-curricular` (201)
+- `GET /api/malla-curricular` (header required)
+- `GET /api/malla-curricular/materia/{materiaId}` (header required)
+- `GET /api/malla-curricular/grado/{gradoId}` (header required)
+- `POST /api/malla-curricular` (201, header required)
 - `PUT /api/malla-curricular/{id}`
-- `POST /api/malla-curricular/bulk`
+- `POST /api/malla-curricular/bulk` (header required)
 - `DELETE /api/malla-curricular/{id}` (204)
 
 ## 10.9 Cursos
 
 All ADMIN (class-level)
 
-- `GET /api/cursos`
+- `GET /api/cursos` (header required)
 - `GET /api/cursos/{id}`
-- `POST /api/cursos` (201)
-- `PUT /api/cursos/{id}`
+- `POST /api/cursos` (201, header required)
+- `PUT /api/cursos/{id}` (header required)
 
 ## 10.10 Profesores
 
 `ProfesorController` (ADMIN class-level):
 - `GET /api/profesores`
-- `GET /api/profesores/{id}`
+- `GET /api/profesores/{id}` (header optional; enriches `horasAsignadas`)
 - `POST /api/profesores` (201)
 - `PUT /api/profesores/{id}`
 - `GET /api/profesores/{profesorId}/sesiones`
 
 `ProfesorHorarioController`:
-- `GET /api/profesores/{profesorId}/horario` (ADMIN or PROFESOR)
+- `GET /api/profesores/{profesorId}/horario` (ADMIN or PROFESOR, header required)
 
 `ProfesorMeController`:
-- `GET /api/profesor/mis-clases-hoy` (PROFESOR)
+- `GET /api/profesor/mis-clases-hoy` (PROFESOR, header required)
 
 ## 10.11 Alumnos
 
 All ADMIN (class-level)
 
-- `GET /api/alumnos`
-- `GET /api/alumnos/{id}`
-- `GET /api/alumnos/buscar-por-rut`
+- `GET /api/alumnos` (header required)
+- `GET /api/alumnos/{id}` (header optional)
+- `GET /api/alumnos/buscar-por-rut` (header optional)
 - `POST /api/alumnos` (201)
 - `PUT /api/alumnos/{id}`
 - `POST /api/alumnos/con-apoderado` (201)
@@ -489,14 +491,14 @@ All ADMIN (class-level)
 
 ## 10.13 Portal apoderado
 
-- `GET /api/apoderado/mis-alumnos` (APODERADO)
-- `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual` (APODERADO)
-- `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen` (APODERADO)
+- `GET /api/apoderado/mis-alumnos` (APODERADO, header required)
+- `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual` (APODERADO, header required)
+- `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen` (APODERADO, header required)
 
 ## 10.14 Matriculas
 
-- `POST /api/matriculas` (ADMIN) -> 201
-- `GET /api/matriculas/curso/{cursoId}` (ADMIN, PROFESOR)
+- `POST /api/matriculas` (ADMIN, header required) -> 201
+- `GET /api/matriculas/curso/{cursoId}` (ADMIN, PROFESOR, header required)
 - `GET /api/matriculas/alumno/{alumnoId}` (ADMIN)
 - `PATCH /api/matriculas/{id}/estado` (ADMIN)
 
@@ -535,11 +537,11 @@ All use cases currently expose `execute(...)` as the entry method convention.
 
 ## 11.1 Alumno
 - `ActualizarAlumno.execute(UUID alumnoId, AlumnoRequest request)`
-- `BuscarAlumnoPorRut.execute(String rut, UUID anoEscolarHeaderId, UUID anoEscolarId)`
+- `BuscarAlumnoPorRut.execute(String rut, UUID anoEscolarId)`
 - `CrearAlumno.execute(AlumnoRequest request)`
 - `CrearAlumnoConApoderado.execute(CrearAlumnoConApoderadoRequest request)`
-- `ObtenerAlumnos.execute(UUID anoEscolarHeaderId, Integer page, Integer size, String sortBy, String sortDir, UUID anoEscolarId, UUID cursoId, UUID gradoId, String q)`
-- `ObtenerDetalleAlumno.execute(UUID alumnoId, UUID anoEscolarHeaderId, UUID anoEscolarId)`
+- `ObtenerAlumnos.execute(UUID anoEscolarId, Integer page, Integer size, String sortBy, String sortDir, UUID cursoId, UUID gradoId, String q)`
+- `ObtenerDetalleAlumno.execute(UUID alumnoId, UUID anoEscolarId)`
 
 ## 11.2 Ano escolar
 - `ActualizarAnoEscolar.execute(UUID id, AnoEscolarRequest request)`
@@ -551,10 +553,10 @@ All use cases currently expose `execute(...)` as the entry method convention.
 ## 11.3 Apoderado
 - `BuscarApoderadoPorRut.execute(String rut)`
 - `CrearApoderadoConUsuario.execute(ApoderadoRequest request)`
-- `ObtenerAlumnosApoderado.execute(UUID apoderadoId, Integer page, Integer size)`
+- `ObtenerAlumnosApoderado.execute(UUID apoderadoId, UUID anoEscolarId, Integer page, Integer size)`
 - `ObtenerApoderadoPorAlumno.execute(UUID alumnoId)`
-- `ObtenerAsistenciaMensualAlumno.execute(UUID alumnoId, int mes, int anio, UUID apoderadoId)`
-- `ObtenerResumenAsistenciaAlumno.execute(UUID alumnoId, UUID anoEscolarHeaderId, UUID anoEscolarQueryId, UUID apoderadoId)`
+- `ObtenerAsistenciaMensualAlumno.execute(UUID alumnoId, int mes, int anio, UUID apoderadoId, UUID anoEscolarId)`
+- `ObtenerResumenAsistenciaAlumno.execute(UUID alumnoId, UUID anoEscolarId, UUID apoderadoId)`
 
 ## 11.4 Asistencia
 - `GuardarAsistenciaClase.execute(GuardarAsistenciaRequest request, UUID profesorId, UUID usuarioId, Rol rolUsuario)`
@@ -574,9 +576,9 @@ All use cases currently expose `execute(...)` as the entry method convention.
 - `ListarDiasNoLectivos.execute(UUID anoEscolarId, Integer mes, Integer anio, Integer page, Integer size)`
 
 ## 11.8 Curso
-- `ActualizarCurso.execute(UUID cursoId, UUID anoEscolarHeaderId, CursoRequest request)`
-- `CrearCurso.execute(UUID anoEscolarHeaderId, CursoRequest request)`
-- `ObtenerCursos.execute(UUID anoEscolarHeaderId, UUID anoEscolarIdRequest, UUID gradoId, int page, int size, String sortBy, String sortDir)`
+- `ActualizarCurso.execute(UUID cursoId, UUID anoEscolarId, CursoRequest request)`
+- `CrearCurso.execute(UUID anoEscolarId, CursoRequest request)`
+- `ObtenerCursos.execute(UUID anoEscolarId, UUID gradoId, int page, int size, String sortBy, String sortDir)`
 - `ObtenerDetalleCurso.execute(UUID cursoId)`
 
 ## 11.9 Dashboard
@@ -604,12 +606,12 @@ All use cases currently expose `execute(...)` as the entry method convention.
 
 ## 11.12 Malla
 - `ActualizarMallaCurricular.execute(UUID id, Integer horasPedagogicas, Boolean activo)`
-- `CrearMallaCurricular.execute(UUID anoEscolarHeaderId, MallaCurricularRequest request)`
+- `CrearMallaCurricular.execute(UUID anoEscolarId, MallaCurricularRequest request)`
 - `EliminarMallaCurricular.execute(UUID id)`
-- `GuardarMallaCurricularBulk.execute(UUID anoEscolarHeaderId, MallaCurricularBulkRequest request)`
-- `ListarMallaCurricularPorAnoEscolar.execute(UUID anoEscolarHeaderId, UUID anoEscolarId, int page, int size)`
-- `ListarMallaCurricularPorGrado.execute(UUID anoEscolarHeaderId, UUID gradoId, UUID anoEscolarId, int page, int size)`
-- `ListarMallaCurricularPorMateria.execute(UUID anoEscolarHeaderId, UUID materiaId, UUID anoEscolarId, int page, int size)`
+- `GuardarMallaCurricularBulk.execute(UUID anoEscolarId, MallaCurricularBulkRequest request)`
+- `ListarMallaCurricularPorAnoEscolar.execute(UUID anoEscolarId, int page, int size)`
+- `ListarMallaCurricularPorGrado.execute(UUID anoEscolarId, UUID gradoId, int page, int size)`
+- `ListarMallaCurricularPorMateria.execute(UUID anoEscolarId, UUID materiaId, int page, int size)`
 
 ## 11.13 Materia
 - `ActualizarMateria.execute(UUID id, MateriaRequest request)`
@@ -620,17 +622,17 @@ All use cases currently expose `execute(...)` as the entry method convention.
 
 ## 11.14 Matricula
 - `CambiarEstadoMatricula.execute(UUID matriculaId, String nuevoEstadoRaw)`
-- `MatricularAlumno.execute(MatriculaRequest request, UUID anoEscolarHeaderId)`
+- `MatricularAlumno.execute(MatriculaRequest request, UUID anoEscolarId)`
 - `ObtenerMatriculasPorAlumno.execute(UUID alumnoId, int page, int size, String sortBy, String sortDir)`
-- `ObtenerMatriculasPorCurso.execute(UUID cursoId, UserPrincipal principal, int page, int size, String sortBy, String sortDir)`
-- `ValidarAccesoMatriculasCursoProfesor.execute(UserPrincipal principal, UUID cursoId)`
+- `ObtenerMatriculasPorCurso.execute(UUID cursoId, UserPrincipal principal, UUID anoEscolarId, int page, int size, String sortBy, String sortDir)`
+- `ValidarAccesoMatriculasCursoProfesor.execute(UserPrincipal principal, UUID cursoId, UUID anoEscolarId)`
 
 ## 11.15 Profesor
 - `ActualizarProfesor.execute(UUID id, ProfesorRequest request)`
 - `CrearProfesorConUsuario.execute(ProfesorRequest request)`
-- `ObtenerClasesHoyProfesor.execute(UserPrincipal principal)`
-- `ObtenerDetalleProfesor.execute(UUID id)`
-- `ObtenerHorarioProfesor.execute(UUID profesorId, UUID anoEscolarHeaderId, UUID anoEscolarQueryId, UserPrincipal principal)`
+- `ObtenerClasesHoyProfesor.execute(UserPrincipal principal, UUID anoEscolarId)`
+- `ObtenerDetalleProfesor.execute(UUID id, UUID anoEscolarId)`
+- `ObtenerHorarioProfesor.execute(UUID profesorId, UUID anoEscolarId, UserPrincipal principal)`
 - `ObtenerProfesores.execute(int page, int size, String sortBy, String sortDir)`
 - `ObtenerSesionesProfesor.execute(UUID profesorId, LocalDate desde, LocalDate hasta, int page, int size)`
 

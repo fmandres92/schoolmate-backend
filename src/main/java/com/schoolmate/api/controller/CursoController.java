@@ -4,7 +4,8 @@ import java.util.UUID;
 import com.schoolmate.api.dto.request.CursoRequest;
 import com.schoolmate.api.dto.response.CursoPageResponse;
 import com.schoolmate.api.dto.response.CursoResponse;
-import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
+import com.schoolmate.api.entity.AnoEscolar;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.usecase.curso.ActualizarCurso;
 import com.schoolmate.api.usecase.curso.CrearCurso;
 import com.schoolmate.api.usecase.curso.ObtenerCursos;
@@ -29,15 +30,14 @@ public class CursoController {
 
     @GetMapping
     public ResponseEntity<CursoPageResponse> listar(
-            @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
-            @RequestParam(required = false) UUID anoEscolarId,
+            @AnoEscolarActivo AnoEscolar anoEscolar,
             @RequestParam(required = false) UUID gradoId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "nombre") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir) {
         CursoPageResponse response = obtenerCursos.execute(
-            anoEscolarHeaderId, anoEscolarId, gradoId, page, size, sortBy, sortDir
+            anoEscolar.getId(), gradoId, page, size, sortBy, sortDir
         );
         return ResponseEntity.ok(response);
     }
@@ -50,16 +50,16 @@ public class CursoController {
 
     @PostMapping
     public ResponseEntity<CursoResponse> crear(
-            @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
+            @AnoEscolarActivo AnoEscolar anoEscolar,
             @Valid @RequestBody CursoRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(crearCurso.execute(anoEscolarHeaderId, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(crearCurso.execute(anoEscolar.getId(), request));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<CursoResponse> actualizar(
             @PathVariable UUID id,
-            @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
+            @AnoEscolarActivo AnoEscolar anoEscolar,
             @Valid @RequestBody CursoRequest request) {
-        return ResponseEntity.ok(actualizarCurso.execute(id, anoEscolarHeaderId, request));
+        return ResponseEntity.ok(actualizarCurso.execute(id, anoEscolar.getId(), request));
     }
 }

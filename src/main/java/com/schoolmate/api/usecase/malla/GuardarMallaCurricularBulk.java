@@ -40,12 +40,11 @@ public class GuardarMallaCurricularBulk {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public List<MallaCurricularResponse> execute(UUID anoEscolarHeaderId, MallaCurricularBulkRequest request) {
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, request.getAnoEscolarId());
+    public List<MallaCurricularResponse> execute(UUID anoEscolarId, MallaCurricularBulkRequest request) {
 
         Materia materia = materiaRepository.findById(request.getMateriaId())
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
-        AnoEscolar anoEscolar = anoEscolarRepository.findById(resolvedAnoEscolarId)
+        AnoEscolar anoEscolar = anoEscolarRepository.findById(anoEscolarId)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
         validarAnoEscolarEscribible(anoEscolar);
 
@@ -71,7 +70,7 @@ public class GuardarMallaCurricularBulk {
 
         List<MallaCurricular> existentes = mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(
             request.getMateriaId(),
-            resolvedAnoEscolarId
+            anoEscolarId
         );
 
         Map<UUID, MallaCurricular> existentesPorGrado = new HashMap<>();
@@ -108,23 +107,12 @@ public class GuardarMallaCurricularBulk {
 
         mallaCurricularRepository.saveAll(aPersistir);
 
-        return mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(request.getMateriaId(), resolvedAnoEscolarId).stream()
+        return mallaCurricularRepository.findByMateriaIdAndAnoEscolarId(request.getMateriaId(), anoEscolarId).stream()
             .map(MallaCurricularMapper::toResponse)
             .sorted(Comparator.comparing(MallaCurricularResponse::getGradoNivel, Comparator.nullsLast(Integer::compareTo)))
             .toList();
     }
 
-    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarId) {
-        UUID resolvedAnoEscolarId = anoEscolarHeaderId != null ? anoEscolarHeaderId : anoEscolarId;
-        if (resolvedAnoEscolarId == null) {
-            throw new ApiException(
-                ErrorCode.VALIDATION_FAILED,
-                "Se requiere año escolar (header X-Ano-Escolar-Id o campo anoEscolarId)",
-                Map.of()
-            );
-        }
-        return resolvedAnoEscolarId;
-    }
 
     private void validarAnoEscolarEscribible(AnoEscolar anoEscolar) {
         if (anoEscolar.calcularEstado(clockProvider.today()) == EstadoAnoEscolar.CERRADO) {

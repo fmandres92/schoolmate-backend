@@ -23,6 +23,7 @@ public interface CursoRepository extends JpaRepository<Curso, UUID> {
     Page<Curso> findPageByAnoEscolarId(UUID anoEscolarId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"grado", "anoEscolar"})
+    // TODO: evaluar si eliminar (ya no se usa en el flujo principal de listados)
     @Query("""
         select c
         from Curso c

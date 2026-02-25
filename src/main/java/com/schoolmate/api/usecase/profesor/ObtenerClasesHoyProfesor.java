@@ -5,10 +5,10 @@ import com.schoolmate.api.dto.response.ClaseHoyResponse;
 import com.schoolmate.api.dto.response.ClasesHoyResponse;
 import com.schoolmate.api.dto.response.DiaNoLectivoResponse;
 import com.schoolmate.api.dto.response.EstadoClaseHoy;
-import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.entity.DiaNoLectivo;
 import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.AsistenciaClaseRepository;
 import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
@@ -46,7 +46,7 @@ public class ObtenerClasesHoyProfesor {
     private final DiaNoLectivoRepository diaNoLectivoRepository;
 
     @Transactional(readOnly = true)
-    public ClasesHoyResponse execute(UserPrincipal principal) {
+    public ClasesHoyResponse execute(UserPrincipal principal, UUID anoEscolarId) {
         UUID profesorId = principal != null ? principal.getProfesorId() : null;
         if (profesorId == null) {
             throw new AccessDeniedException("No se pudo resolver el profesor autenticado");
@@ -59,19 +59,16 @@ public class ObtenerClasesHoyProfesor {
             return buildVacio(today, diaSemana);
         }
 
-        var anoActivoOpt = anoEscolarRepository.findActivoByFecha(today);
-        if (anoActivoOpt.isEmpty()) {
-            return buildVacio(today, diaSemana);
-        }
-        AnoEscolar anoActivo = anoActivoOpt.get();
+        var anoEscolar = anoEscolarRepository.findById(anoEscolarId)
+            .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));
 
         DiaNoLectivoResponse diaNoLectivo = diaNoLectivoRepository
-            .findByAnoEscolarIdAndFecha(anoActivo.getId(), today)
+            .findByAnoEscolarIdAndFecha(anoEscolar.getId(), today)
             .map(this::mapDiaNoLectivo)
             .orElse(null);
 
         List<BloqueHorario> bloques = bloqueHorarioRepository.findClasesProfesorEnDia(
-            profesorId, diaSemana, anoActivo.getId());
+            profesorId, diaSemana, anoEscolar.getId());
 
         if (bloques.isEmpty()) {
             return ClasesHoyResponse.builder()

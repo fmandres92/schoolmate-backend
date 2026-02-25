@@ -1,11 +1,12 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
-import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.dto.request.CambiarEstadoMatriculaRequest;
 import com.schoolmate.api.dto.request.MatriculaRequest;
 import com.schoolmate.api.dto.response.MatriculaPageResponse;
 import com.schoolmate.api.dto.response.MatriculaResponse;
+import com.schoolmate.api.entity.AnoEscolar;
+import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.usecase.matricula.CambiarEstadoMatricula;
 import com.schoolmate.api.usecase.matricula.MatricularAlumno;
 import com.schoolmate.api.usecase.matricula.ObtenerMatriculasPorAlumno;
@@ -36,10 +37,10 @@ public class MatriculaController {
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<MatriculaResponse> matricular(
-            @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
+            @AnoEscolarActivo AnoEscolar anoEscolar,
             @Valid @RequestBody MatriculaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(matricularAlumno.execute(request, anoEscolarHeaderId));
+                .body(matricularAlumno.execute(request, anoEscolar.getId()));
     }
 
     /**
@@ -50,11 +51,12 @@ public class MatriculaController {
     public ResponseEntity<MatriculaPageResponse> porCurso(
             @PathVariable UUID cursoId,
             @AuthenticationPrincipal UserPrincipal principal,
+            @AnoEscolarActivo AnoEscolar anoEscolar,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "alumno.apellido") String sortBy,
             @RequestParam(defaultValue = "asc") String sortDir) {
-        return ResponseEntity.ok(obtenerMatriculasPorCurso.execute(cursoId, principal, page, size, sortBy, sortDir));
+        return ResponseEntity.ok(obtenerMatriculasPorCurso.execute(cursoId, principal, anoEscolar.getId(), page, size, sortBy, sortDir));
     }
 
     /**

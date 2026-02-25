@@ -37,12 +37,11 @@ public class ObtenerAlumnos {
 
     @Transactional(readOnly = true)
     public AlumnoPageResponse execute(
-        UUID anoEscolarHeaderId,
+        UUID anoEscolarId,
         Integer page,
         Integer size,
         String sortBy,
         String sortDir,
-        UUID anoEscolarId,
         UUID cursoId,
         UUID gradoId,
         String q
@@ -51,7 +50,6 @@ public class ObtenerAlumnos {
         int resolvedSize = Math.min(Math.max(size != null ? size : 20, 1), 100);
         String resolvedSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "apellido";
         Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        UUID resolvedAnoEscolarId = resolveAnoEscolarId(anoEscolarHeaderId, anoEscolarId);
 
         Specification<Alumno> spec = Specification.where(AlumnoSpecifications.activoTrue());
 
@@ -64,37 +62,27 @@ public class ObtenerAlumnos {
             }
         }
 
-        if (resolvedAnoEscolarId != null) {
-            List<UUID> alumnoIdsFiltrados = getAlumnoIdsByMatriculaFilters(resolvedAnoEscolarId, cursoId, gradoId);
-            if (alumnoIdsFiltrados != null) {
-                if (alumnoIdsFiltrados.isEmpty()) {
-                    return buildEmptyPage(resolvedPage, resolvedSize, resolvedSortBy, direction);
-                }
-                spec = spec.and(AlumnoSpecifications.byIdIn(alumnoIdsFiltrados));
+        List<UUID> alumnoIdsFiltrados = getAlumnoIdsByMatriculaFilters(anoEscolarId, cursoId, gradoId);
+        if (alumnoIdsFiltrados != null) {
+            if (alumnoIdsFiltrados.isEmpty()) {
+                return buildEmptyPage(resolvedPage, resolvedSize, resolvedSortBy, direction);
             }
+            spec = spec.and(AlumnoSpecifications.byIdIn(alumnoIdsFiltrados));
         }
 
         PageRequest pageable = PageRequest.of(resolvedPage, resolvedSize, Sort.by(direction, resolvedSortBy));
         Page<Alumno> alumnosPage = alumnoRepository.findAll(spec, pageable);
 
-        List<AlumnoResponse> content;
-        if (resolvedAnoEscolarId != null) {
-            List<UUID> alumnoIds = alumnosPage.getContent().stream()
-                .map(Alumno::getId)
-                .toList();
-            Map<UUID, Matricula> matriculaMap = getMatriculaMap(alumnoIds, resolvedAnoEscolarId);
-
-            content = alumnosPage.getContent().stream()
-                .map(alumno -> AlumnoResponse.fromEntityWithMatricula(
-                    alumno,
-                    matriculaMap.get(alumno.getId())
-                ))
-                .toList();
-        } else {
-            content = alumnosPage.getContent().stream()
-                .map(AlumnoResponse::fromEntity)
-                .toList();
-        }
+        List<UUID> alumnoIds = alumnosPage.getContent().stream()
+            .map(Alumno::getId)
+            .toList();
+        Map<UUID, Matricula> matriculaMap = getMatriculaMap(alumnoIds, anoEscolarId);
+        List<AlumnoResponse> content = alumnosPage.getContent().stream()
+            .map(alumno -> AlumnoResponse.fromEntityWithMatricula(
+                alumno,
+                matriculaMap.get(alumno.getId())
+            ))
+            .toList();
 
         return AlumnoPageResponse.builder()
             .content(content)
@@ -169,9 +157,5 @@ public class ObtenerAlumnos {
 
     private boolean isRutSearch(String q) {
         return q.matches("^[0-9]+$") && q.length() >= 5;
-    }
-
-    private UUID resolveAnoEscolarId(UUID anoEscolarHeaderId, UUID anoEscolarId) {
-        return anoEscolarHeaderId != null ? anoEscolarHeaderId : anoEscolarId;
     }
 }

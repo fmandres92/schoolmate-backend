@@ -24,12 +24,13 @@ public class ObtenerMatriculasPorCurso {
     public MatriculaPageResponse execute(
         UUID cursoId,
         UserPrincipal principal,
+        UUID anoEscolarId,
         int page,
         int size,
         String sortBy,
         String sortDir
     ) {
-        validarAccesoMatriculasCursoProfesor.execute(principal, cursoId);
+        validarAccesoMatriculasCursoProfesor.execute(principal, cursoId, anoEscolarId);
         int safePage = Math.max(page, 0);
         int safeSize = Math.max(1, Math.min(size, 100));
         String resolvedSortBy = resolveSortBy(sortBy);
