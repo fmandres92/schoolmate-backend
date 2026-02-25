@@ -1,7 +1,9 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
+import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.response.SesionProfesorPageResponse;
+import com.schoolmate.api.dto.response.CumplimientoAsistenciaResponse;
 import com.schoolmate.api.dto.request.ProfesorRequest;
 import com.schoolmate.api.dto.response.ProfesorPageResponse;
 import com.schoolmate.api.dto.response.ProfesorResponse;
@@ -12,6 +14,7 @@ import com.schoolmate.api.usecase.profesor.CrearProfesorConUsuario;
 import com.schoolmate.api.usecase.profesor.ObtenerDetalleProfesor;
 import com.schoolmate.api.usecase.profesor.ObtenerProfesores;
 import com.schoolmate.api.usecase.profesor.ObtenerSesionesProfesor;
+import com.schoolmate.api.usecase.profesor.ObtenerCumplimientoAsistenciaProfesor;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -32,6 +35,8 @@ public class ProfesorController {
     private final CrearProfesorConUsuario crearProfesorConUsuario;
     private final ActualizarProfesor actualizarProfesor;
     private final ObtenerSesionesProfesor obtenerSesionesProfesor;
+    private final ObtenerCumplimientoAsistenciaProfesor obtenerCumplimientoAsistenciaProfesor;
+    private final ClockProvider clockProvider;
 
     @GetMapping
     public ResponseEntity<ProfesorPageResponse> listar(
@@ -73,5 +78,20 @@ public class ProfesorController {
             @RequestParam(defaultValue = "20") int size
     ) {
         return ResponseEntity.ok(obtenerSesionesProfesor.execute(profesorId, desde, hasta, page, size));
+    }
+
+    @GetMapping("/{profesorId}/cumplimiento-asistencia")
+    public ResponseEntity<CumplimientoAsistenciaResponse> getCumplimientoAsistencia(
+        @PathVariable UUID profesorId,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
+        @AnoEscolarActivo AnoEscolar anoEscolar
+    ) {
+        LocalDate fechaConsulta = fecha != null ? fecha : clockProvider.today();
+        CumplimientoAsistenciaResponse response = obtenerCumplimientoAsistenciaProfesor.execute(
+            profesorId,
+            fechaConsulta,
+            anoEscolar.getId()
+        );
+        return ResponseEntity.ok(response);
     }
 }

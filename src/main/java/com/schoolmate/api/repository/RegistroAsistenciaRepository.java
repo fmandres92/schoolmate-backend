@@ -54,4 +54,14 @@ public interface RegistroAsistenciaRepository extends JpaRepository<RegistroAsis
         @Param("estado") EstadoAsistencia estado,
         @Param("anoEscolarId") UUID anoEscolarId
     );
+
+    @Query("""
+        select ra.asistenciaClase.id, ra.estado, count(ra)
+        from RegistroAsistencia ra
+        where ra.asistenciaClase.id in :asistenciaClaseIds
+        group by ra.asistenciaClase.id, ra.estado
+        """)
+    List<Object[]> countByEstadoGroupedByAsistenciaClaseId(
+        @Param("asistenciaClaseIds") List<UUID> asistenciaClaseIds
+    );
 }

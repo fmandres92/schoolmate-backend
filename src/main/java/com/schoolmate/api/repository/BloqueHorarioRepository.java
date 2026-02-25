@@ -97,6 +97,25 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, UU
     );
 
     @Query("""
+        SELECT bh
+        FROM BloqueHorario bh
+        JOIN FETCH bh.curso c
+        JOIN FETCH c.grado
+        LEFT JOIN FETCH bh.materia
+        WHERE bh.profesor.id = :profesorId
+          AND bh.diaSemana = :diaSemana
+          AND bh.activo = true
+          AND bh.tipo = com.schoolmate.api.enums.TipoBloque.CLASE
+          AND c.anoEscolar.id = :anoEscolarId
+        ORDER BY bh.horaInicio ASC
+        """)
+    List<BloqueHorario> findBloquesClaseByProfesorAndDia(
+        @Param("profesorId") UUID profesorId,
+        @Param("diaSemana") int diaSemana,
+        @Param("anoEscolarId") UUID anoEscolarId
+    );
+
+    @Query("""
         SELECT CASE WHEN COUNT(b) > 0 THEN true ELSE false END
         FROM BloqueHorario b
         JOIN b.curso c

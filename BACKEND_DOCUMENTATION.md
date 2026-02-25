@@ -27,11 +27,11 @@ Goal: describe what the system **really does today**, not what was planned.
 
 Current inventory:
 - Controllers: 19
-- Use cases: 72
+- Use cases: 73
 - Entities: 19
 - Repositories: 18
 - Request DTOs (`dto/request`): 22
-- Response DTOs (`dto/response`): 52
+- Response DTOs (`dto/response`): 53
 - Projection DTOs (`dto/projection`): 1
 - Additional DTOs in `dto/`: 0
 - Flyway migrations in repo: 22 (`V1` to `V23`, with gaps intentionally not present)
@@ -199,6 +199,7 @@ By `CacheControlInterceptor` (GET + HTTP 200 only):
   - `/api/auth/**`
   - `/api/auditoria/**`
   - `/api/profesores/{id}/sesiones`
+  - `/api/profesores/{id}/cumplimiento-asistencia`
 
 - `no-store`:
   - `/api/matriculas/**`
@@ -463,6 +464,7 @@ All ADMIN (class-level)
 - `POST /api/profesores` (201)
 - `PUT /api/profesores/{id}`
 - `GET /api/profesores/{profesorId}/sesiones`
+- `GET /api/profesores/{profesorId}/cumplimiento-asistencia` (header required; `fecha` opcional, default=today)
 
 `ProfesorHorarioController`:
 - `GET /api/profesores/{profesorId}/horario` (ADMIN or PROFESOR, header required)
@@ -505,7 +507,9 @@ All ADMIN (class-level)
 ## 10.15 Asistencia
 
 - `POST /api/asistencia/clase` (PROFESOR, ADMIN) -> 201
-- `GET /api/asistencia/clase` (PROFESOR)
+- `GET /api/asistencia/clase` (PROFESOR, ADMIN)
+  - PROFESOR: valida ownership del bloque por `profesorId`.
+  - ADMIN: bypass de ownership (`profesorId = null` en el use case).
 
 ## 10.16 Jornada (`/api/cursos/{cursoId}/jornada`)
 
@@ -631,6 +635,7 @@ All use cases currently expose `execute(...)` as the entry method convention.
 - `ActualizarProfesor.execute(UUID id, ProfesorRequest request)`
 - `CrearProfesorConUsuario.execute(ProfesorRequest request)`
 - `ObtenerClasesHoyProfesor.execute(UserPrincipal principal, UUID anoEscolarId)`
+- `ObtenerCumplimientoAsistenciaProfesor.execute(UUID profesorId, LocalDate fecha, UUID anoEscolarId)`
 - `ObtenerDetalleProfesor.execute(UUID id, UUID anoEscolarId)`
 - `ObtenerHorarioProfesor.execute(UUID profesorId, UUID anoEscolarId, UserPrincipal principal)`
 - `ObtenerProfesores.execute(int page, int size, String sortBy, String sortDir)`
@@ -667,6 +672,12 @@ All use cases currently expose `execute(...)` as the entry method convention.
   - `MatriculaRepository.countActivasByCursoIds(...)`
 - Batch retrieval for attendance-taken flags:
   - `AsistenciaClaseRepository.findBloqueIdsConAsistenciaTomada(...)`
+- Batch retrieval of asistencia records by block/date:
+  - `AsistenciaClaseRepository.findByBloqueIdsAndFecha(...)`
+- Batch aggregation of attendance counts by asistencia/estado:
+  - `RegistroAsistenciaRepository.countByEstadoGroupedByAsistenciaClaseId(...)`
+- Dedicated fetch for daily teacher class blocks in school year:
+  - `BloqueHorarioRepository.findBloquesClaseByProfesorAndDia(...)`
 - Batch collision queries for schedule assignment:
   - `BloqueHorarioRepository.findColisionesProfesoresConCursoYMateria(...)`
 - Filtering with boolean apply flags in audit/session repositories to avoid PostgreSQL type ambiguity:
@@ -720,6 +731,7 @@ Includes paginated wrappers and domain responses, among others:
 - auth/error: `AuthResponse`, `ApiErrorResponse`
 - calendario/dashboard: `DiaNoLectivoResponse`, `DiaNoLectivoPageResponse`, `DashboardAdminResponse`
 - profesor me: `ClaseHoyResponse`, `ClasesHoyResponse`, `EstadoClaseHoy`
+- cumplimiento asistencia admin: `CumplimientoAsistenciaResponse`, `EstadoCumplimiento`
 
 ## 13.3 Projection DTOs (`dto/projection`)
 - `RegistroConFecha` (proyección interna usada por repositorio de asistencia; no expuesto como contrato REST)
@@ -735,6 +747,12 @@ Includes paginated wrappers and domain responses, among others:
   - rejects non-teaching days (`dia_no_lectivo`),
   - enforces strict window for PROFESOR (same day + +/-15 min),
   - allows ADMIN bypass for exceptional corrections.
+- Attendance read path (`GET /api/asistencia/clase`):
+  - PROFESOR: must own the block.
+  - ADMIN: can read without ownership check.
+- Admin compliance view (`GET /api/profesores/{id}/cumplimiento-asistencia`):
+  - computes block state (`TOMADA`, `NO_TOMADA`, `EN_CURSO`, `PROGRAMADA`) using date/time,
+  - returns per-block attendance summary (`presentes`, `ausentes`, `total`) when attendance exists.
 - Attendance child records are merged in place (UUIDs preserved).
 - RUT validation includes format + check digit + cross-person uniqueness checks.
 - Schedule assignment validates:

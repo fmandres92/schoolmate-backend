@@ -2,6 +2,7 @@ package com.schoolmate.api.controller;
 
 import com.schoolmate.api.dto.request.GuardarAsistenciaRequest;
 import com.schoolmate.api.dto.response.AsistenciaClaseResponse;
+import com.schoolmate.api.enums.Rol;
 import com.schoolmate.api.security.UserPrincipal;
 import com.schoolmate.api.usecase.asistencia.GuardarAsistenciaClase;
 import com.schoolmate.api.usecase.asistencia.ObtenerAsistenciaClase;
@@ -42,14 +43,15 @@ public class AsistenciaController {
     }
 
     @GetMapping("/clase")
-    @PreAuthorize("hasRole('PROFESOR')")
+    @PreAuthorize("hasAnyRole('PROFESOR','ADMIN')")
     public ResponseEntity<AsistenciaClaseResponse> obtener(
         @AuthenticationPrincipal UserPrincipal user,
         @RequestParam UUID bloqueHorarioId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha
     ) {
+        UUID profesorId = user.getRol() == Rol.ADMIN ? null : user.getProfesorId();
         AsistenciaClaseResponse response = obtenerAsistenciaClase.execute(
-            bloqueHorarioId, fecha, user.getProfesorId());
+            bloqueHorarioId, fecha, profesorId);
         return ResponseEntity.ok(response);
     }
 }

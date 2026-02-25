@@ -39,6 +39,7 @@ public class CacheControlInterceptor implements HandlerInterceptor {
 
     private String resolveCacheControl(String path) {
         if (isProfesoresSesionesPath(path)
+                || isProfesoresCumplimientoPath(path)
                 || isPathOrSubpath(path, "/api/apoderado")
                 || isPathOrSubpath(path, "/api/profesor")
                 || isPathOrSubpath(path, "/api/auditoria")
@@ -75,6 +76,10 @@ public class CacheControlInterceptor implements HandlerInterceptor {
 
     private boolean isProfesoresSesionesPath(String path) {
         return path.matches("^/api/profesores/[^/]+/sesiones$");
+    }
+
+    private boolean isProfesoresCumplimientoPath(String path) {
+        return path.matches("^/api/profesores/[^/]+/cumplimiento-asistencia$");
     }
 
     private String normalizePath(HttpServletRequest request) {

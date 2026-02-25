@@ -27,4 +27,15 @@ public interface AsistenciaClaseRepository extends JpaRepository<AsistenciaClase
         @Param("bloqueIds") Collection<UUID> bloqueIds,
         @Param("fecha") LocalDate fecha
     );
+
+    @Query("""
+        select ac
+        from AsistenciaClase ac
+        where ac.bloqueHorario.id in :bloqueIds
+          and ac.fecha = :fecha
+        """)
+    List<AsistenciaClase> findByBloqueIdsAndFecha(
+        @Param("bloqueIds") List<UUID> bloqueIds,
+        @Param("fecha") LocalDate fecha
+    );
 }

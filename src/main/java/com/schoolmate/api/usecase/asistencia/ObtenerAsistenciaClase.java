@@ -32,8 +32,10 @@ public class ObtenerAsistenciaClase {
         BloqueHorario bloque = bloqueHorarioRepository.findById(bloqueHorarioId)
             .orElseThrow(() -> new ResourceNotFoundException("Bloque horario no encontrado"));
 
-        if (bloque.getProfesor() == null || !bloque.getProfesor().getId().equals(profesorId)) {
-            throw new AccessDeniedException("ACCESS_DENIED");
+        if (profesorId != null) {
+            if (bloque.getProfesor() == null || !bloque.getProfesor().getId().equals(profesorId)) {
+                throw new AccessDeniedException("ACCESS_DENIED");
+            }
         }
 
         AsistenciaClase asistenciaClase = asistenciaClaseRepository
