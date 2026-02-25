@@ -10,6 +10,7 @@ import com.schoolmate.api.repository.BloqueHorarioRepository;
 import com.schoolmate.api.repository.CursoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,6 +28,7 @@ public class ObtenerJornadaCurso {
     private final CursoRepository cursoRepository;
     private final GuardarJornadaDia guardarJornadaDia;
 
+    @Transactional(readOnly = true)
     public JornadaCursoResponse ejecutar(UUID cursoId, Integer diaSemanaFiltro) {
         Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado: " + cursoId));

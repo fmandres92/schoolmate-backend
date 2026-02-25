@@ -13,12 +13,15 @@ import com.schoolmate.api.repository.CursoRepository;
 import com.schoolmate.api.repository.MallaCurricularRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -28,6 +31,7 @@ public class ObtenerResumenAsignacionMaterias {
     private final CursoRepository cursoRepository;
     private final MallaCurricularRepository mallaCurricularRepository;
 
+    @Transactional(readOnly = true)
     public AsignacionMateriaResumenResponse execute(UUID cursoId) {
         Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
@@ -40,6 +44,9 @@ public class ObtenerResumenAsignacionMaterias {
 
         List<BloqueHorario> todosBloquesClase = bloqueHorarioRepository
             .findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor(cursoId, TipoBloque.CLASE);
+        Map<UUID, List<BloqueHorario>> bloquesPorMateria = todosBloquesClase.stream()
+            .filter(b -> b.getMateria() != null)
+            .collect(Collectors.groupingBy(b -> b.getMateria().getId()));
 
         int totalBloquesClase = todosBloquesClase.size();
         int totalBloquesAsignados = (int) todosBloquesClase.stream().filter(b -> b.getMateria() != null).count();
@@ -62,8 +69,9 @@ public class ObtenerResumenAsignacionMaterias {
             UUID materiaId = mallaCurricular.getMateria().getId();
             int minutosPermitidos = mallaCurricular.getHorasPedagogicas() * 45;
 
-            List<BloqueHorario> bloquesDeMateria = todosBloquesClase.stream()
-                .filter(b -> b.getMateria() != null && b.getMateria().getId().equals(materiaId))
+            List<BloqueHorario> bloquesDeMateria = bloquesPorMateria
+                .getOrDefault(materiaId, List.of())
+                .stream()
                 .sorted(Comparator
                     .comparing(BloqueHorario::getDiaSemana)
                     .thenComparing(BloqueHorario::getNumeroBloque))

@@ -164,8 +164,9 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, UU
         SELECT b
         FROM BloqueHorario b
         JOIN FETCH b.curso c
+        JOIN FETCH b.profesor p
         LEFT JOIN FETCH b.materia
-        WHERE b.profesor.id = :profesorId
+        WHERE p.id = :profesorId
           AND b.activo = true
           AND b.diaSemana = :diaSemana
           AND b.horaInicio < :horaFin
@@ -175,6 +176,29 @@ public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, UU
         """)
     List<BloqueHorario> findColisionesProfesorConCursoYMateria(
         @Param("profesorId") UUID profesorId,
+        @Param("diaSemana") Integer diaSemana,
+        @Param("horaInicio") LocalTime horaInicio,
+        @Param("horaFin") LocalTime horaFin,
+        @Param("anoEscolarId") UUID anoEscolarId,
+        @Param("bloqueIdExcluir") UUID bloqueIdExcluir
+    );
+
+    @Query("""
+        SELECT b
+        FROM BloqueHorario b
+        JOIN FETCH b.curso c
+        JOIN FETCH b.profesor p
+        LEFT JOIN FETCH b.materia
+        WHERE p.id IN :profesorIds
+          AND b.activo = true
+          AND b.diaSemana = :diaSemana
+          AND b.horaInicio < :horaFin
+          AND b.horaFin > :horaInicio
+          AND c.anoEscolar.id = :anoEscolarId
+          AND b.id <> :bloqueIdExcluir
+        """)
+    List<BloqueHorario> findColisionesProfesoresConCursoYMateria(
+        @Param("profesorIds") Set<UUID> profesorIds,
         @Param("diaSemana") Integer diaSemana,
         @Param("horaInicio") LocalTime horaInicio,
         @Param("horaFin") LocalTime horaFin,

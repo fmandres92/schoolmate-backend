@@ -304,6 +304,18 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - captura específica por tipo para mejorar observabilidad sin bloquear flujo funcional.
 - `GuardarAsistenciaClase` normalizado a `@Component` para consistencia con convención de use cases.
 
+### Actualización técnica reciente (anti-patterns: jornada/apoderado read path hardening)
+
+- Antipatrón #1 (N+1) corregido en disponibilidad de profesores (`jornada`):
+  - `ObtenerProfesoresDisponibles` ya no consulta colisiones por profesor dentro del `map`.
+  - se incorporó consulta batch en `BloqueHorarioRepository.findColisionesProfesoresConCursoYMateria(...)` y agrupación por `profesorId` en memoria.
+- Optimización de CPU en cálculos de malla/jornada:
+  - `ObtenerMateriasDisponibles` pre-agrupa minutos asignados por materia (`Map<UUID, Integer>`) y elimina filtrados repetidos por iteración.
+  - `ObtenerResumenAsignacionMaterias` pre-agrupa bloques por materia (`Map<UUID, List<BloqueHorario>>`) y evita recorridos completos por cada materia.
+- Hardening transaccional en lecturas:
+  - `ObtenerProfesoresDisponibles`, `ObtenerMateriasDisponibles`, `ObtenerResumenAsignacionMaterias`, `ObtenerJornadaCurso` y `ObtenerAsistenciaMensualAlumno` quedaron con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
+- Contratos HTTP/DTO: sin cambios.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -2041,7 +2053,7 @@ Implementación actual:
   - `AccessDeniedException`
   - `ResourceNotFoundException`
   - `BusinessException`
-- `@Transactional`: no.
+- `@Transactional`: sí (`readOnly = true`).
 
 ### `com.schoolmate.api.usecase.apoderado.ObtenerResumenAsistenciaAlumno`
 
@@ -2362,7 +2374,7 @@ Implementación actual:
   5. construye `JornadaCursoResponse` + `JornadaResumenResponse`
 - Errores:
   - `ResourceNotFoundException`
-- `@Transactional`: no.
+- `@Transactional`: sí (`readOnly = true`).
 
 ### `com.schoolmate.api.usecase.jornada.ValidarAccesoJornadaCurso`
 
@@ -2424,7 +2436,8 @@ Implementación actual:
   - curso cargado con `grado` y `anoEscolar` por método fetch (`findByIdWithGradoAndAnoEscolar`).
   - bloque cargado con detalle (`curso`,`materia`,`profesor`) por `findDetalleById`.
   - malla y bloques CLASE cargados con fetch explícito de relaciones para evitar lazy N+1.
-- `@Transactional`: no.
+  - minutos asignados por materia pre-agrupados en `Map<UUID, Integer>` (evita filtrado O(M*N) en loop por malla).
+- `@Transactional`: sí (`readOnly = true`).
 
 ### `com.schoolmate.api.usecase.jornada.AsignarMateriaBloque`
 
@@ -2470,7 +2483,8 @@ Implementación actual:
 - Optimización aplicada:
   - carga de curso con `grado` y `anoEscolar` vía fetch explícito.
   - carga de malla con `materia` y de bloques CLASE con `materia/profesor` para evitar N+1.
-- `@Transactional`: no.
+  - bloques de clase pre-agrupados por materia (`Map<UUID, List<BloqueHorario>>`) para evitar filtrado repetido por cada materia.
+- `@Transactional`: sí (`readOnly = true`).
 
 ### `com.schoolmate.api.usecase.jornada.ObtenerProfesoresDisponibles`
 
@@ -2486,7 +2500,8 @@ Implementación actual:
   - bloque consultado por método con `JOIN FETCH` (`findDetalleById`).
   - carga de bloques de profesores con `profesor` fetch.
   - colisiones con `curso` y `materia` fetch para construir conflicto sin lazy adicional.
-- `@Transactional`: no.
+  - colisiones horarias consultadas en batch para todos los profesores candidatos (`findColisionesProfesoresConCursoYMateria`) y agrupadas por `profesorId` (elimina query por profesor).
+- `@Transactional`: sí (`readOnly = true`).
 
 ### `com.schoolmate.api.usecase.jornada.AsignarProfesorBloque`
 
@@ -2541,7 +2556,7 @@ Implementación actual:
 | `AlumnoRepository` | `Alumno` | `existsByRut`, `existsByRutAndIdNot` | `findActivoByRutNormalizado` (native SQL con `regexp_replace`) | sí, vía `JpaSpecificationExecutor` |
 | `AnoEscolarRepository` | `AnoEscolar` | `findAllByOrderByAnoDesc`, `findByAno`, `existsByAno`, `findByFechaInicioLessThanEqualAndFechaFinGreaterThanEqual`, `findActivoByFecha` (default) | `existsSolapamiento`, `existsSolapamientoExcluyendoId` | no |
 | `AsistenciaClaseRepository` | `AsistenciaClase` | `findByBloqueHorarioIdAndFecha`, `existsByBloqueHorarioIdAndFecha` | `findBloqueIdsConAsistenciaTomada` (batch por `bloqueIds + fecha`) | no |
-| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findColisionesProfesorConCursoYMateria`, `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolarConProfesor`, `findClasesProfesorEnDia`, `existsBloqueActivoProfesorEnCurso`, `findDetalleById`, `findActivosByCursoIdWithMateriaAndProfesorOrderByDiaSemanaAscNumeroBloqueAsc`, `findActivosByCursoIdAndDiaSemanaWithMateriaAndProfesorOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor` | no |
+| `BloqueHorarioRepository` | `BloqueHorario` | `findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc`, `findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipo`, `findByCursoIdAndActivoTrueAndTipoAndMateriaId` | `desactivarBloquesDia`, `findDiasConfigurados`, `findColisionesProfesor`, `findColisionesProfesorConCursoYMateria`, `findColisionesProfesoresConCursoYMateria` (batch), `findHorarioProfesorEnAnoEscolar`, `findBloquesClaseProfesoresEnAnoEscolarConProfesor`, `findClasesProfesorEnDia`, `existsBloqueActivoProfesorEnCurso`, `findDetalleById`, `findActivosByCursoIdWithMateriaAndProfesorOrderByDiaSemanaAscNumeroBloqueAsc`, `findActivosByCursoIdAndDiaSemanaWithMateriaAndProfesorOrderByNumeroBloqueAsc`, `findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor` | no |
 | `CursoRepository` | `Curso` | `findByAnoEscolarIdOrderByNombreAsc`, `findByAnoEscolarIdAndGradoIdOrderByLetraAsc`, `findByActivoTrueAndAnoEscolarIdOrderByNombreAsc`, `countByAnoEscolarIdAndActivoTrue`, `findPageByAnoEscolarIdAndGradoId`, `findPageByAnoEscolarId` | `findLetrasUsadasByGradoIdAndAnoEscolarId`, `findByIdWithGradoAndAnoEscolar`, `findByAnoEscolarIdOrderByNombreAscWithRelaciones`, `findByAnoEscolarIdAndGradoIdOrderByLetraAscWithRelaciones`, `findAllOrderByNombreAscWithRelaciones`, `findPageWithRelaciones` | no |
 | `DiaNoLectivoRepository` | `DiaNoLectivo` | `existsByAnoEscolarIdAndFecha`, `findByAnoEscolarIdAndFecha`, `findByAnoEscolarIdOrderByFechaAsc`, `findByAnoEscolarIdAndFechaBetweenOrderByFechaAsc` | no | no |
 | `GradoRepository` | `Grado` | `findAllByOrderByNivelAsc` | no | no |
@@ -3034,9 +3049,12 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - `ObtenerClasesHoyProfesor` eliminó N+1 en `cantidadAlumnos`/`asistenciaTomada` usando consultas batch por curso y por bloque.
 - `CrearDiasNoLectivos` eliminó N+1 de validación de duplicados por fecha al usar una consulta única por rango y validación en memoria.
 - `GuardarMallaCurricularBulk` eliminó N+1 de carga de grados (`findById` por item) con resolución batch `findAllById` + `saveAll`.
+- `ObtenerProfesoresDisponibles` eliminó N+1 en colisiones horarias con query batch por `profesorIds` + agrupación en memoria.
+- `ObtenerMateriasDisponibles` y `ObtenerResumenAsignacionMaterias` eliminaron filtrado repetitivo por materia con pre-agrupación en mapas.
 - `AlumnoController.getMatriculaMap` ahora consulta por `alumno_id IN (...)` (IDs de la página actual) en vez de traer todas las matrículas activas del año.
 - Validación de solapamiento en años escolares movida a queries de existencia (`existsSolapamiento*`) en BD, eliminando `findAll()+loop`.
 - Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
+- Use cases de lectura de jornada/apoderado marcados con `@Transactional(readOnly = true)` para reducir costo de dirty-checking en consultas complejas.
 - Revalidación HTTP en GET con `ETag` + `If-None-Match` (`304`) y políticas `Cache-Control` por endpoint.
 - Auditoría automática de mutaciones HTTP con persistencia desacoplada (AOP + `REQUIRES_NEW`) para trazabilidad operativa.
 - Guardado de asistencia refactorizado a merge in-place de `registro_asistencia` (sin `DELETE + INSERT` masivo), preservando UUIDs y trazabilidad.

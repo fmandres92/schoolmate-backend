@@ -16,6 +16,7 @@ import com.schoolmate.api.repository.RegistroAsistenciaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DateTimeException;
 import java.time.LocalDate;
@@ -35,6 +36,7 @@ public class ObtenerAsistenciaMensualAlumno {
     private final AnoEscolarRepository anoEscolarRepository;
     private final DiaNoLectivoRepository diaNoLectivoRepository;
 
+    @Transactional(readOnly = true)
     public AsistenciaMensualResponse execute(UUID alumnoId, int mes, int anio, UUID apoderadoId) {
         if (!apoderadoAlumnoRepo.existsByApoderadoIdAndAlumnoId(apoderadoId, alumnoId)) {
             throw new AccessDeniedException("No tienes acceso a este alumno");

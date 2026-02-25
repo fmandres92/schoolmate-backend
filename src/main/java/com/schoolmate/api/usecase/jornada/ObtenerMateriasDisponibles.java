@@ -14,11 +14,14 @@ import com.schoolmate.api.repository.CursoRepository;
 import com.schoolmate.api.repository.MallaCurricularRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -28,6 +31,7 @@ public class ObtenerMateriasDisponibles {
     private final CursoRepository cursoRepository;
     private final MallaCurricularRepository mallaCurricularRepository;
 
+    @Transactional(readOnly = true)
     public MateriasDisponiblesResponse execute(UUID cursoId, UUID bloqueId) {
         Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
@@ -53,19 +57,19 @@ public class ObtenerMateriasDisponibles {
 
         List<BloqueHorario> todosBloquesClase = bloqueHorarioRepository
             .findByCursoIdAndActivoTrueAndTipoWithMateriaAndProfesor(cursoId, TipoBloque.CLASE);
+        Map<UUID, Integer> minutosAsignadosPorMateria = todosBloquesClase.stream()
+            .filter(b -> b.getMateria() != null && !b.getId().equals(bloqueId))
+            .collect(Collectors.groupingBy(
+                b -> b.getMateria().getId(),
+                Collectors.summingInt(b -> (int) Duration.between(b.getHoraInicio(), b.getHoraFin()).toMinutes())
+            ));
 
         List<MateriaDisponibleResponse> materias = new ArrayList<>();
 
         for (MallaCurricular mallaCurricular : malla) {
             UUID materiaId = mallaCurricular.getMateria().getId();
             int minutosPermitidos = mallaCurricular.getHorasPedagogicas() * 45;
-
-            int minutosAsignados = todosBloquesClase.stream()
-                .filter(b -> b.getMateria() != null
-                    && b.getMateria().getId().equals(materiaId)
-                    && !b.getId().equals(bloqueId))
-                .mapToInt(b -> (int) Duration.between(b.getHoraInicio(), b.getHoraFin()).toMinutes())
-                .sum();
+            int minutosAsignados = minutosAsignadosPorMateria.getOrDefault(materiaId, 0);
 
             int minutosDisponibles = minutosPermitidos - minutosAsignados;
             boolean asignable = bloqueDuracionMinutos <= minutosDisponibles;

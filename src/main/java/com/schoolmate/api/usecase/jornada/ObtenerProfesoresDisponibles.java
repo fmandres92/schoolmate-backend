@@ -15,6 +15,7 @@ import com.schoolmate.api.repository.CursoRepository;
 import com.schoolmate.api.repository.ProfesorRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -32,6 +33,7 @@ public class ObtenerProfesoresDisponibles {
     private final CursoRepository cursoRepository;
     private final ProfesorRepository profesorRepository;
 
+    @Transactional(readOnly = true)
     public ProfesoresDisponiblesResponse execute(UUID cursoId, UUID bloqueId) {
         Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado"));
@@ -69,16 +71,22 @@ public class ObtenerProfesoresDisponibles {
                 b -> b.getProfesor().getId(),
                 Collectors.summingLong(b -> Duration.between(b.getHoraInicio(), b.getHoraFin()).toMinutes())
             ));
+        Map<UUID, List<BloqueHorario>> colisionesPorProfesor = profesorIds.isEmpty()
+            ? Collections.emptyMap()
+            : bloqueHorarioRepository.findColisionesProfesoresConCursoYMateria(
+                profesorIds,
+                bloque.getDiaSemana(),
+                bloque.getHoraInicio(),
+                bloque.getHoraFin(),
+                anoEscolarId,
+                bloque.getId()
+            ).stream().collect(Collectors.groupingBy(b -> b.getProfesor().getId()));
 
         List<ProfesorDisponibleResponse> profesorResponses = profesores.stream()
             .map(profesor -> {
-                List<BloqueHorario> colisionesConDetalle = bloqueHorarioRepository.findColisionesProfesorConCursoYMateria(
+                List<BloqueHorario> colisionesConDetalle = colisionesPorProfesor.getOrDefault(
                     profesor.getId(),
-                    bloque.getDiaSemana(),
-                    bloque.getHoraInicio(),
-                    bloque.getHoraFin(),
-                    anoEscolarId,
-                    bloque.getId()
+                    Collections.emptyList()
                 );
 
                 boolean esProfesorActualDelBloque = bloque.getProfesor() != null
