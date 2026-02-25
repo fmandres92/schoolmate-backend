@@ -18,9 +18,9 @@ public class DashboardController {
 
     private final ObtenerDashboardAdmin obtenerDashboardAdmin;
 
-    @GetMapping("/resumen")
+    @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<DashboardAdminResponse> resumen(
+    public ResponseEntity<DashboardAdminResponse> getDashboardAdmin(
         @AnoEscolarActivo AnoEscolar anoEscolar
     ) {
         DashboardAdminResponse response = obtenerDashboardAdmin.execute(anoEscolar.getId());

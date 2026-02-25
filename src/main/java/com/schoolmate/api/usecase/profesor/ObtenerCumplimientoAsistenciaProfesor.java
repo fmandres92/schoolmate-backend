@@ -1,5 +1,6 @@
 package com.schoolmate.api.usecase.profesor;
 
+import com.schoolmate.api.common.CumplimientoCalculator;
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.response.CumplimientoAsistenciaResponse;
 import com.schoolmate.api.dto.response.CumplimientoAsistenciaResponse.BloqueCumplimiento;
@@ -104,7 +105,7 @@ public class ObtenerCumplimientoAsistenciaProfesor {
         for (BloqueHorario bloque : bloques) {
             AsistenciaClase asistenciaClase = asistenciaPorBloque.get(bloque.getId());
             boolean tieneAsistencia = asistenciaClase != null;
-            EstadoCumplimiento estado = calcularEstado(
+            EstadoCumplimiento estado = CumplimientoCalculator.calcularEstado(
                 fecha,
                 hoy,
                 ahora,
@@ -220,29 +221,6 @@ public class ObtenerCumplimientoAsistenciaProfesor {
             .tipo(diaNoLectivo.getTipo().name())
             .descripcion(diaNoLectivo.getDescripcion())
             .build();
-    }
-
-    private EstadoCumplimiento calcularEstado(
-        LocalDate fecha,
-        LocalDate hoy,
-        LocalTime ahora,
-        LocalTime horaInicio,
-        LocalTime horaFin,
-        boolean tieneAsistencia
-    ) {
-        if (fecha.isBefore(hoy)) {
-            return tieneAsistencia ? EstadoCumplimiento.TOMADA : EstadoCumplimiento.NO_TOMADA;
-        }
-        if (fecha.isAfter(hoy)) {
-            return EstadoCumplimiento.PROGRAMADA;
-        }
-        if (ahora.isAfter(horaFin)) {
-            return tieneAsistencia ? EstadoCumplimiento.TOMADA : EstadoCumplimiento.NO_TOMADA;
-        }
-        if (!ahora.isBefore(horaInicio) && !ahora.isAfter(horaFin)) {
-            return tieneAsistencia ? EstadoCumplimiento.TOMADA : EstadoCumplimiento.EN_CURSO;
-        }
-        return EstadoCumplimiento.PROGRAMADA;
     }
 
     private CumplimientoAsistenciaResponse buildResponseVacia(

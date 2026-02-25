@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -72,4 +73,12 @@ public interface CursoRepository extends JpaRepository<Curso, UUID> {
           and c.anoEscolar.id = :anoEscolarId
         """)
     List<String> findLetrasUsadasByGradoIdAndAnoEscolarId(UUID gradoId, UUID anoEscolarId);
+
+    @Query("""
+        select count(c)
+        from Curso c
+        where c.anoEscolar.id = :anoEscolarId
+          and c.activo = true
+        """)
+    long countActivosByAnoEscolarId(@Param("anoEscolarId") UUID anoEscolarId);
 }

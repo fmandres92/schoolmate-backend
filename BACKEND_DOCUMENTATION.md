@@ -205,6 +205,7 @@ By `CacheControlInterceptor` (GET + HTTP 200 only):
   - `/api/matriculas/**`
   - `/api/asistencia/**`
   - `/api/alumnos/**`
+  - `/api/dashboard/**`
 
 - `max-age=2min`:
   - `/api/dias-no-lectivos/**`
@@ -391,10 +392,15 @@ These are generated from live catalog and include Supabase-managed schemas (`aut
 
 ## 10.3 Dashboard admin
 
-- `GET /api/dashboard/admin/resumen`  
+- `GET /api/dashboard/admin`  
   - Role: ADMIN  
   - Header required: `X-Ano-Escolar-Id`  
-  - Returns: `DashboardAdminResponse` (200)
+  - Returns: `DashboardAdminResponse` (200) with:
+    - `stats` (`totalAlumnosMatriculados`, `totalCursos`, `totalProfesoresActivos`)
+    - `cumplimientoHoy` (contexto del día + resumen global + lista por profesor)
+  - Notas:
+    - Fin de semana: `esDiaHabil=false`, sin profesores ni bloques.
+    - Día no lectivo: `esDiaHabil=true`, `diaNoLectivo` poblado, sin profesores ni bloques.
 
 ## 10.4 Anos escolares
 
@@ -670,6 +676,10 @@ All use cases currently expose `execute(...)` as the entry method convention.
 - Extensive use of `@EntityGraph` and dedicated fetch queries to avoid lazy failures/N+1.
 - Batch aggregate query for matricula counts by course:
   - `MatriculaRepository.countActivasByCursoIds(...)`
+- Aggregate count for active enrollments by school year:
+  - `MatriculaRepository.countActivasByAnoEscolarId(...)`
+- Aggregate count for active courses by school year:
+  - `CursoRepository.countActivosByAnoEscolarId(...)`
 - Batch retrieval for attendance-taken flags:
   - `AsistenciaClaseRepository.findBloqueIdsConAsistenciaTomada(...)`
 - Batch retrieval of asistencia records by block/date:
@@ -678,6 +688,10 @@ All use cases currently expose `execute(...)` as the entry method convention.
   - `RegistroAsistenciaRepository.countByEstadoGroupedByAsistenciaClaseId(...)`
 - Dedicated fetch for daily teacher class blocks in school year:
   - `BloqueHorarioRepository.findBloquesClaseByProfesorAndDia(...)`
+- Dedicated fetch for all class blocks of the day (admin dashboard):
+  - `BloqueHorarioRepository.findAllBloquesClaseDelDiaConProfesor(...)`
+- Distinct count of active teachers with assigned class blocks:
+  - `BloqueHorarioRepository.countProfesoresActivosConBloques(...)`
 - Batch collision queries for schedule assignment:
   - `BloqueHorarioRepository.findColisionesProfesoresConCursoYMateria(...)`
 - Filtering with boolean apply flags in audit/session repositories to avoid PostgreSQL type ambiguity:
@@ -753,6 +767,11 @@ Includes paginated wrappers and domain responses, among others:
 - Admin compliance view (`GET /api/profesores/{id}/cumplimiento-asistencia`):
   - computes block state (`TOMADA`, `NO_TOMADA`, `EN_CURSO`, `PROGRAMADA`) using date/time,
   - returns per-block attendance summary (`presentes`, `ausentes`, `total`) when attendance exists.
+- Dashboard admin global compliance (`GET /api/dashboard/admin`):
+  - computes same state model (`TOMADA`, `NO_TOMADA`, `EN_CURSO`, `PROGRAMADA`) for all teachers with classes today,
+  - orders teachers by priority (`noTomadas` desc, `enCurso` desc, `apellido` asc),
+  - limits `bloquesPendientesDetalle` to 3 items per teacher,
+  - calculates `porcentajeCumplimiento` only on closed blocks (`tomadas + noTomadas`), otherwise `null`.
 - Attendance child records are merged in place (UUIDs preserved).
 - RUT validation includes format + check digit + cross-person uniqueness checks.
 - Schedule assignment validates:

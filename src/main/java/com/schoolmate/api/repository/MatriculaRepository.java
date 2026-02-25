@@ -5,6 +5,7 @@ import com.schoolmate.api.enums.EstadoMatricula;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -91,4 +92,12 @@ public interface MatriculaRepository extends JpaRepository<Matricula, UUID> {
         group by m.curso.id
         """)
     List<Object[]> countActivasByCursoIds(List<UUID> cursoIds, EstadoMatricula estado);
+
+    @Query("""
+        select count(m)
+        from Matricula m
+        where m.anoEscolar.id = :anoEscolarId
+          and m.estado = com.schoolmate.api.enums.EstadoMatricula.ACTIVA
+        """)
+    long countActivasByAnoEscolarId(@Param("anoEscolarId") UUID anoEscolarId);
 }
