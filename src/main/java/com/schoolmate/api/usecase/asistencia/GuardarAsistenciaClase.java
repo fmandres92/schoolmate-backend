@@ -193,11 +193,7 @@ public class GuardarAsistenciaClase {
         Map<UUID, RegistroAlumnoRequest> requestMap = registrosRequest.stream()
             .collect(Collectors.toMap(RegistroAlumnoRequest::getAlumnoId, r -> r));
 
-        if (asistenciaClase.getRegistros() == null) {
-            asistenciaClase.setRegistros(new ArrayList<>());
-        }
-
-        asistenciaClase.getRegistros().removeIf(
+        asistenciaClase.removeRegistrosIf(
             registro -> !requestMap.containsKey(registro.getAlumno().getId())
         );
 
@@ -221,7 +217,7 @@ public class GuardarAsistenciaClase {
                 .createdAt(ahora)
                 .updatedAt(ahora)
                 .build();
-            asistenciaClase.getRegistros().add(nuevo);
+            asistenciaClase.addRegistro(nuevo);
         }
     }
 

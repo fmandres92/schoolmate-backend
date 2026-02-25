@@ -45,14 +45,15 @@ public class ActualizarProfesor {
         validarUnicidadEnActualizacion(request, id);
         List<Materia> materias = resolverMaterias(request.getMateriaIds());
 
-        profesor.setRut(request.getRut());
-        profesor.setNombre(request.getNombre());
-        profesor.setApellido(request.getApellido());
-        profesor.setEmail(request.getEmail());
-        profesor.setTelefono(request.getTelefono());
-        profesor.setFechaContratacion(LocalDate.parse(request.getFechaContratacion()));
-        profesor.setHorasPedagogicasContrato(request.getHorasPedagogicasContrato());
-        profesor.setMaterias(materias);
+        profesor.actualizarPerfil(
+            request.getNombre(),
+            request.getApellido(),
+            request.getEmail(),
+            request.getTelefono(),
+            LocalDate.parse(request.getFechaContratacion()),
+            request.getHorasPedagogicasContrato(),
+            materias
+        );
 
         Profesor saved = profesorRepository.save(profesor);
         Profesor profesorConMaterias = profesorRepository.findByIdWithMaterias(saved.getId())

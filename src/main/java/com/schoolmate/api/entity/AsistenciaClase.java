@@ -15,16 +15,19 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.CascadeType;
 import lombok.AllArgsConstructor;
+import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.function.Predicate;
 
 @Entity
 @Table(name = "asistencia_clase")
@@ -58,6 +61,8 @@ public class AsistenciaClase {
 
     @Builder.Default
     @OneToMany(mappedBy = "asistenciaClase", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private List<RegistroAsistencia> registros = new ArrayList<>();
 
     @PrePersist
@@ -73,5 +78,26 @@ public class AsistenciaClase {
     @PreUpdate
     protected void onUpdate() {
         this.updatedAt = TimeContext.now();
+    }
+
+    public List<RegistroAsistencia> getRegistros() {
+        if (registros == null) {
+            return List.of();
+        }
+        return Collections.unmodifiableList(registros);
+    }
+
+    public void removeRegistrosIf(Predicate<RegistroAsistencia> predicate) {
+        if (registros == null) {
+            registros = new ArrayList<>();
+        }
+        registros.removeIf(predicate);
+    }
+
+    public void addRegistro(RegistroAsistencia registro) {
+        if (registros == null) {
+            registros = new ArrayList<>();
+        }
+        registros.add(registro);
     }
 }

@@ -316,6 +316,20 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
   - `ObtenerProfesoresDisponibles`, `ObtenerMateriasDisponibles`, `ObtenerResumenAsignacionMaterias`, `ObtenerJornadaCurso` y `ObtenerAsistenciaMensualAlumno` quedaron con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
 - Contratos HTTP/DTO: sin cambios.
 
+### Actualización técnica reciente (anti-patterns: encapsulación de dominio + controller slim)
+
+- Antipatrón #18 (colecciones mutables expuestas) mitigado en entidades:
+  - `Profesor.materias` ya no expone referencia mutable directa; el getter retorna vista inmodificable.
+  - `AsistenciaClase.registros` ya no se muta externamente con `get().add/removeIf`; se usan métodos de dominio (`addRegistro`, `removeRegistrosIf`).
+- Antipatrón #11 (dominio anémico por ráfaga de setters) reducido:
+  - `Profesor` incorpora `actualizarPerfil(...)` y `ActualizarProfesor` delega la mutación a la entidad.
+  - `AnoEscolar` incorpora `actualizarConfiguracion(...)` y `ActualizarAnoEscolar` delega la mutación a la entidad.
+- Antipatrón #19 (lecturas sin `readOnly`) corregido:
+  - `ObtenerResumenAsistenciaAlumno` y `ObtenerResumenAsignacionProfesores` ahora usan `@Transactional(readOnly = true)`.
+- Antipatrón #16 (lógica en controller) reducido:
+  - `DashboardController` dejó de validar `X-Ano-Escolar-Id`; la validación vive en `ObtenerDashboardAdmin`.
+- Contratos HTTP/DTO: sin cambios.
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -777,6 +791,7 @@ Constraints en código: `ano` marcado como `unique=true`.
 Regla de estado:
 
 - `AnoEscolar` calcula su estado con `calcularEstado(LocalDate fechaReferencia)` (no depende de `LocalDate.now()` dentro de la entidad).
+- La actualización interna de campos de configuración se centraliza en `actualizarConfiguracion(...)` para evitar ráfagas de setters desde use cases.
 
 Divergencia: `V3` crea `ano_escolar` con columna `activo` y **sin** `fecha_inicio_planificacion`; el código actual exige `fecha_inicio_planificacion` y no mapea `activo`.
 
@@ -843,6 +858,7 @@ Restricciones esperadas de BD:
 Relaciones:
 
 - `@ManyToMany` con `Materia` vía `profesor_materia(profesor_id, materia_id)`.
+- `materias` se expone como colección inmodificable; la mutación queda encapsulada en métodos de entidad (ej. `actualizarPerfil(...)`).
 
 Índices: `idx_profesor_email`, `idx_profesor_activo`.
 
@@ -976,6 +992,7 @@ Relaciones:
 - `@ManyToOne` -> `BloqueHorario`
 - `@ManyToOne` -> `Usuario` (`registradoPor`, lazy)
 - `@OneToMany` -> `RegistroAsistencia` (`cascade = ALL`, `orphanRemoval = true`)
+- la colección `registros` se expone inmodificable; la mutación se realiza por métodos de dominio (`addRegistro`, `removeRegistrosIf`).
 
 ### `SesionUsuario` (`sesion_usuario`)
 
@@ -1660,6 +1677,7 @@ Implementación actual:
   - valida existencia por id.
   - no permite modificar un año en estado `CERRADO`.
   - valida orden de fechas, coherencia de año y no solapamiento por query de existencia (`existsSolapamientoExcluyendoId(...)`).
+  - aplica cambios mediante método de dominio `AnoEscolar.actualizarConfiguracion(...)`.
 - Salida:
   - `AnoEscolarResponse`.
 - Errores:
@@ -1919,6 +1937,7 @@ Implementación actual:
 - Repositorios/dependencias:
   - `MatriculaRepository`, `CursoRepository`, `ProfesorRepository`
 - Cálculo:
+  - valida que `anoEscolarId` (header `X-Ano-Escolar-Id`) esté presente; si falta, lanza `ApiException(VALIDATION_FAILED)`.
   - `totalAlumnos`: conteo de matrículas `ACTIVA` para el `anoEscolarId` consultado.
   - `totalCursos`: conteo de cursos `activo=true` para el `anoEscolarId`.
   - `totalProfesores`: conteo global de profesores `activo=true`.
@@ -2070,7 +2089,7 @@ Implementación actual:
   - `ApiException(VALIDATION_FAILED)`
   - `AccessDeniedException`
   - `ResourceNotFoundException`
-- `@Transactional`: no.
+- `@Transactional`: sí (`readOnly = true`).
 
 ### `com.schoolmate.api.usecase.alumno.CrearAlumno`
 
@@ -2184,6 +2203,7 @@ Implementación actual:
   - bloquea cambio de RUT (`PROFESOR_RUT_INMUTABLE`).
   - valida duplicados en `rut`, `email`, `telefono`.
   - valida `materiaIds` existentes; si faltan -> `MATERIAS_NOT_FOUND`.
+  - aplica cambios de perfil mediante método de dominio `Profesor.actualizarPerfil(...)` (en vez de setters dispersos).
   - persiste y recarga con materias (`findByIdWithMaterias`) para mapeo seguro de respuesta.
 - Salida:
   - `ProfesorResponse`.
@@ -2545,7 +2565,7 @@ Implementación actual:
   - agrupación por profesor con minutos y bloques asignados
 - Optimización aplicada:
   - curso y bloques `CLASE` cargados con fetch explícito de relaciones necesarias (`materia`, `profesor`).
-- `@Transactional`: no.
+- `@Transactional`: sí (`readOnly = true`).
 
 ---
 
@@ -3051,6 +3071,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - `GuardarMallaCurricularBulk` eliminó N+1 de carga de grados (`findById` por item) con resolución batch `findAllById` + `saveAll`.
 - `ObtenerProfesoresDisponibles` eliminó N+1 en colisiones horarias con query batch por `profesorIds` + agrupación en memoria.
 - `ObtenerMateriasDisponibles` y `ObtenerResumenAsignacionMaterias` eliminaron filtrado repetitivo por materia con pre-agrupación en mapas.
+- `ObtenerResumenAsistenciaAlumno` y `ObtenerResumenAsignacionProfesores` quedaron en `@Transactional(readOnly = true)` para bajar overhead de lecturas.
 - `AlumnoController.getMatriculaMap` ahora consulta por `alumno_id IN (...)` (IDs de la página actual) en vez de traer todas las matrículas activas del año.
 - Validación de solapamiento en años escolares movida a queries de existencia (`existsSolapamiento*`) en BD, eliminando `findAll()+loop`.
 - Endpoints GET con CRUD/repository directo marcados con `@Transactional(readOnly = true)` para reducir dirty-checking/flush innecesario.
@@ -3118,6 +3139,7 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 - No usar `@Data` en clases `@Entity` con relaciones JPA.
 - Usar `@Getter` + `@Setter` y constructores explícitos.
 - Reservar `@Data` para DTOs o value objects; en claves embebidas (`@Embeddable`) se permite cuando se requiere igualdad por valor.
+- Evitar exponer colecciones mutables de relaciones (`List`/`Set`) desde entidades; preferir getters inmodificables + métodos de dominio para mutación controlada.
 
 ### Estilo de API
 

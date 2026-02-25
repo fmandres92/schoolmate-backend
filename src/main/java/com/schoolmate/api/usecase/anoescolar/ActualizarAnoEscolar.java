@@ -35,10 +35,12 @@ public class ActualizarAnoEscolar {
             throw new BusinessException("Las fechas se solapan con un año escolar existente");
         }
 
-        ano.setAno(request.getAno());
-        ano.setFechaInicioPlanificacion(request.getFechaInicioPlanificacion());
-        ano.setFechaInicio(request.getFechaInicio());
-        ano.setFechaFin(request.getFechaFin());
+        ano.actualizarConfiguracion(
+            request.getAno(),
+            request.getFechaInicioPlanificacion(),
+            request.getFechaInicio(),
+            request.getFechaFin()
+        );
 
         var guardado = anoEscolarRepository.save(ano);
         return AnoEscolarResponse.fromEntity(guardado, guardado.calcularEstado(clockProvider.today()));

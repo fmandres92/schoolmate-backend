@@ -12,6 +12,7 @@ import com.schoolmate.api.repository.RegistroAsistenciaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.UUID;
@@ -24,6 +25,7 @@ public class ObtenerResumenAsistenciaAlumno {
     private final RegistroAsistenciaRepository registroAsistenciaRepo;
     private final AlumnoRepository alumnoRepo;
 
+    @Transactional(readOnly = true)
     public ResumenAsistenciaResponse execute(
         UUID alumnoId,
         UUID anoEscolarHeaderId,

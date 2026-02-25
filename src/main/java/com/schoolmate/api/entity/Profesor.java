@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -51,6 +53,8 @@ public class Profesor {
         joinColumns = @JoinColumn(name = "profesor_id"),
         inverseJoinColumns = @JoinColumn(name = "materia_id")
     )
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private List<Materia> materias;
 
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -68,5 +72,30 @@ public class Profesor {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = TimeContext.now();
+    }
+
+    public List<Materia> getMaterias() {
+        if (materias == null) {
+            return List.of();
+        }
+        return Collections.unmodifiableList(materias);
+    }
+
+    public void actualizarPerfil(
+        String nombre,
+        String apellido,
+        String email,
+        String telefono,
+        LocalDate fechaContratacion,
+        Integer horasPedagogicasContrato,
+        List<Materia> materias
+    ) {
+        this.nombre = nombre;
+        this.apellido = apellido;
+        this.email = email;
+        this.telefono = telefono;
+        this.fechaContratacion = fechaContratacion;
+        this.horasPedagogicasContrato = horasPedagogicasContrato;
+        this.materias = materias == null ? new ArrayList<>() : new ArrayList<>(materias);
     }
 }

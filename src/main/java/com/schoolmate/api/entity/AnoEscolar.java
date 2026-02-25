@@ -66,4 +66,16 @@ public class AnoEscolar {
             return EstadoAnoEscolar.CERRADO;
         }
     }
+
+    public void actualizarConfiguracion(
+        Integer ano,
+        LocalDate fechaInicioPlanificacion,
+        LocalDate fechaInicio,
+        LocalDate fechaFin
+    ) {
+        this.ano = ano;
+        this.fechaInicioPlanificacion = fechaInicioPlanificacion;
+        this.fechaInicio = fechaInicio;
+        this.fechaFin = fechaFin;
+    }
 }
