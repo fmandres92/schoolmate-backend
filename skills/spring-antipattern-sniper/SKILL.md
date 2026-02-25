@@ -14,15 +14,15 @@ Si detectas ALGUNO de los siguientes antipatrones en el código evaluado, debes 
 Cada antipatrón tiene un nivel de severidad. Cuando reportes hallazgos, prioriza siempre los CRÍTICOS primero. No pierdas tiempo en mejoras amarillas si hay rojos sin resolver.
 
 - 🔴 **CRÍTICO** (rompe en producción bajo carga): #1, #2, #13, #15, #17, #20
-- 🟠 **GRAVE** (bug latente, vulnerabilidad o corrupción de datos): #3, #4, #5, #7, #9, #12, #14, #18
-- 🟡 **MEJORA** (deuda técnica, mantenibilidad): #6, #8, #10, #11, #16, #19
+- 🟠 **GRAVE** (bug latente, vulnerabilidad o corrupción de datos): #3, #4, #5, #7, #9, #12, #14, #18, #22
+- 🟡 **MEJORA** (deuda técnica, mantenibilidad): #6, #8, #10, #11, #16, #19, #21
 
 **Regla de combo:** Cuando dos antipatrones críticos aparecen juntos, su impacto se multiplica. Reporta explícitamente la combinación. Ejemplos:
 - **#15 (EAGER) + #1 (N+1):** Cada entidad cargada arrastra sus padres EAGER, y si están en un loop, cada iteración dispara N queries adicionales por los JOINs implícitos. Catastrófico.
 - **#2 (findAll + filter) + #17 (sin paginación):** Trae TODA la tabla sin paginación a RAM y luego filtra. OOM garantizado con tablas grandes.
 - **#13 (OSIV) + #15 (EAGER):** La sesión abierta permite lazy loading descontrolado durante la serialización, y las relaciones EAGER agregan JOINs que nadie pidió. El pool de conexiones se agota.
 
-## 🎯 LA LISTA NEGRA (20 Antipatrones)
+## 🎯 LA LISTA NEGRA (22 Antipatrones)
 
 ### 1. El Destructor de Bases de Datos (Problema N+1)
 - **Síntoma:** Llamar a un método de un `Repository` dentro de un bucle `for`, `forEach` o un `.map()` de Streams.
@@ -269,6 +269,50 @@ em.createQuery(jpql, Alumno.class)
 ```
 - **Excepción:** Si se necesita ordenamiento dinámico (ORDER BY variable), usar `Sort` de Spring Data o `CriteriaBuilder` — NUNCA concatenar el nombre de la columna directamente.
 
+### 21. Convención Duplicada de Método de Entrada en Use Cases 🟡
+- **Síntoma:** En la carpeta `usecase/` conviven nombres de método de entrada distintos para el mismo rol (`execute(...)`, `ejecutar(...)`, etc.).
+- **Por qué está mal:** Los agentes y desarrolladores replican el patrón más cercano; esto produce deriva arquitectónica, rompe búsquedas/refactors masivos y baja la confiabilidad de automatizaciones.
+- **Ejemplo prohibido:**
+```java
+// ❌ Mismo concepto, dos convenciones distintas
+public class CrearAlumnoConApoderado {
+    public AlumnoResponse ejecutar(CrearAlumnoConApoderadoRequest request) { ... }
+}
+
+public class CrearAlumno {
+    public AlumnoResponse execute(AlumnoRequest request) { ... }
+}
+```
+- **Solución exigida:** Definir una sola convención y aplicarla en todo `usecase/`:
+```java
+// ✅ Convención única y auditable
+public class CrearAlumnoConApoderado {
+    public AlumnoResponse execute(CrearAlumnoConApoderadoRequest request) { ... }
+}
+```
+- **Regla de auditoría:** En clases `usecase/**`, debe existir exactamente un método público de entrada y su nombre debe ser `execute`.
+
+### 22. Status Code Incorrecto en POST de Creación 🟠
+- **Síntoma:** Un endpoint `POST` que crea recurso devuelve `200 OK` en lugar de `201 Created`.
+- **Por qué está mal:** Rompe el contrato REST semántico y genera falsos negativos en clientes que validan status para confirmar creación.
+- **Ejemplo prohibido:**
+```java
+// ❌ Crea un recurso, pero responde 200
+@PostMapping
+public ResponseEntity<CursoResponse> crear(@RequestBody CursoRequest request) {
+    return ResponseEntity.ok(crearCurso.execute(request));
+}
+```
+- **Solución exigida:**
+```java
+// ✅ Semántica REST correcta para creación
+@PostMapping
+public ResponseEntity<CursoResponse> crear(@RequestBody CursoRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED).body(crearCurso.execute(request));
+}
+```
+- **Regla de auditoría:** Todo `POST` que materializa una nueva entidad debe responder `201`, salvo endpoints explícitamente documentados como acciones no-creativas.
+
 ## CÓMO RESPONDER
 
 Cuando evalúes código, ve directo al grano. Sigue este protocolo:
@@ -276,8 +320,8 @@ Cuando evalúes código, ve directo al grano. Sigue este protocolo:
 ### Paso 1: Escaneo por severidad
 Revisa el código buscando antipatrones en este orden estricto:
 1. Primero los 🔴 CRÍTICOS (#1, #2, #13, #15, #17, #20)
-2. Luego los 🟠 GRAVES (#3, #4, #5, #7, #9, #12, #14, #18)
-3. Por último los 🟡 MEJORAS (#6, #8, #10, #11, #16, #19)
+2. Luego los 🟠 GRAVES (#3, #4, #5, #7, #9, #12, #14, #18, #22)
+3. Por último los 🟡 MEJORAS (#6, #8, #10, #11, #16, #19, #21)
 
 ### Paso 2: Reportar hallazgos
 Para cada antipatrón encontrado, reporta con este formato:
@@ -319,5 +363,5 @@ Si el código NO tiene antipatrones, responde:
 
 ```
 ✅ Código limpio. Aprobado por el Sniper.
-Severidades revisadas: 20/20 antipatrones verificados.
+Severidades revisadas: 22/22 antipatrones verificados.
 ```

@@ -34,7 +34,7 @@ public class CrearAlumnoConApoderado {
     private final RutValidationService rutValidationService;
 
     @Transactional
-    public AlumnoResponse ejecutar(CrearAlumnoConApoderadoRequest request) {
+    public AlumnoResponse execute(CrearAlumnoConApoderadoRequest request) {
         var alumnoData = request.getAlumno();
         var apoderadoData = request.getApoderado();
 

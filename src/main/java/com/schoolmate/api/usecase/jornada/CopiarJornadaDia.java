@@ -23,7 +23,7 @@ public class CopiarJornadaDia {
     private final ObtenerJornadaCurso obtenerJornadaCurso;
 
     @Transactional
-    public JornadaCursoResponse ejecutar(UUID cursoId, Integer diaSemanaOrigen, List<Integer> diasDestino) {
+    public JornadaCursoResponse execute(UUID cursoId, Integer diaSemanaOrigen, List<Integer> diasDestino) {
         List<BloqueHorario> bloquesOrigen = bloqueHorarioRepository
             .findByCursoIdAndDiaSemanaAndActivoTrueOrderByNumeroBloqueAsc(cursoId, diaSemanaOrigen);
 
@@ -55,9 +55,9 @@ public class CopiarJornadaDia {
         jornadaRequest.setBloques(bloquesRequest);
 
         for (Integer diaDestino : diasDestino) {
-            guardarJornadaDia.ejecutar(cursoId, diaDestino, jornadaRequest);
+            guardarJornadaDia.execute(cursoId, diaDestino, jornadaRequest);
         }
 
-        return obtenerJornadaCurso.ejecutar(cursoId, null);
+        return obtenerJornadaCurso.execute(cursoId, null);
     }
 }

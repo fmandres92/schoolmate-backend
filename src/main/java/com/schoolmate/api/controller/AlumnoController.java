@@ -106,7 +106,7 @@ public class AlumnoController {
     public ResponseEntity<AlumnoResponse> crearConApoderado(
         @Valid @RequestBody CrearAlumnoConApoderadoRequest request
     ) {
-        AlumnoResponse response = crearAlumnoConApoderado.ejecutar(request);
+        AlumnoResponse response = crearAlumnoConApoderado.execute(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 }

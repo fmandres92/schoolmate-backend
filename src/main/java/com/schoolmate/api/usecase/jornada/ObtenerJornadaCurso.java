@@ -8,6 +8,7 @@ import com.schoolmate.api.entity.Curso;
 import com.schoolmate.api.exception.ResourceNotFoundException;
 import com.schoolmate.api.repository.BloqueHorarioRepository;
 import com.schoolmate.api.repository.CursoRepository;
+import com.schoolmate.api.security.UserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,9 +28,20 @@ public class ObtenerJornadaCurso {
     private final BloqueHorarioRepository bloqueHorarioRepository;
     private final CursoRepository cursoRepository;
     private final GuardarJornadaDia guardarJornadaDia;
+    private final ValidarAccesoJornadaCurso validarAccesoJornadaCurso;
 
     @Transactional(readOnly = true)
-    public JornadaCursoResponse ejecutar(UUID cursoId, Integer diaSemanaFiltro) {
+    public JornadaCursoResponse execute(UUID cursoId, Integer diaSemanaFiltro) {
+        return construirRespuesta(cursoId, diaSemanaFiltro);
+    }
+
+    @Transactional(readOnly = true)
+    public JornadaCursoResponse execute(UUID cursoId, Integer diaSemanaFiltro, UserPrincipal user) {
+        validarAccesoJornadaCurso.execute(user, cursoId);
+        return construirRespuesta(cursoId, diaSemanaFiltro);
+    }
+
+    private JornadaCursoResponse construirRespuesta(UUID cursoId, Integer diaSemanaFiltro) {
         Curso curso = cursoRepository.findByIdWithGradoAndAnoEscolar(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado: " + cursoId));
 

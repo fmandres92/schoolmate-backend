@@ -13,6 +13,7 @@ import com.schoolmate.api.usecase.profesor.ObtenerSesionesProfesor;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -46,7 +47,7 @@ public class ProfesorController {
 
     @PostMapping
     public ResponseEntity<ProfesorResponse> crear(@Valid @RequestBody ProfesorRequest request) {
-        return ResponseEntity.ok(crearProfesorConUsuario.execute(request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(crearProfesorConUsuario.execute(request));
     }
 
     @PutMapping("/{id}")

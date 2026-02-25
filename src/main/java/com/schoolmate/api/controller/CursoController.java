@@ -11,6 +11,7 @@ import com.schoolmate.api.usecase.curso.ObtenerCursos;
 import com.schoolmate.api.usecase.curso.ObtenerDetalleCurso;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -51,7 +52,7 @@ public class CursoController {
     public ResponseEntity<CursoResponse> crear(
             @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME, required = false) UUID anoEscolarHeaderId,
             @Valid @RequestBody CursoRequest request) {
-        return ResponseEntity.ok(crearCurso.execute(anoEscolarHeaderId, request));
+        return ResponseEntity.status(HttpStatus.CREATED).body(crearCurso.execute(anoEscolarHeaderId, request));
     }
 
     @PutMapping("/{id}")

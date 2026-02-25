@@ -26,7 +26,6 @@ import com.schoolmate.api.usecase.jornada.ObtenerProfesoresDisponibles;
 import com.schoolmate.api.usecase.jornada.ObtenerJornadaCurso;
 import com.schoolmate.api.usecase.jornada.QuitarMateriaBloque;
 import com.schoolmate.api.usecase.jornada.QuitarProfesorBloque;
-import com.schoolmate.api.usecase.jornada.ValidarAccesoJornadaCurso;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -60,7 +59,6 @@ public class JornadaController {
     private final AsignarProfesorBloque asignarProfesorBloque;
     private final QuitarProfesorBloque quitarProfesorBloque;
     private final ObtenerResumenAsignacionProfesores obtenerResumenAsignacionProfesores;
-    private final ValidarAccesoJornadaCurso validarAccesoJornadaCurso;
 
     @PutMapping("/{diaSemana}")
     @PreAuthorize("hasRole('ADMIN')")
@@ -69,7 +67,7 @@ public class JornadaController {
         @PathVariable Integer diaSemana,
         @Valid @RequestBody JornadaDiaRequest request
     ) {
-        return ResponseEntity.ok(guardarJornadaDia.ejecutar(cursoId, diaSemana, request));
+        return ResponseEntity.ok(guardarJornadaDia.execute(cursoId, diaSemana, request));
     }
 
     @GetMapping
@@ -79,14 +77,13 @@ public class JornadaController {
         @RequestParam(required = false) Integer diaSemana,
         @AuthenticationPrincipal UserPrincipal user
     ) {
-        validarAccesoJornadaCurso.execute(user, cursoId);
-        return ResponseEntity.ok(obtenerJornadaCurso.ejecutar(cursoId, diaSemana));
+        return ResponseEntity.ok(obtenerJornadaCurso.execute(cursoId, diaSemana, user));
     }
 
     @GetMapping("/resumen")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<JornadaResumenResponse> obtenerResumen(@PathVariable UUID cursoId) {
-        JornadaCursoResponse full = obtenerJornadaCurso.ejecutar(cursoId, null);
+        JornadaCursoResponse full = obtenerJornadaCurso.execute(cursoId, null);
         return ResponseEntity.ok(full.getResumen());
     }
 
@@ -97,7 +94,7 @@ public class JornadaController {
         @PathVariable Integer diaSemanaOrigen,
         @Valid @RequestBody CopiarJornadaRequest request
     ) {
-        return ResponseEntity.ok(copiarJornadaDia.ejecutar(cursoId, diaSemanaOrigen, request.getDiasDestino()));
+        return ResponseEntity.ok(copiarJornadaDia.execute(cursoId, diaSemanaOrigen, request.getDiasDestino()));
     }
 
     @DeleteMapping("/{diaSemana}")
@@ -106,7 +103,7 @@ public class JornadaController {
         @PathVariable UUID cursoId,
         @PathVariable Integer diaSemana
     ) {
-        eliminarJornadaDia.ejecutar(cursoId, diaSemana);
+        eliminarJornadaDia.execute(cursoId, diaSemana);
         return ResponseEntity.noContent().build();
     }
 

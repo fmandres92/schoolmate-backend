@@ -22,7 +22,7 @@ public class EliminarJornadaDia {
     private final ClockProvider clockProvider;
 
     @Transactional
-    public void ejecutar(UUID cursoId, Integer diaSemana) {
+    public void execute(UUID cursoId, Integer diaSemana) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado: " + cursoId));
 

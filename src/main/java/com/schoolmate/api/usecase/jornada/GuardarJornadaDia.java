@@ -45,7 +45,7 @@ public class GuardarJornadaDia {
     );
 
     @Transactional
-    public JornadaDiaResponse ejecutar(UUID cursoId, Integer diaSemana, JornadaDiaRequest request) {
+    public JornadaDiaResponse execute(UUID cursoId, Integer diaSemana, JornadaDiaRequest request) {
         Curso curso = cursoRepository.findById(cursoId)
             .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado: " + cursoId));
 

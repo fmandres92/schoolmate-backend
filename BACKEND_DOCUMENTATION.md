@@ -144,7 +144,6 @@ Implication:
   - JWT filter before `UsernamePasswordAuthenticationFilter`
 - PermitAll routes:
   - `/api/auth/login`
-  - `/api/auth/registro` (configured but no controller endpoint currently)
   - `/api/auth/refresh`
   - `/h2-console/**`
   - `/error`
@@ -451,7 +450,7 @@ All ADMIN (class-level)
 
 - `GET /api/cursos`
 - `GET /api/cursos/{id}`
-- `POST /api/cursos` (currently 200, not 201)
+- `POST /api/cursos` (201)
 - `PUT /api/cursos/{id}`
 
 ## 10.10 Profesores
@@ -459,7 +458,7 @@ All ADMIN (class-level)
 `ProfesorController` (ADMIN class-level):
 - `GET /api/profesores`
 - `GET /api/profesores/{id}`
-- `POST /api/profesores` (currently 200, not 201)
+- `POST /api/profesores` (201)
 - `PUT /api/profesores/{id}`
 - `GET /api/profesores/{profesorId}/sesiones`
 
@@ -532,13 +531,13 @@ All ADMIN (class-level)
 
 ## 11) Use case catalog (real signatures)
 
-Note: most classes use method `execute(...)`; a few use `ejecutar(...)` (legacy naming).
+All use cases currently expose `execute(...)` as the entry method convention.
 
 ## 11.1 Alumno
 - `ActualizarAlumno.execute(UUID alumnoId, AlumnoRequest request)`
 - `BuscarAlumnoPorRut.execute(String rut, UUID anoEscolarHeaderId, UUID anoEscolarId)`
 - `CrearAlumno.execute(AlumnoRequest request)`
-- `CrearAlumnoConApoderado.ejecutar(CrearAlumnoConApoderadoRequest request)`
+- `CrearAlumnoConApoderado.execute(CrearAlumnoConApoderadoRequest request)`
 - `ObtenerAlumnos.execute(UUID anoEscolarHeaderId, Integer page, Integer size, String sortBy, String sortDir, UUID anoEscolarId, UUID cursoId, UUID gradoId, String q)`
 - `ObtenerDetalleAlumno.execute(UUID alumnoId, UUID anoEscolarHeaderId, UUID anoEscolarId)`
 
@@ -590,10 +589,11 @@ Note: most classes use method `execute(...)`; a few use `ejecutar(...)` (legacy 
 ## 11.11 Jornada
 - `AsignarMateriaBloque.execute(UUID cursoId, UUID bloqueId, UUID materiaId)`
 - `AsignarProfesorBloque.execute(UUID cursoId, UUID bloqueId, UUID profesorId)`
-- `CopiarJornadaDia.ejecutar(UUID cursoId, Integer diaSemanaOrigen, List<Integer> diasDestino)`
-- `EliminarJornadaDia.ejecutar(UUID cursoId, Integer diaSemana)`
-- `GuardarJornadaDia.ejecutar(UUID cursoId, Integer diaSemana, JornadaDiaRequest request)`
-- `ObtenerJornadaCurso.ejecutar(UUID cursoId, Integer diaSemana)`
+- `CopiarJornadaDia.execute(UUID cursoId, Integer diaSemanaOrigen, List<Integer> diasDestino)`
+- `EliminarJornadaDia.execute(UUID cursoId, Integer diaSemana)`
+- `GuardarJornadaDia.execute(UUID cursoId, Integer diaSemana, JornadaDiaRequest request)`
+- `ObtenerJornadaCurso.execute(UUID cursoId, Integer diaSemana)`
+- `ObtenerJornadaCurso.execute(UUID cursoId, Integer diaSemana, UserPrincipal user)`
 - `ObtenerMateriasDisponibles.execute(UUID cursoId, UUID bloqueId)`
 - `ObtenerProfesoresDisponibles.execute(UUID cursoId, UUID bloqueId)`
 - `ObtenerResumenAsignacionMaterias.execute(UUID cursoId)`
@@ -775,11 +775,9 @@ Gaps still visible:
 
 ## 17) Known technical observations (current reality)
 
-1. `SecurityConfig` permits `/api/auth/registro` but no such endpoint exists in controllers.
-2. Several create endpoints still return 200 instead of 201 (`/api/cursos`, `/api/profesores`).
-3. Config files currently expose DB/JWT secrets in plain text.
-4. Mixed method naming exists in use cases (`execute` and `ejecutar`).
-5. Migration history intentionally contains marker scripts because some DDL ran directly in Supabase.
+1. Config files currently expose DB/JWT secrets in plain text.
+2. Migration history intentionally contains marker scripts because some DDL ran directly in Supabase.
+3. Jornada ownership validation is now enforced inside `ObtenerJornadaCurso` use case (not in controller), matching the same layering pattern used in `ObtenerMatriculasPorCurso`.
 
 These are not hypothetical; they are visible in current code/config.
 
