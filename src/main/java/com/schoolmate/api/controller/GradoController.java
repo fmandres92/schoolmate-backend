@@ -22,15 +22,13 @@ public class GradoController {
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public List<GradoResponse> listar() {
-        return listarGrados.execute().stream()
-            .map(GradoResponse::fromEntity)
-            .toList();
+        return listarGrados.execute();
     }
 
     // Obtener uno por ID
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public GradoResponse obtener(@PathVariable UUID id) {
-        return GradoResponse.fromEntity(obtenerGrado.execute(id));
+        return obtenerGrado.execute(id);
     }
 }

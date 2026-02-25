@@ -2,6 +2,7 @@ package com.schoolmate.api.entity;
 
 import com.schoolmate.api.common.time.TimeContext;
 import com.schoolmate.api.enums.EstadoMatricula;
+import com.schoolmate.api.exception.BusinessException;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -64,5 +65,24 @@ public class Matricula {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = TimeContext.now();
+    }
+
+    public void cambiarEstado(EstadoMatricula nuevoEstado) {
+        if (nuevoEstado == null) {
+            throw new BusinessException("El estado de matrícula es obligatorio");
+        }
+        if (estado == nuevoEstado) {
+            throw new BusinessException("La matrícula ya tiene el estado " + nuevoEstado);
+        }
+
+        boolean transicionValida = switch (estado) {
+            case ACTIVA -> nuevoEstado == EstadoMatricula.RETIRADO || nuevoEstado == EstadoMatricula.TRASLADADO;
+            case RETIRADO, TRASLADADO -> nuevoEstado == EstadoMatricula.ACTIVA;
+        };
+
+        if (!transicionValida) {
+            throw new BusinessException("No se puede cambiar de " + estado + " a " + nuevoEstado);
+        }
+        this.estado = nuevoEstado;
     }
 }

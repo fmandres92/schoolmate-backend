@@ -2,6 +2,7 @@ package com.schoolmate.api.usecase.apoderado;
 
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.dto.AlumnoApoderadoResponse;
+import com.schoolmate.api.dto.response.AlumnoApoderadoPageResponse;
 import com.schoolmate.api.entity.Alumno;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.entity.ApoderadoAlumno;
@@ -11,9 +12,11 @@ import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,23 +32,25 @@ public class ObtenerAlumnosApoderado {
     private final AnoEscolarRepository anoEscolarRepo;
     private final ClockProvider clockProvider;
 
-    public List<AlumnoApoderadoResponse> execute(UUID apoderadoId) {
-        List<ApoderadoAlumno> vinculos = apoderadoAlumnoRepo.findByApoderadoIdWithAlumno(apoderadoId);
-        if (vinculos.isEmpty()) {
-            return List.of();
-        }
+    @Transactional(readOnly = true)
+    public AlumnoApoderadoPageResponse execute(UUID apoderadoId, Integer page, Integer size) {
+        int resolvedPage = Math.max(page != null ? page : 0, 0);
+        int resolvedSize = Math.min(Math.max(size != null ? size : 20, 1), 100);
+        var pageable = PageRequest.of(
+            resolvedPage,
+            resolvedSize,
+            Sort.by(Sort.Order.asc("alumno.apellido"), Sort.Order.asc("alumno.nombre"))
+        );
+        var vinculosPage = apoderadoAlumnoRepo.findPageByApoderadoIdWithAlumno(apoderadoId, pageable);
 
-        List<Alumno> alumnosActivos = vinculos.stream()
+        List<Alumno> alumnosActivos = vinculosPage.getContent().stream()
             .map(ApoderadoAlumno::getAlumno)
-            .filter(alumno -> alumno != null && Boolean.TRUE.equals(alumno.getActivo()))
+            .filter(alumno -> alumno != null)
             .toList();
-        if (alumnosActivos.isEmpty()) {
-            return List.of();
-        }
 
         AnoEscolar anoActivo = anoEscolarRepo.findActivoByFecha(clockProvider.today()).orElse(null);
         Map<UUID, Matricula> matriculasActivasPorAlumno = Map.of();
-        if (anoActivo != null) {
+        if (anoActivo != null && !alumnosActivos.isEmpty()) {
             List<UUID> alumnoIds = alumnosActivos.stream().map(Alumno::getId).toList();
             matriculasActivasPorAlumno = matriculaRepo
                 .findByAlumnoIdInAndAnoEscolarIdAndEstado(alumnoIds, anoActivo.getId(), EstadoMatricula.ACTIVA)
@@ -59,11 +64,19 @@ public class ObtenerAlumnosApoderado {
 
         final AnoEscolar anoActivoFinal = anoActivo;
         final Map<UUID, Matricula> matriculasActivasPorAlumnoFinal = matriculasActivasPorAlumno;
-        return alumnosActivos.stream()
+        var content = alumnosActivos.stream()
             .map(alumno -> mapAlumno(alumno, anoActivoFinal, matriculasActivasPorAlumnoFinal))
-            .sorted(Comparator.comparing(AlumnoApoderadoResponse::getApellido)
-                .thenComparing(AlumnoApoderadoResponse::getNombre))
             .toList();
+
+        return AlumnoApoderadoPageResponse.builder()
+            .content(content)
+            .page(vinculosPage.getNumber())
+            .size(vinculosPage.getSize())
+            .totalElements(vinculosPage.getTotalElements())
+            .totalPages(vinculosPage.getTotalPages())
+            .hasNext(vinculosPage.hasNext())
+            .hasPrevious(vinculosPage.hasPrevious())
+            .build();
     }
 
     private AlumnoApoderadoResponse mapAlumno(

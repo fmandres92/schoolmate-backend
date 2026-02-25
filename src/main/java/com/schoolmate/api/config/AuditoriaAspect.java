@@ -1,5 +1,6 @@
 package com.schoolmate.api.config;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.schoolmate.api.common.time.ClockProvider;
 import com.schoolmate.api.entity.EventoAuditoria;
@@ -119,7 +120,7 @@ public class AuditoriaAspect {
                     .build();
 
             auditoriaRepository.save(evento);
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.warn("Error al registrar evento de auditoria: {}", e.getMessage(), e);
         }
     }
@@ -183,8 +184,11 @@ public class AuditoriaAspect {
                 }
             }
             return null;
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             log.warn("Error al serializar request body para auditoria: {}", e.getMessage());
+            return null;
+        } catch (RuntimeException e) {
+            log.warn("Error inesperado al serializar request body para auditoria: {}", e.getMessage(), e);
             return null;
         }
     }

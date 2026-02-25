@@ -1,5 +1,6 @@
 package com.schoolmate.api.usecase.auditoria;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.schoolmate.api.dto.EventoAuditoriaPageResponse;
 import com.schoolmate.api.dto.EventoAuditoriaResponse;
@@ -89,7 +90,7 @@ public class ConsultarEventosAuditoria {
         }
         try {
             return objectMapper.readValue(json, Object.class);
-        } catch (Exception e) {
+        } catch (JsonProcessingException e) {
             return json;
         }
     }

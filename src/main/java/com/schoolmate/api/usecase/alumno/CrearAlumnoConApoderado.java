@@ -55,37 +55,8 @@ public class CrearAlumnoConApoderado {
         }
 
         String emailApoderado = apoderadoData.getEmail().trim().toLowerCase();
-        Apoderado apoderado = apoderadoRepository.findByRut(rutApoderadoNorm).orElse(null);
-
-        if (apoderado == null) {
-            if (Boolean.TRUE.equals(usuarioRepository.existsByEmail(emailApoderado))) {
-                throw new ConflictException("Ya existe un usuario con el email " + emailApoderado);
-            }
-            if (apoderadoRepository.existsByEmail(emailApoderado)) {
-                throw new ConflictException("Ya existe un apoderado con el email " + emailApoderado);
-            }
-
-            apoderado = Apoderado.builder()
-                    .nombre(apoderadoData.getNombre())
-                    .apellido(apoderadoData.getApellido())
-                    .rut(rutApoderadoNorm)
-                    .email(emailApoderado)
-                    .telefono(apoderadoData.getTelefono())
-                    .build();
-            apoderado = apoderadoRepository.save(apoderado);
-
-            Usuario usuario = Usuario.builder()
-                    .email(emailApoderado)
-                    .rut(rutApoderadoNorm)
-                    .passwordHash(passwordEncoder.encode(rutApoderadoNorm))
-                    .nombre(apoderadoData.getNombre())
-                    .apellido(apoderadoData.getApellido())
-                    .rol(Rol.APODERADO)
-                    .apoderadoId(apoderado.getId())
-                    .activo(true)
-                    .build();
-            usuarioRepository.save(usuario);
-        }
+        Apoderado apoderado = apoderadoRepository.findByRut(rutApoderadoNorm)
+            .orElseGet(() -> crearApoderadoConUsuario(apoderadoData, rutApoderadoNorm, emailApoderado));
 
         Alumno alumno = Alumno.builder()
                 .rut(rutAlumnoNorm)
@@ -119,6 +90,41 @@ public class CrearAlumnoConApoderado {
         response.setApoderadoTelefono(apoderado.getTelefono());
         response.setApoderadoVinculo(request.getVinculo().name());
         return response;
+    }
+
+    private Apoderado crearApoderadoConUsuario(
+        CrearAlumnoConApoderadoRequest.ApoderadoData apoderadoData,
+        String rutApoderadoNorm,
+        String emailApoderado
+    ) {
+        if (Boolean.TRUE.equals(usuarioRepository.existsByEmail(emailApoderado))) {
+            throw new ConflictException("Ya existe un usuario con el email " + emailApoderado);
+        }
+        if (apoderadoRepository.existsByEmail(emailApoderado)) {
+            throw new ConflictException("Ya existe un apoderado con el email " + emailApoderado);
+        }
+
+        Apoderado apoderadoNuevo = Apoderado.builder()
+            .nombre(apoderadoData.getNombre())
+            .apellido(apoderadoData.getApellido())
+            .rut(rutApoderadoNorm)
+            .email(emailApoderado)
+            .telefono(apoderadoData.getTelefono())
+            .build();
+        apoderadoNuevo = apoderadoRepository.save(apoderadoNuevo);
+
+        Usuario usuario = Usuario.builder()
+            .email(emailApoderado)
+            .rut(rutApoderadoNorm)
+            .passwordHash(passwordEncoder.encode(rutApoderadoNorm))
+            .nombre(apoderadoData.getNombre())
+            .apellido(apoderadoData.getApellido())
+            .rol(Rol.APODERADO)
+            .apoderadoId(apoderadoNuevo.getId())
+            .activo(true)
+            .build();
+        usuarioRepository.save(usuario);
+        return apoderadoNuevo;
     }
 
     private String normalizarRut(String rut) {

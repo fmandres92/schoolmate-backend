@@ -2,6 +2,8 @@ package com.schoolmate.api.repository;
 
 import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.ApoderadoAlumnoId;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -35,4 +37,22 @@ public interface ApoderadoAlumnoRepository extends JpaRepository<ApoderadoAlumno
 
     @Query("SELECT aa FROM ApoderadoAlumno aa JOIN FETCH aa.alumno WHERE aa.id.apoderadoId = :apoderadoId")
     List<ApoderadoAlumno> findByApoderadoIdWithAlumno(@Param("apoderadoId") UUID apoderadoId);
+
+    @Query(
+        value = """
+            SELECT aa
+            FROM ApoderadoAlumno aa
+            JOIN FETCH aa.alumno al
+            WHERE aa.id.apoderadoId = :apoderadoId
+              AND al.activo = true
+            """,
+        countQuery = """
+            SELECT count(aa)
+            FROM ApoderadoAlumno aa
+            JOIN aa.alumno al
+            WHERE aa.id.apoderadoId = :apoderadoId
+              AND al.activo = true
+            """
+    )
+    Page<ApoderadoAlumno> findPageByApoderadoIdWithAlumno(@Param("apoderadoId") UUID apoderadoId, Pageable pageable);
 }

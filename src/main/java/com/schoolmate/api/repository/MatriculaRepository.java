@@ -54,6 +54,13 @@ public interface MatriculaRepository extends JpaRepository<Matricula, UUID> {
     List<Matricula> findByAnoEscolarIdAndEstado(UUID anoEscolarId, EstadoMatricula estado);
 
     @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
+    List<Matricula> findByAnoEscolarIdAndCursoGradoIdAndEstado(
+        UUID anoEscolarId,
+        UUID gradoId,
+        EstadoMatricula estado
+    );
+
+    @EntityGraph(attributePaths = {"alumno", "curso", "curso.grado", "anoEscolar"})
     List<Matricula> findByAlumnoIdInAndAnoEscolarIdAndEstado(
         Collection<UUID> alumnoIds,
         UUID anoEscolarId,

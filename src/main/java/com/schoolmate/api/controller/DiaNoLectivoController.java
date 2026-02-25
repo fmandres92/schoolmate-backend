@@ -2,6 +2,7 @@ package com.schoolmate.api.controller;
 
 import com.schoolmate.api.config.AnoEscolarHeaderInterceptor;
 import com.schoolmate.api.dto.request.CrearDiaNoLectivoRequest;
+import com.schoolmate.api.dto.response.DiaNoLectivoPageResponse;
 import com.schoolmate.api.dto.response.DiaNoLectivoResponse;
 import com.schoolmate.api.usecase.calendario.CrearDiasNoLectivos;
 import com.schoolmate.api.usecase.calendario.EliminarDiaNoLectivo;
@@ -35,12 +36,14 @@ public class DiaNoLectivoController {
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<DiaNoLectivoResponse>> listar(
+    public ResponseEntity<DiaNoLectivoPageResponse> listar(
         @RequestHeader(value = AnoEscolarHeaderInterceptor.HEADER_NAME) UUID anoEscolarId,
         @RequestParam(required = false) Integer mes,
-        @RequestParam(required = false) Integer anio
+        @RequestParam(required = false) Integer anio,
+        @RequestParam(defaultValue = "0") Integer page,
+        @RequestParam(defaultValue = "20") Integer size
     ) {
-        return ResponseEntity.ok(listarDiasNoLectivos.execute(anoEscolarId, mes, anio));
+        return ResponseEntity.ok(listarDiasNoLectivos.execute(anoEscolarId, mes, anio, page, size));
     }
 
     @PostMapping

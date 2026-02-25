@@ -1,9 +1,9 @@
 package com.schoolmate.api.controller;
 import java.util.UUID;
 
-import com.schoolmate.api.dto.AlumnoApoderadoResponse;
 import com.schoolmate.api.dto.AsistenciaMensualResponse;
 import com.schoolmate.api.dto.ResumenAsistenciaResponse;
+import com.schoolmate.api.dto.response.AlumnoApoderadoPageResponse;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.security.AnoEscolarActivo;
 import com.schoolmate.api.security.UserPrincipal;
@@ -20,8 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/apoderado")
 @RequiredArgsConstructor
@@ -33,9 +31,11 @@ public class ApoderadoPortalController {
 
     @GetMapping("/mis-alumnos")
     @PreAuthorize("hasRole('APODERADO')")
-    public ResponseEntity<List<AlumnoApoderadoResponse>> misAlumnos(
-            @AuthenticationPrincipal UserPrincipal user) {
-        List<AlumnoApoderadoResponse> alumnos = obtenerAlumnosApoderado.execute(user.getApoderadoId());
+    public ResponseEntity<AlumnoApoderadoPageResponse> misAlumnos(
+            @AuthenticationPrincipal UserPrincipal user,
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size) {
+        AlumnoApoderadoPageResponse alumnos = obtenerAlumnosApoderado.execute(user.getApoderadoId(), page, size);
         return ResponseEntity.ok(alumnos);
     }
 

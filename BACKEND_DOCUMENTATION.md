@@ -273,6 +273,24 @@ Aplicado en Java sobre migraciones ya ejecutadas en BD:
 - Resultado:
   - menor cantidad de roundtrips a BD en operaciones bulk/calendario sin cambiar contratos HTTP ni reglas funcionales.
 
+### Actualización técnica reciente (anti-pattern hardening: dominio + paginación + robustez)
+
+- Antipatrón #2 (filtrado en memoria) corregido en `ObtenerAlumnos`:
+  - filtro por grado en matrículas activas movido a BD (`findByAnoEscolarIdAndCursoGradoIdAndEstado(...)`).
+- Antipatrón #11 (dominio anémico) corregido en matrícula:
+  - regla de transición y cambio de estado encapsulados en `Matricula.cambiarEstado(...)`.
+  - `CambiarEstadoMatricula` ahora delega regla de negocio al dominio.
+- Antipatrón #12 (catch genérico) corregido:
+  - `AuditoriaAspect` y `ConsultarEventosAuditoria` reemplazan `catch(Exception)` por manejo específico (`JsonProcessingException`) + fallback controlado.
+- Antipatrón #4 (Optional mal usado) corregido en `CrearAlumnoConApoderado`:
+  - reemplazo de `orElse(null)+if` por flujo `orElseGet(...)`.
+- Antipatrón #17 (paginación fantasma) corregido:
+  - `GET /api/anos-escolares` -> `AnoEscolarPageResponse`
+  - `GET /api/dias-no-lectivos` -> `DiaNoLectivoPageResponse`
+  - `GET /api/apoderado/mis-alumnos` -> `AlumnoApoderadoPageResponse`
+- Antipatrón #16 (lógica en controller) reducido en grados:
+  - mapping a `GradoResponse` movido del controller a use cases (`ListarGrados`, `ObtenerGrado`).
+
 ---
 
 ## SECCIÓN 2: ARQUITECTURA Y PRINCIPIOS
@@ -1300,7 +1318,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/apoderado/mis-alumnos` | Lista hijos vinculados al apoderado autenticado, con matrícula activa del año activo si existe | `APODERADO` | `Authorization` | - | `List<AlumnoApoderadoResponse>` | `ObtenerAlumnosApoderado` | `ACCESS_DENIED` (si principal inválido) |
+| `GET /api/apoderado/mis-alumnos` | Lista hijos vinculados al apoderado autenticado, con matrícula activa del año activo si existe (paginado) | `APODERADO` | `Authorization`, Query `page,size` | - | `AlumnoApoderadoPageResponse` | `ObtenerAlumnosApoderado` | `ACCESS_DENIED` (si principal inválido) |
 | `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual?mes=...&anio=...` | Asistencia diaria agregada por bloques para un mes (`PRESENTE/AUSENTE/PARCIAL`) + lista `diasNoLectivos` del período | `APODERADO` (ownership) | Path `alumnoId`, Query `mes,anio` | - | `AsistenciaMensualResponse` | `ObtenerAsistenciaMensualAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 | `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen` | Resumen anual de asistencia por bloques con porcentaje (prioridad `header > query`) | `APODERADO` (ownership) | Path `alumnoId`, Header `X-Ano-Escolar-Id` o Query `anoEscolarId` (fallback) | - | `ResumenAsistenciaResponse` | `ObtenerResumenAsistenciaAlumno` | `ACCESS_DENIED`, `RESOURCE_NOT_FOUND`, `VALIDATION_FAILED` |
 
@@ -1316,7 +1334,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/anos-escolares` | Lista años con estado calculado | `ADMIN` | - | - | `List<AnoEscolarResponse>` | `ListarAnosEscolares` | `ACCESS_DENIED` |
+| `GET /api/anos-escolares` | Lista años con estado calculado (paginado) | `ADMIN` | Query `page,size` | - | `AnoEscolarPageResponse` | `ListarAnosEscolares` | `ACCESS_DENIED` |
 | `GET /api/anos-escolares/{id}` | Obtiene año por id | `ADMIN` | Path `id` | - | `AnoEscolarResponse` | `ObtenerAnoEscolar` | `RESOURCE_NOT_FOUND` |
 | `GET /api/anos-escolares/activo` | Año activo para fecha actual | autenticado | - | - | `AnoEscolarResponse` | `ObtenerAnoEscolarActivo` | `RESOURCE_NOT_FOUND` |
 | `POST /api/anos-escolares` | Crea año | `ADMIN` | Body | `AnoEscolarRequest {ano,fechaInicioPlanificacion,fechaInicio,fechaFin}` | `AnoEscolarResponse` | `CrearAnoEscolar` | `BUSINESS_RULE`, `VALIDATION_FAILED` |
@@ -1326,7 +1344,7 @@ Implementación actual:
 
 | Método + URL | Descripción | Roles | Parámetros | Request DTO | Response DTO | UseCase/CRUD | Errores específicos |
 |---|---|---|---|---|---|---|---|
-| `GET /api/dias-no-lectivos` | Lista días no lectivos del año escolar resuelto por header; filtro opcional por `mes` y `anio` | autenticado | Header requerido `X-Ano-Escolar-Id`, Query opcional `mes,anio` | - | `List<DiaNoLectivoResponse>` | `ListarDiasNoLectivos` | `VALIDATION_FAILED`, `BUSINESS_RULE` |
+| `GET /api/dias-no-lectivos` | Lista días no lectivos del año escolar resuelto por header; filtro opcional por `mes` y `anio` (paginado) | autenticado | Header requerido `X-Ano-Escolar-Id`, Query opcional `mes,anio,page,size` | - | `DiaNoLectivoPageResponse` | `ListarDiasNoLectivos` | `VALIDATION_FAILED`, `BUSINESS_RULE` |
 | `POST /api/dias-no-lectivos` | Crea días no lectivos por rango (`fechaInicio`..`fechaFin`) | `ADMIN` | Header `X-Ano-Escolar-Id`, Body | `CrearDiaNoLectivoRequest` | `List<DiaNoLectivoResponse>` (`201`) | `CrearDiasNoLectivos` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE`, `VALIDATION_FAILED` |
 | `DELETE /api/dias-no-lectivos/{id}` | Elimina un día no lectivo | `ADMIN` | Path `id` | - | `204` | `EliminarDiaNoLectivo` | `RESOURCE_NOT_FOUND`, `BUSINESS_RULE` |
 
@@ -1544,21 +1562,22 @@ Implementación actual:
   - normaliza `metodoHttp` a mayúsculas.
   - aplica filtros opcionales con flags booleanos para evitar problemas de tipado SQL en PostgreSQL.
   - usa `desde` inclusivo y `hasta` exclusivo (`+1 día`).
-  - deserializa `requestBody` JSON string a objeto estructurado; si falla, retorna string raw.
+  - deserializa `requestBody` JSON string a objeto estructurado; si falla (`JsonProcessingException`), retorna string raw.
 - Salida:
   - `EventoAuditoriaPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.anoescolar.ListarAnosEscolares`
 
-- Función: listar años escolares en orden descendente con estado calculado.
+- Función: listar años escolares paginados en orden descendente con estado calculado.
 - Repositorios/dependencias:
   - `AnoEscolarRepository`, `ClockProvider`
 - Reglas:
-  - usa `findAllByOrderByAnoDesc()`.
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - usa orden `ano desc`.
   - calcula estado con `AnoEscolar.calcularEstado(clockProvider.today())`.
 - Salida:
-  - `List<AnoEscolarResponse>`.
+  - `AnoEscolarPageResponse`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.anoescolar.ObtenerAnoEscolar`
@@ -1627,7 +1646,7 @@ Implementación actual:
 - Repositorios/dependencias:
   - `GradoRepository`
 - Salida:
-  - `List<Grado>`.
+  - `List<GradoResponse>`.
 - `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.grado.ObtenerGrado`
@@ -1638,7 +1657,7 @@ Implementación actual:
 - Reglas:
   - valida existencia por id.
 - Salida:
-  - `Grado`.
+  - `GradoResponse`.
 - Errores:
   - `ResourceNotFoundException("Grado no encontrado")`.
 - `@Transactional(readOnly = true)`: sí.
@@ -1907,16 +1926,17 @@ Implementación actual:
 
 ### `com.schoolmate.api.usecase.calendario.ListarDiasNoLectivos`
 
-- Función: listar días no lectivos por año escolar, con filtro opcional por mes/año.
+- Función: listar días no lectivos por año escolar, con filtro opcional por mes/año y salida paginada.
 - Repositorios/dependencias:
   - `DiaNoLectivoRepository`
 - Reglas:
-  - si no se envían filtros, retorna todo el año escolar ordenado por fecha.
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - si no se envían filtros, retorna el año escolar paginado ordenado por fecha ascendente.
   - si se filtra, exige `mes` y `anio` juntos.
   - valida mes en rango `1..12`.
   - valida que `mes/anio` formen una fecha válida.
 - Salida:
-  - `List<DiaNoLectivoResponse>`.
+  - `DiaNoLectivoPageResponse`.
 - Errores:
   - `BusinessException`.
 - `@Transactional(readOnly = true)`: sí.
@@ -1973,15 +1993,17 @@ Implementación actual:
 
 ### `com.schoolmate.api.usecase.apoderado.ObtenerAlumnosApoderado`
 
-- Función: listar alumnos vinculados al apoderado autenticado.
+- Función: listar alumnos vinculados al apoderado autenticado (paginado).
 - Repositorios/dependencias:
-  - `ApoderadoAlumnoRepository`, `AlumnoRepository`, `MatriculaRepository`, `AnoEscolarRepository`, `ClockProvider`
+  - `ApoderadoAlumnoRepository`, `MatriculaRepository`, `AnoEscolarRepository`, `ClockProvider`
 - Reglas:
-  - retorna lista vacía si no hay vínculos
-  - solo incluye alumnos activos
+  - normaliza paginación (`page >= 0`, `size` en rango `1..100`).
+  - pagina vínculos activos del apoderado con `alumno` pre-cargado.
   - si existe año escolar activo, enriquece con matrícula `ACTIVA` (`cursoId`, `cursoNombre`, `anoEscolarId`)
-  - ordena por apellido/nombre
-- `@Transactional`: no.
+  - ordena por `alumno.apellido`, `alumno.nombre`.
+- Salida:
+  - `AlumnoApoderadoPageResponse`.
+- `@Transactional(readOnly = true)`: sí.
 
 ### `com.schoolmate.api.usecase.apoderado.ObtenerAsistenciaMensualAlumno`
 
@@ -2176,8 +2198,7 @@ Implementación actual:
 - Flujo:
   1. (firma `String`) valida/reconvierte estado raw.
   2. carga matrícula con relaciones (`findByIdWithRelaciones`)
-  3. valida transición
-  4. setea nuevo estado
+  3. delega transición de estado al dominio (`Matricula.cambiarEstado(...)`)
   5. guarda y mapea a response.
 - Salida:
   - `MatriculaResponse`.
@@ -2548,6 +2569,7 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `AuthResponse` | `token,accessToken,refreshToken,tipo,id,email,nombre,apellido,rol,profesorId,apoderadoId` | `@Data @Builder` |
 | `ApiErrorResponse` | `code,message,status,field,path,timestamp,details` | `@Data @Builder` |
 | `AnoEscolarResponse` | `id,ano,fechaInicioPlanificacion,fechaInicio,fechaFin,estado,createdAt,updatedAt` | `@Data @Builder` |
+| `AnoEscolarPageResponse` | `content,page,size,totalElements,totalPages,sortBy,sortDir,hasNext,hasPrevious` | `@Data @Builder` |
 | `MateriaResponse` | `id,nombre,icono,createdAt,updatedAt` | `@Data @Builder` |
 | `MateriaPageResponse` | `content,page,size,totalElements,totalPages,sortBy,sortDir,hasNext,hasPrevious` | `@Data @Builder` |
 | `ProfesorResponse` | `id,rut,nombre,apellido,email,telefono,fechaContratacion,horasPedagogicasContrato,horasAsignadas,activo,materias,createdAt,updatedAt` | `@Data @Builder` |
@@ -2573,6 +2595,8 @@ Archivo: `/Users/aflores/Documents/proyecto/colegios/backend-hub/schoolmate-hub-
 | `ConflictoHorarioResponse` | `cursoNombre,materiaNombre,horaInicio,horaFin,bloqueId` | `@Data @Builder` |
 | `DashboardAdminResponse` | `totalAlumnos,totalCursos,totalProfesores` | `@Data @Builder` |
 | `GradoResponse` | `id,nombre,nivel,createdAt,updatedAt` | `@Data @Builder` |
+| `DiaNoLectivoPageResponse` | `content,page,size,totalElements,totalPages,hasNext,hasPrevious` | `@Data @Builder` |
+| `AlumnoApoderadoPageResponse` | `content,page,size,totalElements,totalPages,hasNext,hasPrevious` | `@Data @Builder` |
 | `EstadoClaseHoy` | `PENDIENTE,DISPONIBLE,EXPIRADA` | `enum` |
 | `ClaseHoyResponse` | `bloqueId,numeroBloque,horaInicio,horaFin,cursoId,cursoNombre,materiaId,materiaNombre,materiaIcono,cantidadAlumnos,estado,asistenciaTomada` | `@Data @Builder` |
 | `ClasesHoyResponse` | `fecha,diaSemana,nombreDia,diaNoLectivo?,clases[]` | `@Data @Builder` |
@@ -2757,6 +2781,7 @@ Para alumnos:
   - resumen semanal (`totalBloques`, `diasConClase`)
   - `horasAsignadas` calculadas sobre el año consultado
 - `GET /api/apoderado/mis-alumnos` retorna:
+  - respuesta paginada (`content,page,size,totalElements,totalPages,...`)
   - hijos vinculados al apoderado autenticado
   - `cursoId/cursoNombre/anoEscolarId` cuando existe matrícula `ACTIVA` en año activo
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual` retorna:
@@ -2767,7 +2792,8 @@ Para alumnos:
   - `diaNoLectivo` cuando la fecha actual está marcada como excepción en calendario
   - `diaNoLectivo = null` en días lectivos normales
 - `GET /api/dias-no-lectivos` retorna:
-  - lista ordenada ascendente por fecha
+  - respuesta paginada (`content,page,size,totalElements,totalPages,...`)
+  - `content` ordenado ascendente por fecha
   - cada elemento con `id,fecha,tipo,descripcion`
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/resumen` retorna:
   - `totalClases`, `totalPresente`, `totalAusente`, `porcentajeAsistencia`
@@ -2787,7 +2813,7 @@ Para alumnos:
 
 ### Paginación
 
-Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`, `CursoPageResponse`, `ProfesorPageResponse`, `MallaCurricularPageResponse`, `MatriculaPageResponse`):
+Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`, `CursoPageResponse`, `ProfesorPageResponse`, `MallaCurricularPageResponse`, `MatriculaPageResponse`, `AnoEscolarPageResponse`, `DiaNoLectivoPageResponse`, `AlumnoApoderadoPageResponse`):
 
 - `content`
 - `page`
@@ -2822,6 +2848,13 @@ Contratos usados (`MateriaPageResponse`, `AlumnoPageResponse`, `CursoPageRespons
   - paginación/orden: `page,size,sortBy,sortDir`
 - `GET /api/matriculas/alumno/{alumnoId}`:
   - paginación/orden: `page,size,sortBy,sortDir`
+- `GET /api/anos-escolares`:
+  - paginación: `page,size` (orden backend `ano desc`)
+- `GET /api/dias-no-lectivos`:
+  - paginación: `page,size`
+  - filtros opcionales: `mes,anio` (si envías uno, debes enviar ambos)
+- `GET /api/apoderado/mis-alumnos`:
+  - paginación: `page,size`
 - `GET /api/cursos/{cursoId}/jornada`:
   - filtro opcional `diaSemana`
 - `GET /api/apoderado/alumnos/{alumnoId}/asistencia/mensual`:
@@ -2935,7 +2968,6 @@ No hay uso explícito de `${ENV_VAR}` en YAML actual; credenciales y secretos es
 
 ### Queries potencialmente problemáticas a escala
 
-- Filtrado por grado en alumnos (`getAlumnoIdsByMatriculaFilters`) hace parte en memoria tras consulta por año.
 - `ObtenerDetalleCurso.execute`: calcula malla y agregados por request; puede crecer en costo si se vuelve endpoint masivo.
 
 ### Optimizaciones aplicadas recientemente

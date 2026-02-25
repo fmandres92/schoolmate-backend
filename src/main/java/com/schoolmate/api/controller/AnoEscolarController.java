@@ -2,6 +2,7 @@ package com.schoolmate.api.controller;
 import java.util.UUID;
 
 import com.schoolmate.api.dto.request.AnoEscolarRequest;
+import com.schoolmate.api.dto.response.AnoEscolarPageResponse;
 import com.schoolmate.api.dto.response.AnoEscolarResponse;
 import com.schoolmate.api.usecase.anoescolar.ActualizarAnoEscolar;
 import com.schoolmate.api.usecase.anoescolar.CrearAnoEscolar;
@@ -13,8 +14,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/anos-escolares")
@@ -30,8 +29,11 @@ public class AnoEscolarController {
     // GET /api/anos-escolares — Listar todos con estado calculado
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<List<AnoEscolarResponse>> listar() {
-        return ResponseEntity.ok(listarAnosEscolares.execute());
+    public ResponseEntity<AnoEscolarPageResponse> listar(
+        @RequestParam(defaultValue = "0") Integer page,
+        @RequestParam(defaultValue = "20") Integer size
+    ) {
+        return ResponseEntity.ok(listarAnosEscolares.execute(page, size));
     }
 
     // GET /api/anos-escolares/{id}

@@ -121,10 +121,11 @@ public class ObtenerAlumnos {
         if (hasCursoFilter) {
             matriculas = matriculaRepository.findByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA);
         } else {
-            matriculas = matriculaRepository.findByAnoEscolarIdAndEstado(anoEscolarId, EstadoMatricula.ACTIVA)
-                .stream()
-                .filter(m -> m.getCurso().getGrado().getId().equals(gradoId))
-                .toList();
+            matriculas = matriculaRepository.findByAnoEscolarIdAndCursoGradoIdAndEstado(
+                anoEscolarId,
+                gradoId,
+                EstadoMatricula.ACTIVA
+            );
         }
 
         return matriculas.stream()
