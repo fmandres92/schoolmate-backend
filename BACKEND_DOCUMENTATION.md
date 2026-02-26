@@ -857,10 +857,45 @@ Validated controllers:
 ### 16.4 Current coverage profile after leveling
 
 - Strong coverage in controller/security contract layer for current endpoints.
+- Use-case unit tests now strengthened in high-risk modules (`asistencia`, `jornada`, `matricula`) using decision-audit approach (branch by branch).
 - Still pending for full production confidence:
-  - broader use-case unit tests (business rules),
+  - use-case unit suite expansion to remaining modules (`alumno`, `profesor`, `apoderado`, `curso`, `malla`, `calendario`, `dashboard`),
   - repository integration tests for custom JPQL/joins,
   - flow-level E2E/smoke checks.
+
+### 16.5 Use-case unit suite added (risk-first)
+
+Applied pattern:
+- Same quality bar used in `GuardarAsistenciaClaseTest` was propagated to the rest of `asistencia` and then to `jornada` and `matricula`.
+- Each use case was reviewed with explicit decision audit (`if`/`switch`/ternary/`orElseThrow`) and tests were added for error paths, boundary branches and valid execution paths.
+- Priority order used: `asistencia` -> `jornada/horario` -> `matricula`.
+
+Files now covered in this suite:
+- `src/test/java/com/schoolmate/api/usecase/asistencia/GuardarAsistenciaClaseTest.java`
+- `src/test/java/com/schoolmate/api/usecase/asistencia/ObtenerAsistenciaClaseTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/AsignarMateriaBloqueTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/AsignarProfesorBloqueTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/CopiarJornadaDiaTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/EliminarJornadaDiaTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/GuardarJornadaDiaTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/ObtenerJornadaCursoTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/ObtenerMateriasDisponiblesTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/ObtenerProfesoresDisponiblesTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/ObtenerResumenAsignacionMateriasTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/ObtenerResumenAsignacionProfesoresTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/QuitarMateriaBloqueTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/QuitarProfesorBloqueTest.java`
+- `src/test/java/com/schoolmate/api/usecase/jornada/ValidarAccesoJornadaCursoTest.java`
+- `src/test/java/com/schoolmate/api/usecase/matricula/CambiarEstadoMatriculaTest.java`
+- `src/test/java/com/schoolmate/api/usecase/matricula/MatricularAlumnoTest.java`
+- `src/test/java/com/schoolmate/api/usecase/matricula/ObtenerMatriculasPorAlumnoTest.java`
+- `src/test/java/com/schoolmate/api/usecase/matricula/ObtenerMatriculasPorCursoTest.java`
+- `src/test/java/com/schoolmate/api/usecase/matricula/ValidarAccesoMatriculasCursoProfesorTest.java`
+
+What this suite validates in practice:
+- Attendance domain: temporal window, non-school days, ownership/role checks, merge/conciliate behavior, idempotent/race-condition branch.
+- Jornada domain: block continuity and schedule constraints, allowed block types, minute-budget enforcement against malla, professor collisions, assignment/removal invariants.
+- Matricula domain: state-transition guards, school-year/course consistency, active enrollment uniqueness, pagination/sort sanitization, role-based access validators.
 
 ---
 
