@@ -81,11 +81,12 @@ public class ObtenerDashboardAdmin {
         Optional<DiaNoLectivoInfo> diaNoLectivoInfoOpt = diaNoLectivoRepository
             .findByAnoEscolarIdAndFecha(anoEscolarId, hoy)
             .map(this::mapDiaNoLectivo);
-        if (diaNoLectivoInfoOpt.isPresent()) {
+        if (!diaNoLectivoInfoOpt.isEmpty()) {
+            DiaNoLectivoInfo diaNoLectivoInfo = diaNoLectivoInfoOpt.get();
             return DashboardAdminResponse.builder()
                 .stats(stats)
                 .cumplimientoHoy(buildCumplimientoVacio(
-                    hoy, diaSemana, nombreDia, true, diaNoLectivoInfoOpt.get()
+                    hoy, diaSemana, nombreDia, true, diaNoLectivoInfo
                 ))
                 .build();
         }
@@ -114,8 +115,7 @@ public class ObtenerDashboardAdmin {
             ));
 
         int globalTomadas = 0;
-        int globalNoTomadas = 0;
-        int globalEnCurso = 0;
+        int globalPendientes = 0;
         int globalProgramadas = 0;
         int profesoresCumplimiento100 = 0;
 
@@ -125,11 +125,10 @@ public class ObtenerDashboardAdmin {
             BloqueHorario primero = bloquesProfesor.get(0);
 
             int tomadas = 0;
-            int noTomadas = 0;
-            int enCurso = 0;
+            int pendientes = 0;
             int programadas = 0;
             LocalDateTime ultimaActividad = null;
-            List<BloquePendienteDetalle> pendientes = new ArrayList<>();
+            List<BloquePendienteDetalle> pendientesDetalle = new ArrayList<>();
 
             for (BloqueHorario bloque : bloquesProfesor) {
                 AsistenciaClase asistencia = asistenciaPorBloque.get(bloque.getId());
@@ -147,9 +146,9 @@ public class ObtenerDashboardAdmin {
                         }
                     }
                     case NO_TOMADA -> {
-                        noTomadas++;
-                        if (pendientes.size() < 3) {
-                            pendientes.add(BloquePendienteDetalle.builder()
+                        pendientes++;
+                        if (pendientesDetalle.size() < 3) {
+                            pendientesDetalle.add(BloquePendienteDetalle.builder()
                                 .horaInicio(bloque.getHoraInicio().format(HORA_FORMAT))
                                 .horaFin(bloque.getHoraFin().format(HORA_FORMAT))
                                 .cursoNombre(bloque.getCurso().getNombre())
@@ -157,22 +156,31 @@ public class ObtenerDashboardAdmin {
                                 .build());
                         }
                     }
-                    case EN_CURSO -> enCurso++;
+                    case EN_CURSO -> {
+                        pendientes++;
+                        if (pendientesDetalle.size() < 3) {
+                            pendientesDetalle.add(BloquePendienteDetalle.builder()
+                                .horaInicio(bloque.getHoraInicio().format(HORA_FORMAT))
+                                .horaFin(bloque.getHoraFin().format(HORA_FORMAT))
+                                .cursoNombre(bloque.getCurso().getNombre())
+                                .materiaNombre(bloque.getMateria() != null ? bloque.getMateria().getNombre() : null)
+                                .build());
+                        }
+                    }
                     case PROGRAMADA -> programadas++;
                 }
             }
 
-            int bloquesCerrados = tomadas + noTomadas;
-            Double porcentajeCumplimiento = bloquesCerrados > 0
-                ? Math.round((tomadas * 100.0 / bloquesCerrados) * 10.0) / 10.0
+            int bloquesGestionables = tomadas + pendientes;
+            Double porcentajeCumplimiento = bloquesGestionables > 0
+                ? Math.round((tomadas * 100.0 / bloquesGestionables) * 10.0) / 10.0
                 : null;
-            if (bloquesCerrados > 0 && noTomadas == 0) {
+            if (bloquesGestionables > 0 && pendientes == 0) {
                 profesoresCumplimiento100++;
             }
 
             globalTomadas += tomadas;
-            globalNoTomadas += noTomadas;
-            globalEnCurso += enCurso;
+            globalPendientes += pendientes;
             globalProgramadas += programadas;
 
             profesores.add(ProfesorCumplimiento.builder()
@@ -181,23 +189,18 @@ public class ObtenerDashboardAdmin {
                 .apellido(primero.getProfesor().getApellido())
                 .totalBloques(bloquesProfesor.size())
                 .tomadas(tomadas)
-                .noTomadas(noTomadas)
-                .enCurso(enCurso)
+                .pendientes(pendientes)
                 .programadas(programadas)
                 .porcentajeCumplimiento(porcentajeCumplimiento)
                 .ultimaActividadHora(ultimaActividad != null
                     ? ultimaActividad.toLocalTime().format(HORA_FORMAT)
                     : null)
-                .bloquesPendientesDetalle(pendientes)
+                .bloquesPendientesDetalle(pendientesDetalle)
                 .build());
         }
 
         profesores.sort((a, b) -> {
-            int cmp = Integer.compare(b.getNoTomadas(), a.getNoTomadas());
-            if (cmp != 0) {
-                return cmp;
-            }
-            cmp = Integer.compare(b.getEnCurso(), a.getEnCurso());
+            int cmp = Integer.compare(b.getPendientes(), a.getPendientes());
             if (cmp != 0) {
                 return cmp;
             }
@@ -211,10 +214,9 @@ public class ObtenerDashboardAdmin {
             .esDiaHabil(true)
             .diaNoLectivo(null)
             .resumenGlobal(ResumenGlobal.builder()
-                .totalBloques(globalTomadas + globalNoTomadas + globalEnCurso + globalProgramadas)
+                .totalBloques(globalTomadas + globalPendientes + globalProgramadas)
                 .tomadas(globalTomadas)
-                .noTomadas(globalNoTomadas)
-                .enCurso(globalEnCurso)
+                .pendientes(globalPendientes)
                 .programadas(globalProgramadas)
                 .profesoresConClase(bloquesPorProfesor.size())
                 .profesoresCumplimiento100(profesoresCumplimiento100)
@@ -251,8 +253,7 @@ public class ObtenerDashboardAdmin {
             .resumenGlobal(ResumenGlobal.builder()
                 .totalBloques(0)
                 .tomadas(0)
-                .noTomadas(0)
-                .enCurso(0)
+                .pendientes(0)
                 .programadas(0)
                 .profesoresConClase(0)
                 .profesoresCumplimiento100(0)

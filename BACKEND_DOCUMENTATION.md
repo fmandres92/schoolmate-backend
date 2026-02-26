@@ -398,6 +398,8 @@ These are generated from live catalog and include Supabase-managed schemas (`aut
   - Returns: `DashboardAdminResponse` (200) with:
     - `stats` (`totalAlumnosMatriculados`, `totalCursos`, `totalProfesoresActivos`)
     - `cumplimientoHoy` (contexto del día + resumen global + lista por profesor)
+    - `resumenGlobal` usa 3 buckets operativos: `tomadas`, `pendientes`, `programadas`
+    - cada `profesor` usa 3 buckets operativos: `tomadas`, `pendientes`, `programadas`
   - Notas:
     - Fin de semana: `esDiaHabil=false`, sin profesores ni bloques.
     - Día no lectivo: `esDiaHabil=true`, `diaNoLectivo` poblado, sin profesores ni bloques.
@@ -768,10 +770,13 @@ Includes paginated wrappers and domain responses, among others:
   - computes block state (`TOMADA`, `NO_TOMADA`, `EN_CURSO`, `PROGRAMADA`) using date/time,
   - returns per-block attendance summary (`presentes`, `ausentes`, `total`) when attendance exists.
 - Dashboard admin global compliance (`GET /api/dashboard/admin`):
-  - computes same state model (`TOMADA`, `NO_TOMADA`, `EN_CURSO`, `PROGRAMADA`) for all teachers with classes today,
-  - orders teachers by priority (`noTomadas` desc, `enCurso` desc, `apellido` asc),
+  - internally evaluates states (`TOMADA`, `NO_TOMADA`, `EN_CURSO`, `PROGRAMADA`) and projects them to 3 operational buckets:
+    - `tomadas`
+    - `pendientes` (`NO_TOMADA` + `EN_CURSO`)
+    - `programadas`
+  - orders teachers by priority (`pendientes` desc, `apellido` asc),
   - limits `bloquesPendientesDetalle` to 3 items per teacher,
-  - calculates `porcentajeCumplimiento` only on closed blocks (`tomadas + noTomadas`), otherwise `null`.
+  - calculates `porcentajeCumplimiento` as `tomadas / (tomadas + pendientes)`; if denominator is 0, returns `null`.
 - Attendance child records are merged in place (UUIDs preserved).
 - RUT validation includes format + check digit + cross-person uniqueness checks.
 - Schedule assignment validates:
@@ -817,6 +822,7 @@ Gaps still visible:
 1. Config files currently expose DB/JWT secrets in plain text.
 2. Migration history intentionally contains marker scripts because some DDL ran directly in Supabase.
 3. Jornada ownership validation is now enforced inside `ObtenerJornadaCurso` use case (not in controller), matching the same layering pattern used in `ObtenerMatriculasPorCurso`.
+4. `ObtenerDashboardAdmin` normalizes `Optional` usage in the day-off branch (`isEmpty` guard + safe unwrap), avoiding `isPresent` + `get` anti-pattern.
 
 These are not hypothetical; they are visible in current code/config.
 

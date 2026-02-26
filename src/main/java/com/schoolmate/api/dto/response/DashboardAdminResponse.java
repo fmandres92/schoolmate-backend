@@ -46,8 +46,7 @@ public class DashboardAdminResponse {
     public static class ResumenGlobal {
         private int totalBloques;
         private int tomadas;
-        private int noTomadas;
-        private int enCurso;
+        private int pendientes;
         private int programadas;
         private int profesoresConClase;
         private int profesoresCumplimiento100;
@@ -61,8 +60,7 @@ public class DashboardAdminResponse {
         private String apellido;
         private int totalBloques;
         private int tomadas;
-        private int noTomadas;
-        private int enCurso;
+        private int pendientes;
         private int programadas;
         private Double porcentajeCumplimiento;
         private String ultimaActividadHora;
