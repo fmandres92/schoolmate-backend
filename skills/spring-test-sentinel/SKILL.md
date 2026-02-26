@@ -298,6 +298,88 @@ public class TestAnoEscolarResolver implements HandlerMethodArgumentResolver {
 
 **Beneficio:** Cuando el mecanismo de `@AnoEscolarActivo` cambie, actualizas un solo archivo en vez de N tests de controller.
 
+### Regla #12: Auditoría de Decisiones — Cada `if` del Código de Producción Necesita un Test
+
+Antes de dar por terminados los tests de un use case, recorre el código de producción línea por línea y haz una lista de CADA bifurcación (`if`, `else`, `throw`, operador ternario, `Optional.orElseThrow`). Luego verifica que cada bifurcación tiene al menos un test que la fuerza a ejecutarse.
+
+Si una bifurcación no tiene test, es un hueco que permite que un bug pase sin ser detectado. Cuanto más complejo es el use case, más importante es esta auditoría.
+
+Formato de auditoría interno (no mostrar al usuario, usar como checklist):
+
+```
+Línea XX: if (bloque.getTipo() != CLASE) → ¿test? ✅/❌
+Línea YY: if (!fechaRequest.equals(hoy)) → ¿test? ✅/❌
+Línea ZZ: existenteOpt.isEmpty() vs existenteOpt.isPresent() → ¿test de ambas ramas? ✅/❌
+```
+
+**Si hay más de 2 bifurcaciones sin test, NO entregues los tests como terminados. Completa la cobertura primero.**
+
+### Regla #13: En Tests de Controller está PROHIBIDO `thenReturn(null)`
+
+Un contract test que devuelve `null` en el use case y solo valida status code no prueba contrato real. Eso oculta roturas de serialización JSON, nombres de campos y tipos.
+
+```java
+// ❌ PROHIBIDO: verde falso, no valida body real
+when(obtenerCursos.execute(...)).thenReturn(null);
+mockMvc.perform(get("/api/cursos"))
+    .andExpect(status().isOk());
+
+// ✅ OBLIGATORIO: devolver DTO real y validar contrato
+when(obtenerCursos.execute(...)).thenReturn(cursoPageResponseMock());
+mockMvc.perform(get("/api/cursos"))
+    .andExpect(status().isOk())
+    .andExpect(jsonPath("$.content[0].id").value(cursoId.toString()))
+    .andExpect(jsonPath("$.page").value(0))
+    .andExpect(jsonPath("$.size").value(20));
+```
+
+**Regla práctica:** Todo endpoint de lectura debe validar al menos:
+1. Status HTTP
+2. 1-3 campos semánticos de negocio del payload
+3. Metadata de paginación si el response es paginado (`page`, `size`, `totalElements`, `hasNext`, `hasPrevious`)
+
+### Regla #14: Controllers protegidos requieren matriz mínima de seguridad con `@WebMvcTest`
+
+Si el endpoint tiene `@PreAuthorize` o depende de autenticación, NO alcanza con `standaloneSetup`. Debe existir una matriz mínima con Spring Security real:
+
+1. `sin autenticación` → `401`
+2. `rol incorrecto` → `403`
+3. `rol correcto` → `2xx` esperado
+
+```java
+// ✅ Matriz mínima obligatoria
+@WebMvcTest(AsistenciaController.class)
+class AsistenciaControllerContractTest {
+    @Test void guardar_sinAutenticacion_retorna401() { ... }
+    @Test void guardar_conRolIncorrecto_retorna403() { ... }
+    @Test void guardar_conRolProfesor_retorna201YContratoValido() { ... }
+}
+```
+
+Si el controller usa `@AuthenticationPrincipal UserPrincipal`, crea autenticación con principal real `UserPrincipal` en el test (no `User` genérico de Spring).
+
+### Regla #15: Endpoints con `@AnoEscolarActivo` requieren matriz de header
+
+Para cualquier endpoint donde el año escolar sea obligatorio por `@AnoEscolarActivo` (required=true), el contract test debe cubrir:
+
+1. Header ausente → `400 VALIDATION_FAILED`
+2. Header con UUID inválido → `400 VALIDATION_FAILED`
+3. Header con UUID inexistente → `404 RESOURCE_NOT_FOUND`
+4. Header válido y autorizado → `2xx` + contrato del payload
+
+```java
+// ✅ Matriz mínima de header
+mockMvc.perform(get("/api/dashboard/admin")).andExpect(status().isBadRequest());
+mockMvc.perform(get("/api/dashboard/admin").header("X-Ano-Escolar-Id", "no-uuid"))
+    .andExpect(status().isBadRequest());
+mockMvc.perform(get("/api/dashboard/admin").header("X-Ano-Escolar-Id", uuidInexistente))
+    .andExpect(status().isNotFound());
+mockMvc.perform(get("/api/dashboard/admin").header("X-Ano-Escolar-Id", uuidValido))
+    .andExpect(status().isOk());
+```
+
+Sin esta matriz, el test de controller queda incompleto.
+
 ---
 
 ## FASE 3: TIPOS DE TEST Y CUÁNDO USAR CADA UNO
