@@ -29,6 +29,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -119,6 +120,92 @@ class ObtenerMatriculasPorCursoTest {
         Pageable pageable = pageableCaptor.getValue();
 
         assertThat(pageable.getSort().getOrderFor("alumno.apellido").getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    void execute_conSizeCero_loAjustaAUno() {
+        UUID cursoId = UUID.randomUUID();
+        UUID anoEscolarId = UUID.randomUUID();
+        UserPrincipal principal = principalProfesor();
+
+        when(matriculaRepository.findPageByCursoIdAndEstado(eq(cursoId), eq(EstadoMatricula.ACTIVA), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 1), 0));
+
+        useCase.execute(cursoId, principal, anoEscolarId, 0, 0, "alumno.nombre", "asc");
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(matriculaRepository).findPageByCursoIdAndEstado(eq(cursoId), eq(EstadoMatricula.ACTIVA), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(1);
+    }
+
+    @Test
+    void execute_conSortByValido_aplicaCampoSolicitado() {
+        UUID cursoId = UUID.randomUUID();
+        UUID anoEscolarId = UUID.randomUUID();
+        UserPrincipal principal = principalProfesor();
+
+        when(matriculaRepository.findPageByCursoIdAndEstado(eq(cursoId), eq(EstadoMatricula.ACTIVA), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        MatriculaPageResponse response = useCase.execute(cursoId, principal, anoEscolarId, 0, 20, "fechaMatricula", "asc");
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(matriculaRepository).findPageByCursoIdAndEstado(eq(cursoId), eq(EstadoMatricula.ACTIVA), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().getOrderFor("fechaMatricula").getDirection()).isEqualTo(Sort.Direction.ASC);
+        assertThat(response.getSortBy()).isEqualTo("fechaMatricula");
+        assertThat(response.getSortDir()).isEqualTo("asc");
+    }
+
+    @Test
+    void execute_conSortDirNull_mantieneAscPorDefecto() {
+        UUID cursoId = UUID.randomUUID();
+        UUID anoEscolarId = UUID.randomUUID();
+        UserPrincipal principal = principalProfesor();
+
+        when(matriculaRepository.findPageByCursoIdAndEstado(eq(cursoId), eq(EstadoMatricula.ACTIVA), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        useCase.execute(cursoId, principal, anoEscolarId, 0, 20, "createdAt", null);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(matriculaRepository).findPageByCursoIdAndEstado(eq(cursoId), eq(EstadoMatricula.ACTIVA), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().getOrderFor("createdAt").getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    void execute_retornaMetadataDePaginacion() {
+        UUID cursoId = UUID.randomUUID();
+        UUID anoEscolarId = UUID.randomUUID();
+        UserPrincipal principal = principalProfesor();
+        Matricula matricula = matricula();
+
+        when(matriculaRepository.findPageByCursoIdAndEstado(eq(cursoId), eq(EstadoMatricula.ACTIVA), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(matricula), PageRequest.of(1, 2), 5));
+
+        MatriculaPageResponse response = useCase.execute(cursoId, principal, anoEscolarId, 1, 2, "updatedAt", "desc");
+
+        assertThat(response.getPage()).isEqualTo(1);
+        assertThat(response.getSize()).isEqualTo(2);
+        assertThat(response.getTotalElements()).isEqualTo(5);
+        assertThat(response.getTotalPages()).isEqualTo(3);
+        assertThat(response.getHasNext()).isTrue();
+        assertThat(response.getHasPrevious()).isTrue();
+    }
+
+    @Test
+    void execute_validaAccesoAntesDeConsultarRepositorio() {
+        UUID cursoId = UUID.randomUUID();
+        UUID anoEscolarId = UUID.randomUUID();
+        UserPrincipal principal = principalProfesor();
+
+        when(matriculaRepository.findPageByCursoIdAndEstado(eq(cursoId), eq(EstadoMatricula.ACTIVA), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        useCase.execute(cursoId, principal, anoEscolarId, 0, 10, null, null);
+
+        var inOrder = inOrder(validarAccesoMatriculasCursoProfesor, matriculaRepository);
+        inOrder.verify(validarAccesoMatriculasCursoProfesor).execute(principal, cursoId, anoEscolarId);
+        inOrder.verify(matriculaRepository).findPageByCursoIdAndEstado(eq(cursoId), eq(EstadoMatricula.ACTIVA), any(Pageable.class));
     }
 
     private static Matricula matricula() {

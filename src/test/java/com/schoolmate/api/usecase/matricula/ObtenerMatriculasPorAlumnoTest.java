@@ -97,6 +97,83 @@ class ObtenerMatriculasPorAlumnoTest {
         assertThat(pageable.getSort().getOrderFor("fechaMatricula").getDirection()).isEqualTo(Sort.Direction.ASC);
     }
 
+    @Test
+    void execute_conSizeCero_loAjustaAUno() {
+        UUID alumnoId = UUID.randomUUID();
+
+        when(matriculaRepository.findPageByAlumnoId(eq(alumnoId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 1), 0));
+
+        useCase.execute(alumnoId, 0, 0, "estado", "asc");
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(matriculaRepository).findPageByAlumnoId(eq(alumnoId), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(1);
+    }
+
+    @Test
+    void execute_conSortByValido_estadoYDesc_aplicaCorrectamente() {
+        UUID alumnoId = UUID.randomUUID();
+
+        when(matriculaRepository.findPageByAlumnoId(eq(alumnoId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        MatriculaPageResponse response = useCase.execute(alumnoId, 0, 20, "estado", "DESC");
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(matriculaRepository).findPageByAlumnoId(eq(alumnoId), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().getOrderFor("estado").getDirection()).isEqualTo(Sort.Direction.DESC);
+        assertThat(response.getSortBy()).isEqualTo("estado");
+        assertThat(response.getSortDir()).isEqualTo("desc");
+    }
+
+    @Test
+    void execute_conSortDirNull_mantieneAscPorDefecto() {
+        UUID alumnoId = UUID.randomUUID();
+
+        when(matriculaRepository.findPageByAlumnoId(eq(alumnoId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
+
+        useCase.execute(alumnoId, 0, 20, "createdAt", null);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(matriculaRepository).findPageByAlumnoId(eq(alumnoId), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().getOrderFor("createdAt").getDirection()).isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    void execute_conSortByBlank_aplicaDefaultFechaMatricula() {
+        UUID alumnoId = UUID.randomUUID();
+
+        when(matriculaRepository.findPageByAlumnoId(eq(alumnoId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+
+        MatriculaPageResponse response = useCase.execute(alumnoId, 0, 10, "   ", "desc");
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(matriculaRepository).findPageByAlumnoId(eq(alumnoId), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().getOrderFor("fechaMatricula").getDirection()).isEqualTo(Sort.Direction.DESC);
+        assertThat(response.getSortBy()).isEqualTo("fechaMatricula");
+    }
+
+    @Test
+    void execute_retornaMetadataDePaginacion() {
+        UUID alumnoId = UUID.randomUUID();
+        Matricula matricula = matricula();
+
+        when(matriculaRepository.findPageByAlumnoId(eq(alumnoId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(matricula), PageRequest.of(1, 2), 5));
+
+        MatriculaPageResponse response = useCase.execute(alumnoId, 1, 2, "updatedAt", "asc");
+
+        assertThat(response.getPage()).isEqualTo(1);
+        assertThat(response.getSize()).isEqualTo(2);
+        assertThat(response.getTotalElements()).isEqualTo(5);
+        assertThat(response.getTotalPages()).isEqualTo(3);
+        assertThat(response.getHasNext()).isTrue();
+        assertThat(response.getHasPrevious()).isTrue();
+    }
+
     private static Matricula matricula() {
         UUID anoEscolarId = UUID.randomUUID();
         AnoEscolar anoEscolar = AnoEscolar.builder()

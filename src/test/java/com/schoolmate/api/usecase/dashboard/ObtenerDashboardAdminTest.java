@@ -180,6 +180,67 @@ class ObtenerDashboardAdminTest {
         verify(asistenciaClaseRepository).findByBloqueIdsAndFecha(any(), eq(hoy));
     }
 
+    @Test
+    void execute_conBloquesSoloProgramados_porcentajeEsNullYNoCuentaCumplimiento100() {
+        UUID anoEscolarId = UUID.randomUUID();
+        LocalDate hoy = LocalDate.of(2026, 3, 4); // Wednesday
+        LocalDateTime ahora = LocalDateTime.of(2026, 3, 4, 7, 0);
+
+        Profesor profesor = Profesor.builder().id(UUID.randomUUID()).nombre("Carlos").apellido("Mora").activo(true).build();
+        BloqueHorario b1 = bloque(UUID.randomUUID(), profesor, "3° Básico A", LocalTime.of(11, 0), LocalTime.of(11, 45));
+        BloqueHorario b2 = bloque(UUID.randomUUID(), profesor, "3° Básico A", LocalTime.of(12, 0), LocalTime.of(12, 45));
+
+        when(matriculaRepository.countActivasByAnoEscolarId(anoEscolarId)).thenReturn(80L);
+        when(cursoRepository.countActivosByAnoEscolarId(anoEscolarId)).thenReturn(6L);
+        when(bloqueHorarioRepository.countProfesoresActivosConBloques(anoEscolarId)).thenReturn(1L);
+        when(clockProvider.today()).thenReturn(hoy);
+        when(clockProvider.now()).thenReturn(ahora);
+        when(diaNoLectivoRepository.findByAnoEscolarIdAndFecha(anoEscolarId, hoy)).thenReturn(Optional.empty());
+        when(bloqueHorarioRepository.findAllBloquesClaseDelDiaConProfesor(3, anoEscolarId)).thenReturn(List.of(b1, b2));
+        when(asistenciaClaseRepository.findByBloqueIdsAndFecha(any(), eq(hoy))).thenReturn(List.of());
+
+        DashboardAdminResponse response = useCase.execute(anoEscolarId);
+
+        DashboardAdminResponse.ResumenGlobal resumen = response.getCumplimientoHoy().getResumenGlobal();
+        assertThat(resumen.getTotalBloques()).isEqualTo(2);
+        assertThat(resumen.getTomadas()).isZero();
+        assertThat(resumen.getPendientes()).isZero();
+        assertThat(resumen.getProgramadas()).isEqualTo(2);
+        assertThat(resumen.getProfesoresConClase()).isEqualTo(1);
+        assertThat(resumen.getProfesoresCumplimiento100()).isZero();
+
+        assertThat(response.getCumplimientoHoy().getProfesores()).hasSize(1);
+        assertThat(response.getCumplimientoHoy().getProfesores().getFirst().getPorcentajeCumplimiento()).isNull();
+    }
+
+    @Test
+    void execute_empatePendientes_ordenaPorApellidoAsc() {
+        UUID anoEscolarId = UUID.randomUUID();
+        LocalDate hoy = LocalDate.of(2026, 3, 4); // Wednesday
+        LocalDateTime ahora = LocalDateTime.of(2026, 3, 4, 12, 0);
+
+        Profesor profesorZ = Profesor.builder().id(UUID.randomUUID()).nombre("Ana").apellido("Zapata").activo(true).build();
+        Profesor profesorA = Profesor.builder().id(UUID.randomUUID()).nombre("Bruno").apellido("Alvarez").activo(true).build();
+
+        BloqueHorario bZ = bloque(UUID.randomUUID(), profesorZ, "4° Básico A", LocalTime.of(8, 0), LocalTime.of(8, 45));
+        BloqueHorario bA = bloque(UUID.randomUUID(), profesorA, "4° Básico B", LocalTime.of(8, 0), LocalTime.of(8, 45));
+
+        when(matriculaRepository.countActivasByAnoEscolarId(anoEscolarId)).thenReturn(60L);
+        when(cursoRepository.countActivosByAnoEscolarId(anoEscolarId)).thenReturn(4L);
+        when(bloqueHorarioRepository.countProfesoresActivosConBloques(anoEscolarId)).thenReturn(2L);
+        when(clockProvider.today()).thenReturn(hoy);
+        when(clockProvider.now()).thenReturn(ahora);
+        when(diaNoLectivoRepository.findByAnoEscolarIdAndFecha(anoEscolarId, hoy)).thenReturn(Optional.empty());
+        when(bloqueHorarioRepository.findAllBloquesClaseDelDiaConProfesor(3, anoEscolarId)).thenReturn(List.of(bZ, bA));
+        when(asistenciaClaseRepository.findByBloqueIdsAndFecha(any(), eq(hoy))).thenReturn(List.of());
+
+        DashboardAdminResponse response = useCase.execute(anoEscolarId);
+
+        assertThat(response.getCumplimientoHoy().getProfesores()).hasSize(2);
+        assertThat(response.getCumplimientoHoy().getProfesores().get(0).getApellido()).isEqualTo("Alvarez");
+        assertThat(response.getCumplimientoHoy().getProfesores().get(1).getApellido()).isEqualTo("Zapata");
+    }
+
     private static BloqueHorario bloque(UUID id, Profesor profesor, String cursoNombre, LocalTime inicio, LocalTime fin) {
         return BloqueHorario.builder()
             .id(id)

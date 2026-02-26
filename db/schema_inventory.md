@@ -1,13 +1,13 @@
 # Database Structure Inventory
 
-Generated at: `2026-02-23T19:55:30.292505-03:00`  
+Generated at: `2026-02-26T20:36:53.314142-03:00`  
 Source: live PostgreSQL catalog (`information_schema` + `pg_catalog`)  
 Connection: `jdbc:postgresql://db.suoiyaaswcibsbrvpjxa.supabase.co:5432/postgres?sslmode=require`
 
 ## Summary
 
 - Schemas: **5**
-- Tables: **50**
+- Tables: **51**
 - Foreign Keys: **46**
 
 ## Relationships (Foreign Keys)
@@ -81,6 +81,69 @@ Indexes:
 
 - [PK-INDEX] `audit_log_entries_pkey`: `CREATE UNIQUE INDEX audit_log_entries_pkey ON auth.audit_log_entries USING btree (id)`
 - [INDEX] `audit_logs_instance_id_idx`: `CREATE INDEX audit_logs_instance_id_idx ON auth.audit_log_entries USING btree (instance_id)`
+
+### `auth.custom_oauth_providers`
+
+Columns:
+
+| Name | Type | Nullable | Default |
+|---|---|---|---|
+| `id` | `uuid` | NO | `gen_random_uuid()` |
+| `provider_type` | `text` | NO | `` |
+| `identifier` | `text` | NO | `` |
+| `name` | `text` | NO | `` |
+| `client_id` | `text` | NO | `` |
+| `client_secret` | `text` | NO | `` |
+| `acceptable_client_ids` | `text[]` | NO | `'{}'::text[]` |
+| `scopes` | `text[]` | NO | `'{}'::text[]` |
+| `pkce_enabled` | `boolean` | NO | `true` |
+| `attribute_mapping` | `jsonb` | NO | `'{}'::jsonb` |
+| `authorization_params` | `jsonb` | NO | `'{}'::jsonb` |
+| `enabled` | `boolean` | NO | `true` |
+| `email_optional` | `boolean` | NO | `false` |
+| `issuer` | `text` | YES | `` |
+| `discovery_url` | `text` | YES | `` |
+| `skip_nonce_check` | `boolean` | NO | `false` |
+| `cached_discovery` | `jsonb` | YES | `` |
+| `discovery_cached_at` | `timestamp with time zone` | YES | `` |
+| `authorization_url` | `text` | YES | `` |
+| `token_url` | `text` | YES | `` |
+| `userinfo_url` | `text` | YES | `` |
+| `jwks_uri` | `text` | YES | `` |
+| `created_at` | `timestamp with time zone` | NO | `now()` |
+| `updated_at` | `timestamp with time zone` | NO | `now()` |
+
+Constraints:
+
+- [PK] `custom_oauth_providers_pkey`: `PRIMARY KEY (id)`
+- [UNIQUE] `custom_oauth_providers_identifier_key`: `UNIQUE (identifier)`
+- [CHECK] `custom_oauth_providers_authorization_url_https`: `CHECK (authorization_url IS NULL OR authorization_url ~~ 'https://%'::text)`
+- [CHECK] `custom_oauth_providers_authorization_url_length`: `CHECK (authorization_url IS NULL OR char_length(authorization_url) <= 2048)`
+- [CHECK] `custom_oauth_providers_client_id_length`: `CHECK (char_length(client_id) >= 1 AND char_length(client_id) <= 512)`
+- [CHECK] `custom_oauth_providers_discovery_url_length`: `CHECK (discovery_url IS NULL OR char_length(discovery_url) <= 2048)`
+- [CHECK] `custom_oauth_providers_identifier_format`: `CHECK (identifier ~ '^[a-z0-9][a-z0-9:-]{0,48}[a-z0-9]$'::text)`
+- [CHECK] `custom_oauth_providers_issuer_length`: `CHECK (issuer IS NULL OR char_length(issuer) >= 1 AND char_length(issuer) <= 2048)`
+- [CHECK] `custom_oauth_providers_jwks_uri_https`: `CHECK (jwks_uri IS NULL OR jwks_uri ~~ 'https://%'::text)`
+- [CHECK] `custom_oauth_providers_jwks_uri_length`: `CHECK (jwks_uri IS NULL OR char_length(jwks_uri) <= 2048)`
+- [CHECK] `custom_oauth_providers_name_length`: `CHECK (char_length(name) >= 1 AND char_length(name) <= 100)`
+- [CHECK] `custom_oauth_providers_oauth2_requires_endpoints`: `CHECK (provider_type <> 'oauth2'::text OR authorization_url IS NOT NULL AND token_url IS NOT NULL AND userinfo_url IS NOT NULL)`
+- [CHECK] `custom_oauth_providers_oidc_discovery_url_https`: `CHECK (provider_type <> 'oidc'::text OR discovery_url IS NULL OR discovery_url ~~ 'https://%'::text)`
+- [CHECK] `custom_oauth_providers_oidc_issuer_https`: `CHECK (provider_type <> 'oidc'::text OR issuer IS NULL OR issuer ~~ 'https://%'::text)`
+- [CHECK] `custom_oauth_providers_oidc_requires_issuer`: `CHECK (provider_type <> 'oidc'::text OR issuer IS NOT NULL)`
+- [CHECK] `custom_oauth_providers_provider_type_check`: `CHECK (provider_type = ANY (ARRAY['oauth2'::text, 'oidc'::text]))`
+- [CHECK] `custom_oauth_providers_token_url_https`: `CHECK (token_url IS NULL OR token_url ~~ 'https://%'::text)`
+- [CHECK] `custom_oauth_providers_token_url_length`: `CHECK (token_url IS NULL OR char_length(token_url) <= 2048)`
+- [CHECK] `custom_oauth_providers_userinfo_url_https`: `CHECK (userinfo_url IS NULL OR userinfo_url ~~ 'https://%'::text)`
+- [CHECK] `custom_oauth_providers_userinfo_url_length`: `CHECK (userinfo_url IS NULL OR char_length(userinfo_url) <= 2048)`
+
+Indexes:
+
+- [INDEX] `custom_oauth_providers_created_at_idx`: `CREATE INDEX custom_oauth_providers_created_at_idx ON auth.custom_oauth_providers USING btree (created_at)`
+- [INDEX] `custom_oauth_providers_enabled_idx`: `CREATE INDEX custom_oauth_providers_enabled_idx ON auth.custom_oauth_providers USING btree (enabled)`
+- [INDEX] `custom_oauth_providers_identifier_idx`: `CREATE INDEX custom_oauth_providers_identifier_idx ON auth.custom_oauth_providers USING btree (identifier)`
+- [INDEX] `custom_oauth_providers_identifier_key`: `CREATE UNIQUE INDEX custom_oauth_providers_identifier_key ON auth.custom_oauth_providers USING btree (identifier)`
+- [PK-INDEX] `custom_oauth_providers_pkey`: `CREATE UNIQUE INDEX custom_oauth_providers_pkey ON auth.custom_oauth_providers USING btree (id)`
+- [INDEX] `custom_oauth_providers_provider_type_idx`: `CREATE INDEX custom_oauth_providers_provider_type_idx ON auth.custom_oauth_providers USING btree (provider_type)`
 
 ### `auth.flow_state`
 

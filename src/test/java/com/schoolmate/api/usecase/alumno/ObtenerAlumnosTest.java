@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -124,6 +125,210 @@ class ObtenerAlumnosTest {
         assertThat(alumnoResponse.getApoderado()).isNull();
         assertThat(alumnoResponse.getApoderadoNombre()).isNull();
         assertThat(alumnoResponse.getApoderadoEmail()).isNull();
+    }
+
+    @Test
+    void execute_conFiltroCursoSinCoincidencias_retornaPaginaVaciaSinConsultarAlumnos() {
+        UUID anoEscolarId = UUID.randomUUID();
+        UUID cursoId = UUID.randomUUID();
+        when(matriculaRepository.findByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA)).thenReturn(List.of());
+
+        AlumnoPageResponse response = useCase.execute(
+            anoEscolarId,
+            0,
+            20,
+            "apellido",
+            "asc",
+            cursoId,
+            null,
+            null
+        );
+
+        assertThat(response.getContent()).isEmpty();
+        assertThat(response.getTotalElements()).isZero();
+        verify(alumnoRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void execute_conFiltroGrado_consultaMatriculasPorAnoYGrado() {
+        UUID anoEscolarId = UUID.randomUUID();
+        UUID gradoId = UUID.randomUUID();
+        Alumno alumno = alumno(UUID.randomUUID(), "45612378-0", "Sofia", "Muñoz");
+        Matricula matricula = matricula(alumno, anoEscolarId);
+
+        when(matriculaRepository.findByAnoEscolarIdAndCursoGradoIdAndEstado(
+            anoEscolarId, gradoId, EstadoMatricula.ACTIVA
+        )).thenReturn(List.of(matricula));
+        when(alumnoRepository.findAll(any(Specification.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(alumno)));
+        when(matriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(anyList(), eq(anoEscolarId), eq(EstadoMatricula.ACTIVA)))
+            .thenReturn(List.of(matricula));
+        when(apoderadoAlumnoRepository.findByAlumnoIdsWithApoderado(anyList())).thenReturn(List.of());
+
+        useCase.execute(
+            anoEscolarId,
+            0,
+            20,
+            "apellido",
+            "asc",
+            null,
+            gradoId,
+            null
+        );
+
+        verify(matriculaRepository).findByAnoEscolarIdAndCursoGradoIdAndEstado(
+            anoEscolarId,
+            gradoId,
+            EstadoMatricula.ACTIVA
+        );
+        verify(matriculaRepository, never()).findByCursoIdAndEstado(any(UUID.class), eq(EstadoMatricula.ACTIVA));
+    }
+
+    @Test
+    void execute_conSortByInvalidoYSortDirDesc_aplicaFallbackYDesc() {
+        UUID anoEscolarId = UUID.randomUUID();
+        Alumno alumno = alumno(UUID.randomUUID(), "45612378-0", "Sofia", "Muñoz");
+
+        when(alumnoRepository.findAll(any(Specification.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(alumno)));
+        when(matriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(anyList(), eq(anoEscolarId), eq(EstadoMatricula.ACTIVA)))
+            .thenReturn(List.of(matricula(alumno, anoEscolarId)));
+        when(apoderadoAlumnoRepository.findByAlumnoIdsWithApoderado(anyList())).thenReturn(List.of());
+
+        AlumnoPageResponse response = useCase.execute(
+            anoEscolarId,
+            0,
+            20,
+            "no_permitido",
+            "desc",
+            null,
+            null,
+            null
+        );
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(alumnoRepository).findAll(any(Specification.class), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().getOrderFor("apellido").getDirection())
+            .isEqualTo(Sort.Direction.DESC);
+        assertThat(response.getSortBy()).isEqualTo("apellido");
+        assertThat(response.getSortDir()).isEqualTo("desc");
+    }
+
+    @Test
+    void execute_conPageYSizeNull_usaDefaults() {
+        UUID anoEscolarId = UUID.randomUUID();
+        Alumno alumno = alumno(UUID.randomUUID(), "45612378-0", "Sofia", "Muñoz");
+
+        when(alumnoRepository.findAll(any(Specification.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(alumno)));
+        when(matriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(anyList(), eq(anoEscolarId), eq(EstadoMatricula.ACTIVA)))
+            .thenReturn(List.of(matricula(alumno, anoEscolarId)));
+        when(apoderadoAlumnoRepository.findByAlumnoIdsWithApoderado(anyList())).thenReturn(List.of());
+
+        useCase.execute(
+            anoEscolarId,
+            null,
+            null,
+            "apellido",
+            null,
+            null,
+            null,
+            null
+        );
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(alumnoRepository).findAll(any(Specification.class), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(0);
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(20);
+        assertThat(pageableCaptor.getValue().getSort().getOrderFor("apellido").getDirection())
+            .isEqualTo(Sort.Direction.ASC);
+    }
+
+    @Test
+    void execute_conVinculoNulo_mapeaVinculoComoOtro() {
+        UUID anoEscolarId = UUID.randomUUID();
+        Alumno alumno = alumno(UUID.randomUUID(), "12312312-3", "Laura", "Sepulveda");
+        Apoderado apoderado = apoderado("Mario", "Lopez", "11111111-1", "mario@test.cl", "99999999");
+
+        when(alumnoRepository.findAll(any(Specification.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(alumno)));
+        when(matriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(anyList(), eq(anoEscolarId), eq(EstadoMatricula.ACTIVA)))
+            .thenReturn(List.of(matricula(alumno, anoEscolarId)));
+        when(apoderadoAlumnoRepository.findByAlumnoIdsWithApoderado(anyList()))
+            .thenReturn(List.of(vinculo(alumno, apoderado, true, null)));
+
+        AlumnoPageResponse response = useCase.execute(
+            anoEscolarId,
+            0,
+            20,
+            "apellido",
+            "asc",
+            null,
+            null,
+            null
+        );
+
+        AlumnoResponse alumnoResponse = response.getContent().get(0);
+        assertThat(alumnoResponse.getApoderadoVinculo()).isEqualTo("OTRO");
+        assertThat(alumnoResponse.getApoderado().getVinculo()).isEqualTo("OTRO");
+    }
+
+    @Test
+    void execute_sinMatriculaActivaEnAno_retornaCamposMatriculaNulos() {
+        UUID anoEscolarId = UUID.randomUUID();
+        Alumno alumno = alumno(UUID.randomUUID(), "32132132-1", "Diego", "Pizarro");
+
+        when(alumnoRepository.findAll(any(Specification.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(alumno)));
+        when(matriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(anyList(), eq(anoEscolarId), eq(EstadoMatricula.ACTIVA)))
+            .thenReturn(List.of());
+        when(apoderadoAlumnoRepository.findByAlumnoIdsWithApoderado(anyList())).thenReturn(List.of());
+
+        AlumnoPageResponse response = useCase.execute(
+            anoEscolarId,
+            0,
+            20,
+            "apellido",
+            "asc",
+            null,
+            null,
+            null
+        );
+
+        AlumnoResponse alumnoResponse = response.getContent().get(0);
+        assertThat(alumnoResponse.getMatriculaId()).isNull();
+        assertThat(alumnoResponse.getCursoId()).isNull();
+        assertThat(alumnoResponse.getEstadoMatricula()).isNull();
+        assertThat(alumnoResponse.getFechaMatricula()).isNull();
+    }
+
+    @Test
+    void execute_conFiltroCurso_consultaRepositorioCursoEstado() {
+        UUID anoEscolarId = UUID.randomUUID();
+        UUID cursoId = UUID.randomUUID();
+        Alumno alumno = alumno(UUID.randomUUID(), "74185296-3", "Nora", "Perez");
+        Matricula matricula = matricula(alumno, anoEscolarId);
+
+        when(matriculaRepository.findByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA))
+            .thenReturn(List.of(matricula));
+        when(alumnoRepository.findAll(any(Specification.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(alumno)));
+        when(matriculaRepository.findByAlumnoIdInAndAnoEscolarIdAndEstado(anyList(), eq(anoEscolarId), eq(EstadoMatricula.ACTIVA)))
+            .thenReturn(List.of(matricula));
+        when(apoderadoAlumnoRepository.findByAlumnoIdsWithApoderado(anyList())).thenReturn(List.of());
+
+        useCase.execute(
+            anoEscolarId,
+            0,
+            20,
+            "apellido",
+            "asc",
+            cursoId,
+            null,
+            null
+        );
+
+        verify(matriculaRepository).findByCursoIdAndEstado(cursoId, EstadoMatricula.ACTIVA);
     }
 
     private static Alumno alumno(UUID id, String rut, String nombre, String apellido) {
