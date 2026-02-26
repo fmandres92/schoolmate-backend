@@ -1,6 +1,6 @@
 # SchoolMate Hub API - Backend Documentation (Rebuilt from Source)
 
-Last update: 2026-02-25  
+Last update: 2026-02-26  
 Source of truth: Java code in `src/main/java`, Spring config in `src/main/resources`, and Flyway migrations in `src/main/resources/db/migration`.
 
 ---
@@ -35,6 +35,8 @@ Current inventory:
 - Projection DTOs (`dto/projection`): 1
 - Additional DTOs in `dto/`: 0
 - Flyway migrations in repo: 22 (`V1` to `V23`, with gaps intentionally not present)
+- Controller contract test suites: 20 (`*ControllerContractTest`) + 1 integrated matrix suite (`ControllersSecurityMatrixContractTest`)
+- Shared test support classes for controllers: 3 (`TestAuthenticationPrincipalResolver`, `TestJsonMapperFactory`, `TestSecurityRequestPostProcessors`)
 
 ---
 
@@ -801,19 +803,64 @@ Observed transactional strategy:
 
 ## 16) Tests currently in repository
 
-Current test files:
+### 16.1 Base tests (existing)
 - `SchoolmateApiApplicationTests` (context load)
 - `ApiSecurityHandlersTest`
 - `JwtAuthenticationFilterTest`
 - `LoginUsuarioTest`
 - `RefrescarTokenTest`
 
-Coverage concentration today:
-- security handlers and JWT filter behavior
-- auth login/refresh token lifecycle
+### 16.2 Controller contract suite (current standard)
 
-Gaps still visible:
-- no broad unit coverage yet for most use cases (curso, malla, jornada, matricula, asistencia, etc.).
+Controller contracts were leveled to the same standard used by dashboard tests, with dedicated files under:
+- `src/test/java/com/schoolmate/api/controller/*ControllerContractTest.java`
+- plus `ControllersSecurityMatrixContractTest` for integrated real-security matrix checks.
+
+Validated controllers:
+- `AlumnoControllerContractTest`
+- `AnoEscolarControllerContractTest`
+- `ApoderadoControllerContractTest`
+- `ApoderadoPortalControllerContractTest`
+- `AsistenciaControllerContractTest`
+- `AuditoriaControllerContractTest`
+- `AuthControllerContractTest`
+- `CursoControllerContractTest`
+- `DashboardControllerContractTest`
+- `DevToolsControllerContractTest`
+- `DiaNoLectivoControllerContractTest`
+- `GradoControllerContractTest`
+- `JornadaControllerContractTest`
+- `MallaCurricularControllerContractTest`
+- `MateriaControllerContractTest`
+- `MatriculaControllerContractTest`
+- `ProfesorControllerContractTest`
+- `ProfesorHorarioControllerContractTest`
+- `ProfesorMeControllerContractTest`
+
+### 16.3 What the controller suite verifies
+
+- Security matrix by endpoint policy:
+  - `hasRole('ADMIN')`: `401`, `403`, happy path.
+  - `isAuthenticated()`: `401`, happy path.
+  - `permitAll()`: happy path.
+- Header contract when endpoint uses `@AnoEscolarActivo(required = true)`:
+  - missing header -> `400`
+  - invalid UUID -> `400`
+  - non-existent school-year UUID -> `404`
+  - valid header -> happy path
+- Happy path response contract:
+  - full JSON assertions (including nested objects and paginated wrappers metadata: `page`, `size`, `totalElements`, `sortBy`, `sortDir`, `hasNext`, `hasPrevious` when applicable).
+- Input validation contract:
+  - `POST`/`PUT` invalid body -> `400`
+  - plus verification that use case is not executed on invalid payloads.
+
+### 16.4 Current coverage profile after leveling
+
+- Strong coverage in controller/security contract layer for current endpoints.
+- Still pending for full production confidence:
+  - broader use-case unit tests (business rules),
+  - repository integration tests for custom JPQL/joins,
+  - flow-level E2E/smoke checks.
 
 ---
 
