@@ -3,9 +3,11 @@ package com.schoolmate.api.usecase.alumno;
 import com.schoolmate.api.dto.response.AlumnoPageResponse;
 import com.schoolmate.api.dto.response.AlumnoResponse;
 import com.schoolmate.api.entity.Alumno;
+import com.schoolmate.api.entity.ApoderadoAlumno;
 import com.schoolmate.api.entity.Matricula;
 import com.schoolmate.api.enums.EstadoMatricula;
 import com.schoolmate.api.repository.AlumnoRepository;
+import com.schoolmate.api.repository.ApoderadoAlumnoRepository;
 import com.schoolmate.api.repository.MatriculaRepository;
 import com.schoolmate.api.specification.AlumnoSpecifications;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,7 @@ public class ObtenerAlumnos {
 
     private final AlumnoRepository alumnoRepository;
     private final MatriculaRepository matriculaRepository;
+    private final ApoderadoAlumnoRepository apoderadoAlumnoRepository;
 
     @Transactional(readOnly = true)
     public AlumnoPageResponse execute(
@@ -77,10 +80,12 @@ public class ObtenerAlumnos {
             .map(Alumno::getId)
             .toList();
         Map<UUID, Matricula> matriculaMap = getMatriculaMap(alumnoIds, anoEscolarId);
+        Map<UUID, ApoderadoAlumno> apoderadoPrincipalMap = getApoderadoPrincipalMap(alumnoIds);
         List<AlumnoResponse> content = alumnosPage.getContent().stream()
-            .map(alumno -> AlumnoResponse.fromEntityWithMatricula(
+            .map(alumno -> buildAlumnoResponse(
                 alumno,
-                matriculaMap.get(alumno.getId())
+                matriculaMap.get(alumno.getId()),
+                apoderadoPrincipalMap.get(alumno.getId())
             ))
             .toList();
 
@@ -139,6 +144,51 @@ public class ObtenerAlumnos {
             (m1, m2) -> m1,
             HashMap::new
         ));
+    }
+
+    private Map<UUID, ApoderadoAlumno> getApoderadoPrincipalMap(List<UUID> alumnoIds) {
+        if (alumnoIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<ApoderadoAlumno> vinculos = apoderadoAlumnoRepository.findByAlumnoIdsWithApoderado(alumnoIds);
+        Map<UUID, ApoderadoAlumno> apoderadosPorAlumno = new HashMap<>();
+
+        for (ApoderadoAlumno vinculo : vinculos) {
+            UUID alumnoId = vinculo.getId().getAlumnoId();
+            ApoderadoAlumno current = apoderadosPorAlumno.get(alumnoId);
+
+            if (current == null || (Boolean.TRUE.equals(vinculo.getEsPrincipal())
+                && !Boolean.TRUE.equals(current.getEsPrincipal()))) {
+                apoderadosPorAlumno.put(alumnoId, vinculo);
+            }
+        }
+
+        return apoderadosPorAlumno;
+    }
+
+    private AlumnoResponse buildAlumnoResponse(Alumno alumno, Matricula matricula, ApoderadoAlumno vinculo) {
+        AlumnoResponse response = AlumnoResponse.fromEntityWithMatricula(alumno, matricula);
+        if (vinculo == null || vinculo.getApoderado() == null) {
+            return response;
+        }
+
+        String nombreVinculo = vinculo.getVinculo() != null ? vinculo.getVinculo().name() : "OTRO";
+
+        response.setApoderado(AlumnoResponse.ApoderadoInfo.builder()
+            .id(vinculo.getApoderado().getId())
+            .nombre(vinculo.getApoderado().getNombre())
+            .apellido(vinculo.getApoderado().getApellido())
+            .rut(vinculo.getApoderado().getRut())
+            .vinculo(nombreVinculo)
+            .build());
+        response.setApoderadoNombre(vinculo.getApoderado().getNombre());
+        response.setApoderadoApellido(vinculo.getApoderado().getApellido());
+        response.setApoderadoEmail(vinculo.getApoderado().getEmail());
+        response.setApoderadoTelefono(vinculo.getApoderado().getTelefono());
+        response.setApoderadoVinculo(nombreVinculo);
+
+        return response;
     }
 
     private AlumnoPageResponse buildEmptyPage(int page, int size, String sortBy, Sort.Direction direction) {

@@ -56,4 +56,12 @@ public interface ApoderadoAlumnoRepository extends JpaRepository<ApoderadoAlumno
             """
     )
     Page<ApoderadoAlumno> findPageByApoderadoIdWithAlumno(@Param("apoderadoId") UUID apoderadoId, Pageable pageable);
+
+    @Query("""
+        SELECT aa
+        FROM ApoderadoAlumno aa
+        JOIN FETCH aa.apoderado
+        WHERE aa.id.alumnoId IN :alumnoIds
+        """)
+    List<ApoderadoAlumno> findByAlumnoIdsWithApoderado(@Param("alumnoIds") List<UUID> alumnoIds);
 }

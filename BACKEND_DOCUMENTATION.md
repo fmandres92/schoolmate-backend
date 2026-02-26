@@ -505,6 +505,7 @@ All ADMIN (class-level)
 All ADMIN (class-level)
 
 - `GET /api/alumnos` (header required)
+  - incluye datos de matrícula del año consultado y enriquecimiento de apoderado principal (`apoderado`, `apoderadoNombre`, `apoderadoApellido`, `apoderadoEmail`, `apoderadoTelefono`, `apoderadoVinculo`) cuando existe vínculo.
 - `GET /api/alumnos/{id}` (header optional)
 - `GET /api/alumnos/buscar-por-rut` (header optional)
 - `POST /api/alumnos` (201)
@@ -712,6 +713,8 @@ All use cases currently expose `execute(...)` as the entry method convention.
   - `AsistenciaClaseRepository.findBloqueIdsConAsistenciaTomada(...)`
 - Batch retrieval of asistencia records by block/date:
   - `AsistenciaClaseRepository.findByBloqueIdsAndFecha(...)`
+- Batch retrieval of guardian links for student list enrichment:
+  - `ApoderadoAlumnoRepository.findByAlumnoIdsWithApoderado(...)`
 - Batch aggregation of attendance counts by asistencia/estado:
   - `RegistroAsistenciaRepository.countByEstadoGroupedByAsistenciaClaseId(...)`
 - Dedicated fetch for daily teacher class blocks in school year:
@@ -889,7 +892,7 @@ Additional focused suites:
 - Strong coverage in controller/security contract layer for current endpoints.
 - Use-case unit tests now strengthened in high-risk modules (`asistencia`, `jornada`, `matricula`) using decision-audit approach (branch by branch).
 - Still pending for full production confidence:
-  - use-case unit suite expansion to remaining modules (`alumno`, `profesor`, `apoderado`, `curso`, `malla`, `calendario`, `dashboard`),
+  - use-case unit suite expansion to remaining modules (`profesor`, `apoderado`, `curso`, `malla`, `calendario`, `dashboard`),
   - repository integration tests for custom JPQL/joins,
   - flow-level E2E/smoke checks.
 
@@ -898,7 +901,7 @@ Additional focused suites:
 Applied pattern:
 - Same quality bar used in `GuardarAsistenciaClaseTest` was propagated to the rest of `asistencia` and then to `jornada` and `matricula`.
 - Each use case was reviewed with explicit decision audit (`if`/`switch`/ternary/`orElseThrow`) and tests were added for error paths, boundary branches and valid execution paths.
-- Priority order used: `asistencia` -> `jornada/horario` -> `matricula`.
+- Priority order used: `asistencia` -> `jornada/horario` -> `matricula` -> `alumno`.
 
 Files now covered in this suite:
 - `src/test/java/com/schoolmate/api/usecase/asistencia/GuardarAsistenciaClaseTest.java`
@@ -921,11 +924,13 @@ Files now covered in this suite:
 - `src/test/java/com/schoolmate/api/usecase/matricula/ObtenerMatriculasPorAlumnoTest.java`
 - `src/test/java/com/schoolmate/api/usecase/matricula/ObtenerMatriculasPorCursoTest.java`
 - `src/test/java/com/schoolmate/api/usecase/matricula/ValidarAccesoMatriculasCursoProfesorTest.java`
+- `src/test/java/com/schoolmate/api/usecase/alumno/ObtenerAlumnosTest.java`
 
 What this suite validates in practice:
 - Attendance domain: temporal window, non-school days, ownership/role checks, merge/conciliate behavior, idempotent/race-condition branch.
 - Jornada domain: block continuity and schedule constraints, allowed block types, minute-budget enforcement against malla, professor collisions, assignment/removal invariants.
 - Matricula domain: state-transition guards, school-year/course consistency, active enrollment uniqueness, pagination/sort sanitization, role-based access validators.
+- Alumno domain: list enrichment with apoderado principal selection (`esPrincipal=true` precedence) and null-safe fallback when no vínculo exists.
 
 ---
 
