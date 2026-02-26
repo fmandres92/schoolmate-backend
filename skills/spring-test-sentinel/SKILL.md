@@ -246,6 +246,58 @@ when(clockProvider.now()).thenReturn(LocalDateTime.of(2025, 6, 15, 8, 10)); // 8
 // Ahora la ventana temporal es predecible y el test es determinista
 ```
 
+### Regla #10: Los Helpers de Test Usan los Mismos Tipos que el DTO Real
+
+Cuando crees métodos helper para construir responses, requests o entidades de test, los tipos de cada campo deben coincidir EXACTAMENTE con la clase real de producción. Un helper que "funciona" pero usa tipos distintos oculta bugs de serialización y rompe si el DTO cambia de tipo.
+
+```java
+// ❌ PROHIBIDO: el helper usa String pero el DTO real tiene LocalDate
+private static AlumnoResponse alumnoResponse(...) {
+    return AlumnoResponse.builder()
+        .fechaNacimiento("2015-01-01")  // Si el DTO tiene LocalDate, esto es incorrecto
+        .build();
+}
+
+// ✅ OBLIGATORIO: verificar el tipo real y usarlo
+private static AlumnoResponse alumnoResponse(...) {
+    return AlumnoResponse.builder()
+        .fechaNacimiento(LocalDate.of(2015, 1, 1))  // Mismo tipo que el DTO
+        .build();
+}
+```
+
+**Antes de escribir un helper, abre la clase real del DTO/entidad y verifica el tipo de cada campo.** Si el builder acepta un String donde debería ir un LocalDate, es señal de que algo está mal en el builder o en tu helper — investiga antes de continuar.
+
+### Regla #11: Infraestructura de Test Reutilizable va en `support/`
+
+Si durante la escritura de tests creas componentes reutilizables — resolvers custom, filtros de seguridad mock, builders de autenticación, helpers de MockMvc — NO los dejes como inner class dentro del test. Extráelos a una clase compartida en `src/test/java/.../support/`.
+
+Indicadores de que algo debe extraerse:
+- Lo vas a necesitar en más de un test de controller (ej. un resolver para `@AnoEscolarActivo`)
+- Es infraestructura de test, no lógica de un test específico
+- Tiene más de 10 líneas
+
+```java
+// ❌ PROHIBIDO: inner class repetida en cada test de controller
+@ExtendWith(MockitoExtension.class)
+class AlumnoControllerContractTest {
+    // ... tests ...
+
+    static class TestAnoEscolarResolver implements HandlerMethodArgumentResolver {
+        // 20 líneas que se copiarán en CursoControllerContractTest,
+        // MallaCurricularControllerContractTest, etc.
+    }
+}
+
+// ✅ OBLIGATORIO: clase compartida
+// En src/test/java/com/schoolmate/api/support/TestAnoEscolarResolver.java
+public class TestAnoEscolarResolver implements HandlerMethodArgumentResolver {
+    // Una sola vez, referenciada desde todos los tests de controller
+}
+```
+
+**Beneficio:** Cuando el mecanismo de `@AnoEscolarActivo` cambie, actualizas un solo archivo en vez de N tests de controller.
+
 ---
 
 ## FASE 3: TIPOS DE TEST Y CUÁNDO USAR CADA UNO
