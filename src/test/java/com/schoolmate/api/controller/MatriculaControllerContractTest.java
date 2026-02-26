@@ -1,7 +1,7 @@
 package com.schoolmate.api.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.schoolmate.api.common.time.ClockProvider;
+import com.schoolmate.api.common.time.OverridableClockProvider;
 import com.schoolmate.api.dto.request.CambiarEstadoMatriculaRequest;
 import com.schoolmate.api.dto.request.MatriculaRequest;
 import com.schoolmate.api.dto.response.MatriculaPageResponse;
@@ -84,7 +84,7 @@ class MatriculaControllerContractTest {
     private AnoEscolarRepository anoEscolarRepository;
 
     @MockitoBean
-    private ClockProvider clockProvider;
+    private OverridableClockProvider clockProvider;
 
     @MockitoBean
     private EventoAuditoriaRepository eventoAuditoriaRepository;

@@ -202,9 +202,7 @@ public class ObtenerCumplimientoAsistenciaProfesor {
         for (Map.Entry<UUID, Map<EstadoAsistencia, Long>> entry : conteoPorAsistencia.entrySet()) {
             Map<EstadoAsistencia, Long> estados = entry.getValue();
             long ausentes = estados.getOrDefault(EstadoAsistencia.AUSENTE, 0L);
-            long presentes = estados.getOrDefault(EstadoAsistencia.PRESENTE, 0L)
-                + estados.getOrDefault(EstadoAsistencia.TARDANZA, 0L)
-                + estados.getOrDefault(EstadoAsistencia.JUSTIFICADO, 0L);
+            long presentes = estados.getOrDefault(EstadoAsistencia.PRESENTE, 0L);
             long total = presentes + ausentes;
 
             resumen.put(entry.getKey(), ResumenAsistenciaBloque.builder()

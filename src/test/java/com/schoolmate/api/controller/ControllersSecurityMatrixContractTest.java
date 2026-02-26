@@ -1,6 +1,6 @@
 package com.schoolmate.api.controller;
 
-import com.schoolmate.api.common.time.ClockProvider;
+import com.schoolmate.api.common.time.OverridableClockProvider;
 import com.schoolmate.api.dto.response.*;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.enums.Rol;
@@ -50,6 +50,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -83,7 +84,7 @@ class ControllersSecurityMatrixContractTest {
     private EventoAuditoriaRepository eventoAuditoriaRepository;
 
     @MockitoBean
-    private ClockProvider clockProvider;
+    private OverridableClockProvider clockProvider;
 
     @MockitoBean
     private ObtenerAlumnos obtenerAlumnos;
@@ -862,16 +863,82 @@ class ControllersSecurityMatrixContractTest {
     }
 
     @Test
-    void devToolsController_isAuthenticatedMatrix_ok() throws Exception {
-        mockMvc.perform(get("/api/dev/clock"))
+    void sistemaController_isAuthenticatedMatrix_ok() throws Exception {
+        mockMvc.perform(get("/api/sistema/hora"))
             .andExpect(status().isUnauthorized());
 
-        mockMvc.perform(get("/api/dev/clock")
+        mockMvc.perform(get("/api/sistema/hora")
                 .with(authenticated(adminPrincipal())))
             .andExpect(status().isOk())
             .andExpect(contentTypeJson())
             .andExpect(jsonPath("$.currentDateTime").value("2026-02-26T10:30"))
+            .andExpect(jsonPath("$.isOverridden").value(false))
+            .andExpect(jsonPath("$.ambiente").value("dev"));
+
+        mockMvc.perform(get("/api/sistema/hora")
+                .with(authenticated(profesorPrincipal())))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/sistema/hora")
+                .with(authenticated(apoderadoPrincipal())))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void devClockController_adminOnlyMatrix_ok() throws Exception {
+        String body = "{\"dateTime\":\"2026-03-10T09:50:00\"}";
+
+        mockMvc.perform(post("/api/admin/dev-clock")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(delete("/api/admin/dev-clock"))
+            .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/admin/dev-clock")
+                .with(authenticated(profesorPrincipal()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/dev-clock")
+                .with(authenticated(apoderadoPrincipal()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/admin/dev-clock")
+                .with(authenticated(profesorPrincipal())))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(delete("/api/admin/dev-clock")
+                .with(authenticated(apoderadoPrincipal())))
+            .andExpect(status().isForbidden());
+
+        when(clockProvider.now()).thenReturn(LocalDateTime.of(2026, 3, 10, 9, 50));
+        when(clockProvider.isOverridden()).thenReturn(true);
+
+        mockMvc.perform(post("/api/admin/dev-clock")
+                .with(authenticated(adminPrincipal()))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.currentDateTime").value("2026-03-10T09:50"))
+            .andExpect(jsonPath("$.isOverridden").value(true));
+
+        verify(clockProvider).setClock(LocalDateTime.of(2026, 3, 10, 9, 50));
+
+        when(clockProvider.now()).thenReturn(LocalDateTime.of(2026, 3, 10, 10, 0));
+        when(clockProvider.isOverridden()).thenReturn(false);
+
+        mockMvc.perform(delete("/api/admin/dev-clock")
+                .with(authenticated(adminPrincipal())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.currentDateTime").value("2026-03-10T10:00"))
             .andExpect(jsonPath("$.isOverridden").value(false));
+
+        verify(clockProvider).resetClock();
     }
 
     private static ResultMatcher contentTypeJson() {

@@ -23,19 +23,19 @@ Goal: describe what the system **really does today**, not what was planned.
 - Main class: `com.schoolmate.api.SchoolmateApiApplication`
 - Base package: `com.schoolmate.api`
 - Style: Spring MVC + Use Cases + JPA repositories
-- Profiles: `dev` (default), `prod`
+- Profiles: `dev` (default), `qa`, `prod`
 
 Current inventory:
-- Controllers: 19
+- Controllers: 20
 - Use cases: 73
 - Entities: 19
 - Repositories: 18
-- Request DTOs (`dto/request`): 22
-- Response DTOs (`dto/response`): 53
+- Request DTOs (`dto/request`): 23
+- Response DTOs (`dto/response`): 55
 - Projection DTOs (`dto/projection`): 1
 - Additional DTOs in `dto/`: 0
 - Flyway migrations in repo: 22 (`V1` to `V23`, with gaps intentionally not present)
-- Controller contract test suites: 20 (`*ControllerContractTest`) + 1 integrated matrix suite (`ControllersSecurityMatrixContractTest`)
+- Controller contract test suites: 20 (`*ControllerContractTest`) + 1 integrated matrix suite (`ControllersSecurityMatrixContractTest`) + 2 focused clock integration/profile suites
 - Shared test support classes for controllers: 3 (`TestAuthenticationPrincipalResolver`, `TestJsonMapperFactory`, `TestSecurityRequestPostProcessors`)
 
 ---
@@ -73,6 +73,7 @@ Current inventory:
 - `spring.profiles.active=dev`
 - `spring.jpa.open-in-view=false` (OSIV disabled)
 - `server.port=8080`
+- `app.ambiente=dev` (default value; overridden per profile)
 
 ## 4.2 Dev config (`application-dev.yml`)
 - DataSource points to Supabase PostgreSQL
@@ -80,14 +81,25 @@ Current inventory:
 - Flyway enabled + validate-on-migrate + baseline-on-migrate
 - Security logging enabled (`org.springframework.security=DEBUG`)
 - JWT secret/expiration configured
+- `app.ambiente=dev`
 
-## 4.3 Prod config (`application-prod.yml`)
+## 4.3 QA config (`application-qa.yml`)
+- `app.ambiente=qa`
+- DataSource/JWT based on environment variables:
+  - `DB_PASSWORD` and `JWT_SECRET` without defaults
+  - `DB_URL` and `DB_USERNAME` with local defaults for bootstrap
+- JPA: `ddl-auto=validate`, `show-sql=false`, `format_sql=false`
+- Flyway enabled with `validate-on-migrate=true`
+- Security logging level `INFO`
+
+## 4.4 Prod config (`application-prod.yml`)
 - DataSource also points to Supabase PostgreSQL
 - JPA: `ddl-auto=validate`, `show-sql=false`
 - Flyway enabled
 - JWT secret/expiration configured
+- `app.ambiente=prod`
 
-## 4.4 Important operational note
+## 4.5 Important operational note
 `application-dev.yml` and `application-prod.yml` currently contain explicit credentials/secrets in plain text. This is an active risk and should be moved to environment variables or secret manager.
 
 ---
@@ -112,7 +124,7 @@ No generic service layer (`*Service`) is used for business orchestration.
 ## 6) Package map
 
 - `common/rut`: RUT normalization and cross-person validation
-- `common/time`: central time provider + overridable time context (dev tooling)
+- `common/time`: `ClockProvider` interface + profile-based implementations (`OverridableClockProvider` for `!prod`, `FixedClockProvider` for `prod`) backed by `TimeContext`
 - `config`: security/web/cache/interceptors/aspect
 - `controller`: all REST API endpoints
 - `dto/request`, `dto/response`: API contracts
@@ -130,12 +142,14 @@ No generic service layer (`*Service`) is used for business orchestration.
 ## 7) Cross-cutting behavior
 
 ## 7.1 Time model
-- `ClockProvider.now()` and `ClockProvider.today()` are the official time source.
-- Backed by `TimeContext` static clock.
-- Dev profile supports override/reset via `DevToolsController`.
+- `ClockProvider` is the official abstraction for application time (`now()`, `today()`, `isOverridden()`).
+- `OverridableClockProvider` is active in `dev`/`qa` (`@Profile("!prod")`) and supports override/reset through `TimeContext`.
+- `FixedClockProvider` is active in `prod` (`@Profile("prod")`) and always returns real system time (`isOverridden=false`).
+- Read endpoint for server time: `GET /api/sistema/hora` (authenticated users).
+- Override/reset endpoints: `POST/DELETE /api/admin/dev-clock` (`@Profile("!prod")`, ADMIN only).
 
 Implication:
-- Temporal rules (attendance windows, school-year state, etc.) are testable and controllable in dev.
+- Temporal rules (attendance windows, school-year state, etc.) are testable/controllable in `dev` and `qa`, and non-overridable in `prod`.
 
 ## 7.2 Security model
 - Stateless JWT authentication.
@@ -173,6 +187,7 @@ Implication:
   - `ApiException`
   - `MethodArgumentNotValidException`
   - `AccessDeniedException`
+  - `NoResourceFoundException` (unmapped routes -> 404 contract)
   - `DataIntegrityViolationException`
   - fallback `Exception`
 
@@ -208,6 +223,7 @@ By `CacheControlInterceptor` (GET + HTTP 200 only):
   - `/api/asistencia/**`
   - `/api/alumnos/**`
   - `/api/dashboard/**`
+  - `/api/sistema/**`
 
 - `max-age=2min`:
   - `/api/dias-no-lectivos/**`
@@ -235,6 +251,8 @@ Also present:
   - IP (`X-Forwarded-For` -> `X-Real-IP` -> `remoteAddr`)
   - optional `X-Ano-Escolar-Id`
   - timestamp (`ClockProvider.now()`)
+
+Note: `POST/DELETE /api/admin/dev-clock` is intentionally auditable (not excluded by `/api/dev/` prefix rule).
 
 Note: aspect catches specific runtime persistence/serialization/context errors and does not block business response.
 
@@ -537,11 +555,17 @@ All ADMIN (class-level)
 - `DELETE /bloques/{bloqueId}/profesor` (ADMIN)
 - `GET /asignacion-profesores` (ADMIN)
 
-## 10.17 Dev tools (`@Profile("dev")`)
+## 10.17 Sistema
 
-- `GET /api/dev/clock`
-- `POST /api/dev/clock`
-- `DELETE /api/dev/clock`
+- `GET /api/sistema/hora` (authenticated, all profiles)
+  - response: `currentDateTime`, `isOverridden`, `ambiente`
+  - cache-control: `no-store`
+
+## 10.18 Dev clock admin (`@Profile("!prod")`)
+
+- `POST /api/admin/dev-clock` (ADMIN)
+- `DELETE /api/admin/dev-clock` (ADMIN)
+- Legacy `/api/dev/clock` endpoints were removed.
 
 ---
 
@@ -826,7 +850,7 @@ Validated controllers:
 - `AuthControllerContractTest`
 - `CursoControllerContractTest`
 - `DashboardControllerContractTest`
-- `DevToolsControllerContractTest`
+- `DevClockControllerContractTest`
 - `DiaNoLectivoControllerContractTest`
 - `GradoControllerContractTest`
 - `JornadaControllerContractTest`
@@ -836,6 +860,11 @@ Validated controllers:
 - `ProfesorControllerContractTest`
 - `ProfesorHorarioControllerContractTest`
 - `ProfesorMeControllerContractTest`
+- `SistemaControllerContractTest`
+
+Additional focused suites:
+- `DevClockRealFlowContractTest` (real override/reset flow without mocking clock provider)
+- `ProdClockEndpointsContractTest` (profile behavior in `prod`: no dev-clock endpoints, sistema clock fixed)
 
 ### 16.3 What the controller suite verifies
 
@@ -843,6 +872,7 @@ Validated controllers:
   - `hasRole('ADMIN')`: `401`, `403`, happy path.
   - `isAuthenticated()`: `401`, happy path.
   - `permitAll()`: happy path.
+  - profile-scoped availability (`@Profile`) where applicable (`/api/admin/dev-clock` not loaded in `prod`).
 - Header contract when endpoint uses `@AnoEscolarActivo(required = true)`:
   - missing header -> `400`
   - invalid UUID -> `400`

@@ -26,3 +26,6 @@ logging:
   level:
     com.schoolmate: DEBUG
     org.springframework.security: DEBUG
+
+app:
+  ambiente: dev

@@ -50,7 +50,8 @@ public class CacheControlInterceptor implements HandlerInterceptor {
         if (isPathOrSubpath(path, "/api/matriculas")
                 || isPathOrSubpath(path, "/api/asistencia")
                 || isPathOrSubpath(path, "/api/alumnos")
-                || isPathOrSubpath(path, "/api/dashboard")) {
+                || isPathOrSubpath(path, "/api/dashboard")
+                || isPathOrSubpath(path, "/api/sistema")) {
             return NO_STORE;
         }
 

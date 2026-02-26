@@ -20,3 +20,6 @@ jwt:
 logging:
   level:
     com.schoolmate: INFO
+
+app:
+  ambiente: prod

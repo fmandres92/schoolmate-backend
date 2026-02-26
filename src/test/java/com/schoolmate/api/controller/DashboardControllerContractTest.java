@@ -1,6 +1,6 @@
 package com.schoolmate.api.controller;
 
-import com.schoolmate.api.common.time.ClockProvider;
+import com.schoolmate.api.common.time.OverridableClockProvider;
 import com.schoolmate.api.dto.response.DashboardAdminResponse;
 import com.schoolmate.api.entity.AnoEscolar;
 import com.schoolmate.api.enums.Rol;
@@ -61,7 +61,7 @@ class DashboardControllerContractTest {
     private AnoEscolarRepository anoEscolarRepository;
 
     @MockitoBean
-    private ClockProvider clockProvider;
+    private OverridableClockProvider clockProvider;
 
     @MockitoBean
     private EventoAuditoriaRepository eventoAuditoriaRepository;
