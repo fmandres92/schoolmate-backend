@@ -1,5 +1,10 @@
 app:
   ambiente: qa
+  admin:
+    email: ${ADMIN_EMAIL}
+    password: ${ADMIN_PASSWORD:}
+    nombre: ${ADMIN_NOMBRE:Administrador}
+    apellido: ${ADMIN_APELLIDO:Sistema}
 
 spring:
   datasource:

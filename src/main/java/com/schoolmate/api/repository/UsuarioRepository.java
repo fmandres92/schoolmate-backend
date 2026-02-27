@@ -1,6 +1,7 @@
 package com.schoolmate.api.repository;
 
 import com.schoolmate.api.entity.Usuario;
+import com.schoolmate.api.enums.Rol;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -17,4 +18,5 @@ public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
     Boolean existsByEmail(String email);
     Boolean existsByRut(String rut);
     boolean existsByProfesorId(UUID profesorId);
+    boolean existsByRolAndActivoTrue(Rol rol);
 }

@@ -23,3 +23,8 @@ logging:
 
 app:
   ambiente: prod
+  admin:
+    email: ${ADMIN_EMAIL:admin@schoolmate.cl}
+    password: ${ADMIN_PASSWORD:}
+    nombre: ${ADMIN_NOMBRE:Administrador}
+    apellido: ${ADMIN_APELLIDO:Sistema}

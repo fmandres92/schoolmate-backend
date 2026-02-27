@@ -1,6 +1,6 @@
 # SchoolMate Hub API - Backend Documentation (Rebuilt from Source)
 
-Last update: 2026-02-26  
+Last update: 2026-02-27  
 Source of truth: Java code in `src/main/java`, Spring config in `src/main/resources`, and Flyway migrations in `src/main/resources/db/migration`.
 
 ---
@@ -34,7 +34,7 @@ Current inventory:
 - Response DTOs (`dto/response`): 55
 - Projection DTOs (`dto/projection`): 1
 - Additional DTOs in `dto/`: 0
-- Flyway migrations in repo: 22 (`V1` to `V23`, with gaps intentionally not present)
+- Flyway migrations in repo: 3 (`V1` to `V3`, baseline consolidado + seeds estructurales)
 - Controller contract test suites: 20 (`*ControllerContractTest`) + 1 integrated matrix suite (`ControllersSecurityMatrixContractTest`) + 2 focused clock integration/profile suites
 - Shared test support classes for controllers: 3 (`TestAuthenticationPrincipalResolver`, `TestJsonMapperFactory`, `TestSecurityRequestPostProcessors`)
 
@@ -50,6 +50,7 @@ Current inventory:
 - Spring Data JPA
 - Hibernate ORM (via Boot)
 - PostgreSQL driver
+- Spring Boot Flyway starter (`spring-boot-starter-flyway`)
 - Flyway + Flyway PostgreSQL extension
 - JJWT 0.12.6
 - Lombok 1.18.36
@@ -82,6 +83,10 @@ Current inventory:
 - Security logging enabled (`org.springframework.security=DEBUG`)
 - JWT secret/expiration configured
 - `app.ambiente=dev`
+- Admin bootstrap (`app.admin.*`):
+  - email default `admin@schoolmate.cl`
+  - password default `admin123`
+  - nombre/apellido default `Administrador` / `Sistema`
 
 ## 4.3 QA config (`application-qa.yml`)
 - `app.ambiente=qa`
@@ -91,6 +96,10 @@ Current inventory:
 - JPA: `ddl-auto=validate`, `show-sql=false`, `format_sql=false`
 - Flyway enabled with `validate-on-migrate=true`
 - Security logging level `INFO`
+- Admin bootstrap (`app.admin.*`):
+  - email default `admin@schoolmate.cl`
+  - password **without default** (`ADMIN_PASSWORD` required to create admin)
+  - nombre/apellido default `Administrador` / `Sistema`
 
 ## 4.4 Prod config (`application-prod.yml`)
 - DataSource also points to Supabase PostgreSQL
@@ -98,6 +107,10 @@ Current inventory:
 - Flyway enabled
 - JWT secret/expiration configured
 - `app.ambiente=prod`
+- Admin bootstrap (`app.admin.*`):
+  - email default `admin@schoolmate.cl`
+  - password **without default** (`ADMIN_PASSWORD` required to create admin)
+  - nombre/apellido default `Administrador` / `Sistema`
 
 ## 4.5 Important operational note
 `application-dev.yml` and `application-prod.yml` currently contain explicit credentials/secrets in plain text. This is an active risk and should be moved to environment variables or secret manager.
@@ -256,6 +269,15 @@ Note: `POST/DELETE /api/admin/dev-clock` is intentionally auditable (not exclude
 
 Note: aspect catches specific runtime persistence/serialization/context errors and does not block business response.
 
+## 7.9 Startup admin bootstrap
+- `AdminBootstrapRunner` (`config/AdminBootstrapRunner.java`) runs on application startup.
+- Behavior:
+  - If an active admin already exists (`UsuarioRepository.existsByRolAndActivoTrue(Rol.ADMIN)`), it does nothing.
+  - If no active admin exists and `app.admin.password` is blank/null, it logs warning and does not create user.
+  - If no active admin exists and password is provided, it creates an ADMIN user with BCrypt password hash.
+- Scope:
+  - Creation-only bootstrap; it never updates existing admins.
+
 ---
 
 ## 8) Domain model (entities)
@@ -349,32 +371,25 @@ Note: aspect catches specific runtime persistence/serialization/context errors a
 ## 9.1 Migration files in repository
 
 Ordered by version:
-- V1 create usuario
-- V2 seed usuarios
-- V3 create catalogo base
-- V4 seed catalogo base
-- V5 create profesores/cursos
-- V6 seed profesores/cursos
-- V7 marker (alumno created directly in Supabase)
-- V8 marker (alumno seed directly in Supabase)
-- V9 create malla curricular
-- V10 seccion catalogo + uniqueness for curso letra
-- V11 matricula refactor
-- V12 asignacion (legacy table)
-- V13 rename horas_semanales -> horas_pedagogicas
-- V14 add `profesor.horas_pedagogicas_contrato`
-- V15 add `usuario.rut` + backfill script
-- V16 asistencia tables
-- V17 marker (apoderado/apoderado_alumno done directly in Supabase)
-- V18 marker (REQ-04 apoderado-alumno updates)
-- V19 add `usuario.refresh_token`
-- V21 marker (sesion_usuario + trazabilidad asistencia)
-- V22 marker (evento_auditoria)
-- V23 consolidation/baseline idempotent script for schema drift
+- `V1__baseline_schema.sql`:
+  - Consolidated schema baseline for empty PostgreSQL databases.
+  - Defines all core tables, constraints and indexes used by current entities.
+- `V2__seed_catalogos_sistema.sql`:
+  - Structural seed catalogs:
+    - grados (1° a 8° básico)
+    - secciones (`A` a `J`)
+- `V3__seed_ano_escolar_2026.sql`:
+  - Initial academic period seed:
+    - `ano=2026`
+    - `fecha_inicio_planificacion=2026-01-01`
+    - `fecha_inicio=2026-02-10`
+    - `fecha_fin=2026-12-31`
+  - Implemented as idempotent insert (`ON CONFLICT (ano) DO NOTHING`).
 
 ## 9.2 Important migration reality
-- Some migrations are marker-only by design (executed directly in Supabase).
-- V23 exists to close drift and make local empty DB bootstrap viable with idempotent DDL.
+- Historical `V1..V23` migration chain was removed from the repository and replaced by a clean baseline strategy (`V1..V3`).
+- New environments must start from empty schema and let Flyway apply `V1`, `V2`, `V3` in order.
+- Schema is still validated at startup by Hibernate (`ddl-auto=validate`), so baseline/mappings must remain aligned.
 
 ## 9.3 Live schema snapshot artifacts
 The repo includes:
@@ -728,6 +743,8 @@ All use cases currently expose `execute(...)` as the entry method convention.
 - Filtering with boolean apply flags in audit/session repositories to avoid PostgreSQL type ambiguity:
   - `EventoAuditoriaRepository.findByFiltros(...)`
   - `SesionUsuarioRepository.findByUsuarioIdAndFechas(...)`
+- Admin bootstrap existence check:
+  - `UsuarioRepository.existsByRolAndActivoTrue(Rol rol)`
 
 ## 12.3 Legacy residue to know
 - `RegistroAsistenciaRepository.deleteByAsistenciaClaseId(...)` still exists but main attendance flow uses in-place merge and not delete+insert.
