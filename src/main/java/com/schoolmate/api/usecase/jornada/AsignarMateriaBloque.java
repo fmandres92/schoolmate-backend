@@ -59,7 +59,7 @@ public class AsignarMateriaBloque {
             return buildResponse(bloque);
         }
 
-        Materia materia = materiaRepository.findById(materiaId)
+        Materia materia = materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
 
         UUID gradoId = curso.getGrado().getId();

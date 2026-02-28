@@ -18,7 +18,7 @@ public class ActualizarMateria {
 
     @Transactional
     public MateriaResponse execute(UUID id, MateriaRequest request) {
-        var existente = materiaRepository.findById(id)
+        var existente = materiaRepository.findByIdAndActivoTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
 
         existente.actualizarDatos(request.getNombre(), request.getIcono());

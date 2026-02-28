@@ -17,7 +17,7 @@ public class ObtenerMateria {
 
     @Transactional(readOnly = true)
     public MateriaResponse execute(UUID id) {
-        var materia = materiaRepository.findById(id)
+        var materia = materiaRepository.findByIdAndActivoTrue(id)
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
         return MateriaResponse.fromEntity(materia);
     }

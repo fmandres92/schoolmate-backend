@@ -474,9 +474,10 @@ These are generated from live catalog and include Supabase-managed schemas (`aut
 
 - `GET /api/materias` (ADMIN) -> `MateriaPageResponse`
 - `GET /api/materias/{id}` (ADMIN) -> `MateriaResponse`
+- `GET /api/materias/{id}/dependencias` (ADMIN) -> `MateriaDependenciasResponse`
 - `POST /api/materias` (ADMIN) -> `MateriaResponse` (201)
 - `PUT /api/materias/{id}` (ADMIN) -> `MateriaResponse`
-- `DELETE /api/materias/{id}` (ADMIN) -> 204
+- `DELETE /api/materias/{id}` (ADMIN) -> 204, con borrado protegido por dependencias
 
 ## 10.8 Malla curricular
 
@@ -672,6 +673,7 @@ All use cases currently expose `execute(...)` as the entry method convention.
 - `CrearMateria.execute(MateriaRequest request)`
 - `EliminarMateria.execute(UUID id)`
 - `ListarMaterias.execute(Integer page, Integer size, String sortBy, String sortDir)`
+- `ObtenerDependenciasMateria.execute(UUID materiaId)`
 - `ObtenerMateria.execute(UUID id)`
 
 ## 11.14 Matricula
@@ -728,6 +730,8 @@ All use cases currently expose `execute(...)` as the entry method convention.
   - `AsistenciaClaseRepository.findBloqueIdsConAsistenciaTomada(...)`
 - Batch retrieval of asistencia records by block/date:
   - `AsistenciaClaseRepository.findByBloqueIdsAndFecha(...)`
+- Aggregate count of historical class sessions by materia through bloque relation:
+  - `AsistenciaClaseRepository.countByBloqueHorarioMateriaId(...)`
 - Batch retrieval of guardian links for student list enrichment:
   - `ApoderadoAlumnoRepository.findByAlumnoIdsWithApoderado(...)`
 - Batch aggregation of attendance counts by asistencia/estado:
@@ -740,11 +744,24 @@ All use cases currently expose `execute(...)` as the entry method convention.
   - `BloqueHorarioRepository.countProfesoresActivosConBloques(...)`
 - Batch collision queries for schedule assignment:
   - `BloqueHorarioRepository.findColisionesProfesoresConCursoYMateria(...)`
+- Aggregate and grouped usage queries for protected materia deletion:
+  - `BloqueHorarioRepository.countByMateriaId(...)`
+  - `BloqueHorarioRepository.countBloquesPorCursoByMateriaId(...)`
 - Filtering with boolean apply flags in audit/session repositories to avoid PostgreSQL type ambiguity:
   - `EventoAuditoriaRepository.findByFiltros(...)`
   - `SesionUsuarioRepository.findByUsuarioIdAndFechas(...)`
 - Admin bootstrap existence check:
   - `UsuarioRepository.existsByRolAndActivoTrue(Rol rol)`
+- Active-only access and pessimistic locking for materia soft-delete and concurrent assignment flows:
+  - `MateriaRepository.findByActivoTrue(...)`
+  - `MateriaRepository.findByIdAndActivoTrue(...)`
+  - `MateriaRepository.findByIdAndActivoTrueForUpdate(...)`
+  - `MateriaRepository.findActivasByIdInForUpdate(...)`
+- Active malla lookup with eager grado/ano for dependency summary:
+  - `MallaCurricularRepository.findActivasByMateriaIdConGradoYAno(...)`
+- Internal profesor projections and join-table cleanup for protected materia deletion:
+  - `ProfesorRepository.findProfesoresByMateriaId(...)`
+  - `ProfesorRepository.deleteProfesorMateriaByMateriaId(...)`
 
 ## 12.3 Legacy residue to know
 - `RegistroAsistenciaRepository.deleteByAsistenciaClaseId(...)` still exists but main attendance flow uses in-place merge and not delete+insert.
@@ -783,7 +800,7 @@ Includes paginated wrappers and domain responses, among others:
 - ano escolar: `AnoEscolarResponse`, `AnoEscolarPageResponse`
 - curso: `CursoResponse`, `CursoPageResponse`
 - grado: `GradoResponse`, `GradoPageResponse`
-- materia: `MateriaResponse`, `MateriaPageResponse`, `MateriaDisponibleResponse`, `MateriasDisponiblesResponse`
+- materia: `MateriaResponse`, `MateriaPageResponse`, `MateriaDisponibleResponse`, `MateriasDisponiblesResponse`, `MateriaDependenciasResponse`
 - malla: `MallaCurricularResponse`, `MallaCurricularPageResponse`
 - profesor: `ProfesorResponse`, `ProfesorPageResponse`, `ProfesorHorarioResponse`, `ProfesorDisponibleResponse`, `ProfesorResumenAsignacionResponse`, `ProfesoresDisponiblesResponse`
 - profesor sesiones/auditoria: `SesionProfesorResponse`, `SesionProfesorPageResponse`, `EventoAuditoriaResponse`, `EventoAuditoriaPageResponse`
@@ -797,6 +814,8 @@ Includes paginated wrappers and domain responses, among others:
 
 ## 13.3 Projection DTOs (`dto/projection`)
 - `RegistroConFecha` (proyección interna usada por repositorio de asistencia; no expuesto como contrato REST)
+- `ProfesorNombreProjection` (proyección interna para resumir profesores asociados a una materia)
+- `BloquesPorCursoProjection` (proyección interna para agrupar bloques de horario por curso en dependencias de materia)
 
 ---
 
@@ -831,6 +850,13 @@ Includes paginated wrappers and domain responses, among others:
   - weekly minutes budget,
   - teacher qualification for subject,
   - collision detection.
+- Materia uses protected soft-delete with dependency levels:
+  - `SIN_DEPENDENCIAS`: eliminable directamente.
+  - `SOLO_PLANIFICACION`: eliminable con cascade controlado sobre `malla_curricular` activa y limpieza de `profesor_materia`.
+  - `USO_OPERATIVO`: no eliminable mientras existan `bloque_horario` referenciando la materia.
+  - `DATOS_HISTORICOS`: no eliminable cuando existen sesiones en `asistencia_clase` asociadas por bloque.
+- Materias inactivas (`activo=false`) no aparecen en listar/obtener/actualizar; el soft-delete conserva historial pero oculta el recurso del contrato normal.
+- Flujos que crean o reasignan referencias de materia coordinan lock pesimista sobre la fila activa de `materia` para evitar nuevas asociaciones durante una eliminación protegida.
 - Matricula state transition logic is centralized in `Matricula.cambiarEstado(...)`.
 
 ---
@@ -842,6 +868,7 @@ Observed transactional strategy:
 - Read use cases generally use `@Transactional(readOnly = true)`.
 - Audit AOP writes in independent transaction (`REQUIRES_NEW`).
 - OSIV is disabled; read flows rely on explicit fetching within transactional boundaries.
+- Protected materia deletion and the main flows that create new materia references acquire pessimistic write locks on active materia rows to close the race window between dependency check and commit.
 
 ---
 
@@ -908,9 +935,9 @@ Additional focused suites:
 
 - Strong coverage in controller/security contract layer for current endpoints.
 - Use-case unit tests now strengthened in high-risk modules (`asistencia`, `jornada`, `matricula`) using decision-audit approach (branch by branch).
+- Materia protected deletion now also has dedicated repository/integration coverage for dependency queries, soft-delete visibility rules and concurrent reference creation under lock.
 - Still pending for full production confidence:
   - use-case unit suite expansion to remaining modules (`profesor`, `apoderado`, `curso`, `malla`, `calendario`, `dashboard`),
-  - repository integration tests for custom JPQL/joins,
   - flow-level E2E/smoke checks.
 
 ### 16.5 Use-case unit suite added (risk-first)
@@ -942,12 +969,17 @@ Files now covered in this suite:
 - `src/test/java/com/schoolmate/api/usecase/matricula/ObtenerMatriculasPorCursoTest.java`
 - `src/test/java/com/schoolmate/api/usecase/matricula/ValidarAccesoMatriculasCursoProfesorTest.java`
 - `src/test/java/com/schoolmate/api/usecase/alumno/ObtenerAlumnosTest.java`
+- `src/test/java/com/schoolmate/api/usecase/materia/EliminarMateriaTest.java`
+- `src/test/java/com/schoolmate/api/usecase/materia/ObtenerDependenciasMateriaTest.java`
+- `src/test/java/com/schoolmate/api/usecase/materia/EliminarMateriaConcurrencyIntegrationTest.java`
+- `src/test/java/com/schoolmate/api/repository/MateriaDependenciasRepositoryIntegrationTest.java`
 
 What this suite validates in practice:
 - Attendance domain: temporal window, non-school days, ownership/role checks, merge/conciliate behavior, idempotent/race-condition branch.
 - Jornada domain: block continuity and schedule constraints, allowed block types, minute-budget enforcement against malla, professor collisions, assignment/removal invariants.
 - Matricula domain: state-transition guards, school-year/course consistency, active enrollment uniqueness, pagination/sort sanitization, role-based access validators.
 - Alumno domain: list enrichment with apoderado principal selection (`esPrincipal=true` precedence) and null-safe fallback when no vínculo exists.
+- Materia domain: dependency summary by level, protected soft-delete with controlled cleanup, hidden inactive rows in normal CRUD reads, and lock coordination against concurrent new references.
 
 ---
 

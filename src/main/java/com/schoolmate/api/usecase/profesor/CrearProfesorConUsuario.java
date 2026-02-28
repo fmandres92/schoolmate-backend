@@ -21,6 +21,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -100,7 +101,11 @@ public class CrearProfesorConUsuario {
     }
 
     private List<Materia> resolverMaterias(List<UUID> materiaIds) {
-        List<Materia> materias = materiaRepository.findAllById(materiaIds);
+        List<UUID> materiaIdsOrdenados = materiaIds.stream()
+            .distinct()
+            .sorted(Comparator.naturalOrder())
+            .toList();
+        List<Materia> materias = materiaRepository.findActivasByIdInForUpdate(materiaIdsOrdenados);
         Set<UUID> idsEncontrados = materias.stream().map(Materia::getId).collect(Collectors.toSet());
         Set<UUID> idsFaltantes = new HashSet<>(materiaIds);
         idsFaltantes.removeAll(idsEncontrados);

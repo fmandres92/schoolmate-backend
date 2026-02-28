@@ -57,7 +57,7 @@ class GuardarMallaCurricularBulkBehaviorTest {
         UUID materiaId = UUID.randomUUID();
         UUID gradoId = UUID.randomUUID();
 
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia(materiaId)));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia(materiaId)));
         when(anoEscolarRepository.findById(anoId)).thenReturn(Optional.of(ano(anoId)));
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 1));
         when(gradoRepository.findAllById(any())).thenReturn(List.of());
@@ -70,7 +70,7 @@ class GuardarMallaCurricularBulkBehaviorTest {
     void execute_siMateriaNoExiste_lanzaNotFound() {
         UUID anoId = UUID.randomUUID();
         UUID materiaId = UUID.randomUUID();
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.empty());
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute(
             anoId,
@@ -82,7 +82,7 @@ class GuardarMallaCurricularBulkBehaviorTest {
     void execute_siAnoNoExiste_lanzaNotFound() {
         UUID anoId = UUID.randomUUID();
         UUID materiaId = UUID.randomUUID();
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia(materiaId)));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia(materiaId)));
         when(anoEscolarRepository.findById(anoId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute(
@@ -104,7 +104,7 @@ class GuardarMallaCurricularBulkBehaviorTest {
             .fechaFin(LocalDate.of(2025, 12, 20))
             .build();
 
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia(materiaId)));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia(materiaId)));
         when(anoEscolarRepository.findById(anoId)).thenReturn(Optional.of(anoCerrado));
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 2, 1));
 
@@ -120,7 +120,7 @@ class GuardarMallaCurricularBulkBehaviorTest {
         UUID materiaId = UUID.randomUUID();
         UUID gradoId = UUID.randomUUID();
 
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia(materiaId)));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia(materiaId)));
         when(anoEscolarRepository.findById(anoId)).thenReturn(Optional.of(ano(anoId)));
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 1));
 
@@ -148,7 +148,7 @@ class GuardarMallaCurricularBulkBehaviorTest {
         MallaCurricular existente1 = malla(UUID.randomUUID(), materia, g1, ano, 4, true);
         MallaCurricular existente2 = malla(UUID.randomUUID(), materia, g2, ano, 5, true);
 
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia));
         when(anoEscolarRepository.findById(anoId)).thenReturn(Optional.of(ano));
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 1));
         when(gradoRepository.findAllById(any())).thenReturn(List.of(g1));
@@ -195,7 +195,7 @@ class GuardarMallaCurricularBulkBehaviorTest {
         MallaCurricular nuevaG2 = malla(UUID.randomUUID(), materia, g2, ano, 5, true);
         MallaCurricular nuevaG1 = malla(UUID.randomUUID(), materia, g1, ano, 6, true);
 
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia));
         when(anoEscolarRepository.findById(anoId)).thenReturn(Optional.of(ano));
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 1));
         when(gradoRepository.findAllById(any())).thenReturn(List.of(g1, g2));
@@ -231,7 +231,7 @@ class GuardarMallaCurricularBulkBehaviorTest {
         Grado grado = Grado.builder().id(gradoId).nombre("2° Básico").nivel(2).build();
         MallaCurricular existenteInactiva = malla(UUID.randomUUID(), materia, grado, ano, 3, false);
 
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia));
         when(anoEscolarRepository.findById(anoId)).thenReturn(Optional.of(ano));
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 1));
         when(gradoRepository.findAllById(any())).thenReturn(List.of(grado));

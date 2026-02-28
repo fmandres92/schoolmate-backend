@@ -46,7 +46,7 @@ public class CrearMallaCurricular {
             );
         }
 
-        Materia materia = materiaRepository.findById(request.getMateriaId())
+        Materia materia = materiaRepository.findByIdAndActivoTrueForUpdate(request.getMateriaId())
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
         Grado grado = gradoRepository.findById(request.getGradoId())
             .orElseThrow(() -> new ResourceNotFoundException("Grado no encontrado"));
