@@ -3,6 +3,7 @@ package com.schoolmate.api.controller;
 import com.schoolmate.api.common.time.OverridableClockProvider;
 import com.schoolmate.api.dto.response.*;
 import com.schoolmate.api.entity.AnoEscolar;
+import com.schoolmate.api.enums.NivelDependenciaMateria;
 import com.schoolmate.api.enums.Rol;
 import com.schoolmate.api.repository.AnoEscolarRepository;
 import com.schoolmate.api.repository.EventoAuditoriaRepository;
@@ -21,6 +22,7 @@ import com.schoolmate.api.usecase.grado.ListarGrados;
 import com.schoolmate.api.usecase.jornada.ObtenerJornadaCurso;
 import com.schoolmate.api.usecase.malla.ListarMallaCurricularPorAnoEscolar;
 import com.schoolmate.api.usecase.materia.ListarMaterias;
+import com.schoolmate.api.usecase.materia.ObtenerDependenciasMateria;
 import com.schoolmate.api.usecase.profesor.ObtenerClasesHoyProfesor;
 import com.schoolmate.api.usecase.profesor.ObtenerCumplimientoAsistenciaProfesor;
 import com.schoolmate.api.usecase.profesor.ObtenerHorarioProfesor;
@@ -127,6 +129,9 @@ class ControllersSecurityMatrixContractTest {
 
     @MockitoBean
     private ListarMaterias listarMaterias;
+
+    @MockitoBean
+    private ObtenerDependenciasMateria obtenerDependenciasMateria;
 
     @MockitoBean
     private ObtenerProfesores obtenerProfesores;
@@ -705,6 +710,49 @@ class ControllersSecurityMatrixContractTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
             .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void materiaDependenciasController_adminMatrix_ok() throws Exception {
+        UUID materiaId = UUID.randomUUID();
+
+        mockMvc.perform(get("/api/materias/{id}/dependencias", materiaId))
+            .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/materias/{id}/dependencias", materiaId)
+                .with(authenticated(profesorPrincipal())))
+            .andExpect(status().isForbidden());
+
+        when(obtenerDependenciasMateria.execute(materiaId)).thenReturn(MateriaDependenciasResponse.builder()
+            .materiaId(materiaId)
+            .materiaNombre("Matemática")
+            .eliminable(true)
+            .nivelDependencia(NivelDependenciaMateria.SIN_DEPENDENCIAS)
+            .mensaje("Esta materia no tiene dependencias y se puede eliminar de forma segura.")
+            .profesores(MateriaDependenciasResponse.ProfesoresInfo.builder()
+                .total(0)
+                .nombres(List.of())
+                .build())
+            .mallaCurricular(MateriaDependenciasResponse.MallaCurricularInfo.builder()
+                .total(0)
+                .detalle(List.of())
+                .build())
+            .bloquesHorario(MateriaDependenciasResponse.BloquesHorarioInfo.builder()
+                .total(0)
+                .detalle(List.of())
+                .build())
+            .asistenciaRegistrada(MateriaDependenciasResponse.AsistenciaRegistradaInfo.builder()
+                .total(0)
+                .build())
+            .build());
+
+        mockMvc.perform(get("/api/materias/{id}/dependencias", materiaId)
+                .with(authenticated(adminPrincipal())))
+            .andExpect(status().isOk())
+            .andExpect(contentTypeJson())
+            .andExpect(jsonPath("$.materiaId").value(materiaId.toString()))
+            .andExpect(jsonPath("$.nivelDependencia").value("SIN_DEPENDENCIAS"))
+            .andExpect(jsonPath("$.eliminable").value(true));
     }
 
     @Test

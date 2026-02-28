@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -21,6 +22,8 @@ public interface MallaCurricularRepository extends JpaRepository<MallaCurricular
     Page<MallaCurricular> findPageByAnoEscolarIdAndActivoTrue(UUID anoEscolarId, Pageable pageable);
 
     List<MallaCurricular> findByMateriaIdAndAnoEscolarId(UUID materiaId, UUID anoEscolarId);
+
+    List<MallaCurricular> findByMateriaIdAndActivoTrue(UUID materiaId);
 
     @EntityGraph(attributePaths = {"materia", "grado", "anoEscolar"})
     Page<MallaCurricular> findPageByMateriaIdAndAnoEscolarId(UUID materiaId, UUID anoEscolarId, Pageable pageable);
@@ -53,6 +56,16 @@ public interface MallaCurricularRepository extends JpaRepository<MallaCurricular
         UUID gradoId,
         UUID anoEscolarId
     );
+
+    @EntityGraph(attributePaths = {"grado", "anoEscolar"})
+    @Query("""
+        select mc
+        from MallaCurricular mc
+        where mc.materia.id = :materiaId
+          and mc.activo = true
+        order by mc.anoEscolar.ano asc, mc.grado.nombre asc
+        """)
+    List<MallaCurricular> findActivasByMateriaIdConGradoYAno(@Param("materiaId") UUID materiaId);
 
     boolean existsByMateriaIdAndGradoIdAndAnoEscolarId(UUID materiaId, UUID gradoId, UUID anoEscolarId);
 }

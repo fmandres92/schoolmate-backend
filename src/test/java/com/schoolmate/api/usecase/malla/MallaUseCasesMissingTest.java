@@ -111,7 +111,7 @@ class MallaUseCasesMissingTest {
             new MallaCurricularBulkRequest.GradoHoras(gradoId, 6)
         ));
 
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia(materiaId)));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia(materiaId)));
         when(anoEscolarRepository.findById(anoId)).thenReturn(Optional.of(anoEscolar(anoId)));
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 1));
 

@@ -13,6 +13,13 @@ import java.util.UUID;
 
 public interface AsistenciaClaseRepository extends JpaRepository<AsistenciaClase, UUID> {
 
+    @Query("""
+        select count(ac)
+        from AsistenciaClase ac
+        where ac.bloqueHorario.materia.id = :materiaId
+        """)
+    long countByBloqueHorarioMateriaId(@Param("materiaId") UUID materiaId);
+
     Optional<AsistenciaClase> findByBloqueHorarioIdAndFecha(UUID bloqueHorarioId, LocalDate fecha);
 
     boolean existsByBloqueHorarioIdAndFecha(UUID bloqueHorarioId, LocalDate fecha);

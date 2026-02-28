@@ -28,6 +28,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -57,7 +58,7 @@ class CrearProfesorConUsuarioBehaviorTest {
         when(profesorRepository.existsByRut(request.getRut())).thenReturn(false);
         when(profesorRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(profesorRepository.existsByTelefono(request.getTelefono())).thenReturn(false);
-        when(materiaRepository.findAllById(request.getMateriaIds()))
+        when(materiaRepository.findActivasByIdInForUpdate(anyList()))
             .thenReturn(List.of(Materia.builder().id(materiaA).nombre("Mat").build()));
 
         assertThatThrownBy(() -> useCase.execute(request))
@@ -72,7 +73,7 @@ class CrearProfesorConUsuarioBehaviorTest {
         when(profesorRepository.existsByRut(request.getRut())).thenReturn(false);
         when(profesorRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(profesorRepository.existsByTelefono(request.getTelefono())).thenReturn(false);
-        when(materiaRepository.findAllById(request.getMateriaIds()))
+        when(materiaRepository.findActivasByIdInForUpdate(anyList()))
             .thenReturn(List.of(Materia.builder().id(materiaA).nombre("Mat").build()));
         when(usuarioRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(usuarioRepository.existsByRut("12345678-5")).thenReturn(true);
@@ -91,7 +92,7 @@ class CrearProfesorConUsuarioBehaviorTest {
         when(profesorRepository.existsByRut(request.getRut())).thenReturn(false);
         when(profesorRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(profesorRepository.existsByTelefono(request.getTelefono())).thenReturn(false);
-        when(materiaRepository.findAllById(request.getMateriaIds())).thenReturn(List.of(materia));
+        when(materiaRepository.findActivasByIdInForUpdate(anyList())).thenReturn(List.of(materia));
         when(usuarioRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(usuarioRepository.existsByRut("12345678-5")).thenReturn(false);
         when(passwordEncoder.encode("12345678-5")).thenReturn("hash");

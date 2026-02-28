@@ -42,7 +42,7 @@ public class GuardarMallaCurricularBulk {
     @Transactional
     public List<MallaCurricularResponse> execute(UUID anoEscolarId, MallaCurricularBulkRequest request) {
 
-        Materia materia = materiaRepository.findById(request.getMateriaId())
+        Materia materia = materiaRepository.findByIdAndActivoTrueForUpdate(request.getMateriaId())
             .orElseThrow(() -> new ResourceNotFoundException("Materia no encontrada"));
         AnoEscolar anoEscolar = anoEscolarRepository.findById(anoEscolarId)
             .orElseThrow(() -> new ResourceNotFoundException("Año escolar no encontrado"));

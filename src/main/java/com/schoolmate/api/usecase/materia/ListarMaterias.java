@@ -27,7 +27,7 @@ public class ListarMaterias {
         String resolvedSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "nombre";
         Sort.Direction direction = "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
 
-        var materiasPage = materiaRepository.findAll(
+        var materiasPage = materiaRepository.findByActivoTrue(
             PageRequest.of(resolvedPage, resolvedSize, Sort.by(direction, resolvedSortBy))
         );
 

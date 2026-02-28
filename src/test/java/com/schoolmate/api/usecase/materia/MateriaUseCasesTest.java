@@ -38,8 +38,6 @@ class MateriaUseCasesTest {
     @InjectMocks
     private CrearMateria crearMateria;
     @InjectMocks
-    private EliminarMateria eliminarMateria;
-    @InjectMocks
     private ListarMaterias listarMaterias;
     @InjectMocks
     private ObtenerMateria obtenerMateria;
@@ -47,7 +45,7 @@ class MateriaUseCasesTest {
     @Test
     void actualizarMateria_siNoExiste_lanzaNotFound() {
         UUID id = UUID.randomUUID();
-        when(materiaRepository.findById(id)).thenReturn(Optional.empty());
+        when(materiaRepository.findByIdAndActivoTrue(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> actualizarMateria.execute(id, new MateriaRequest("Mat", "icon")))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -86,33 +84,14 @@ class MateriaUseCasesTest {
     }
 
     @Test
-    void eliminarMateria_siNoExiste_lanzaNotFound() {
-        UUID id = UUID.randomUUID();
-        when(materiaRepository.existsById(id)).thenReturn(false);
-
-        assertThatThrownBy(() -> eliminarMateria.execute(id))
-            .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    @Test
-    void eliminarMateria_siExiste_eliminaPorId() {
-        UUID id = UUID.randomUUID();
-        when(materiaRepository.existsById(id)).thenReturn(true);
-
-        eliminarMateria.execute(id);
-
-        verify(materiaRepository).deleteById(id);
-    }
-
-    @Test
     void listarMaterias_aplicaDefaultsYSanitiza() {
         Materia materia = materia(UUID.randomUUID(), "Matematica", "math");
-        when(materiaRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(materia)));
+        when(materiaRepository.findByActivoTrue(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(materia)));
 
         MateriaPageResponse response = listarMaterias.execute(-1, 500, "x", "x");
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(materiaRepository).findAll(captor.capture());
+        verify(materiaRepository).findByActivoTrue(captor.capture());
         assertThat(captor.getValue().getPageNumber()).isEqualTo(0);
         assertThat(captor.getValue().getPageSize()).isEqualTo(100);
         assertThat(response.getSortBy()).isEqualTo("nombre");
@@ -122,13 +101,13 @@ class MateriaUseCasesTest {
     @Test
     void listarMaterias_conSortPermitidoYAsc_respetaOrden() {
         Materia materia = materia(UUID.randomUUID(), "Lenguaje", "menu_book");
-        when(materiaRepository.findAll(any(Pageable.class)))
+        when(materiaRepository.findByActivoTrue(any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(materia), PageRequest.of(0, 5), 1));
 
         MateriaPageResponse response = listarMaterias.execute(0, 5, "updatedAt", "asc");
 
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-        verify(materiaRepository).findAll(captor.capture());
+        verify(materiaRepository).findByActivoTrue(captor.capture());
         assertThat(captor.getValue().getSort().getOrderFor("updatedAt")).isNotNull();
         assertThat(captor.getValue().getSort().getOrderFor("updatedAt").getDirection().name()).isEqualTo("ASC");
         assertThat(response.getSortBy()).isEqualTo("updatedAt");
@@ -138,7 +117,7 @@ class MateriaUseCasesTest {
     @Test
     void listarMaterias_conSortDirNull_usaDescPorDefecto() {
         Materia materia = materia(UUID.randomUUID(), "Ciencias", "science");
-        when(materiaRepository.findAll(any(Pageable.class)))
+        when(materiaRepository.findByActivoTrue(any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(materia), PageRequest.of(0, 20), 1));
 
         MateriaPageResponse response = listarMaterias.execute(0, 20, "nombre", null);
@@ -150,7 +129,7 @@ class MateriaUseCasesTest {
     @Test
     void obtenerMateria_siNoExiste_lanzaNotFound() {
         UUID id = UUID.randomUUID();
-        when(materiaRepository.findById(id)).thenReturn(Optional.empty());
+        when(materiaRepository.findByIdAndActivoTrue(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> obtenerMateria.execute(id))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -160,7 +139,7 @@ class MateriaUseCasesTest {
     void obtenerMateria_siExiste_retornaResponse() {
         UUID id = UUID.randomUUID();
         Materia materia = materia(id, "Filosofia", "psychology");
-        when(materiaRepository.findById(id)).thenReturn(Optional.of(materia));
+        when(materiaRepository.findByIdAndActivoTrue(id)).thenReturn(Optional.of(materia));
 
         MateriaResponse response = obtenerMateria.execute(id);
 
@@ -169,16 +148,34 @@ class MateriaUseCasesTest {
     }
 
     @Test
+    void obtenerMateria_siEstaInactiva_lanzaNotFound() {
+        UUID id = UUID.randomUUID();
+        when(materiaRepository.findByIdAndActivoTrue(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> obtenerMateria.execute(id))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
     void actualizarMateria_happyPath_actualizaDatos() {
         UUID id = UUID.randomUUID();
         Materia existente = materia(id, "Musica", "music_note");
-        when(materiaRepository.findById(id)).thenReturn(Optional.of(existente));
+        when(materiaRepository.findByIdAndActivoTrue(id)).thenReturn(Optional.of(existente));
         when(materiaRepository.save(any(Materia.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MateriaResponse response = actualizarMateria.execute(id, new MateriaRequest("Artes", "palette"));
 
         assertThat(response.getNombre()).isEqualTo("Artes");
         assertThat(response.getIcono()).isEqualTo("palette");
+    }
+
+    @Test
+    void actualizarMateria_siEstaInactiva_lanzaNotFound() {
+        UUID id = UUID.randomUUID();
+        when(materiaRepository.findByIdAndActivoTrue(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> actualizarMateria.execute(id, new MateriaRequest("Artes", "palette")))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     private static Materia materia(UUID id, String nombre, String icono) {

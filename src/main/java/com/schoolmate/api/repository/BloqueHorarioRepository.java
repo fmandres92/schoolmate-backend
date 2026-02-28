@@ -1,5 +1,6 @@
 package com.schoolmate.api.repository;
 
+import com.schoolmate.api.dto.projection.BloquesPorCursoProjection;
 import com.schoolmate.api.entity.BloqueHorario;
 import com.schoolmate.api.enums.TipoBloque;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +15,18 @@ import java.util.Set;
 import java.util.UUID;
 
 public interface BloqueHorarioRepository extends JpaRepository<BloqueHorario, UUID> {
+
+    long countByMateriaId(UUID materiaId);
+
+    @Query("""
+        select c.nombre as cursoNombre, count(bh) as cantidadBloques
+        from BloqueHorario bh
+        join bh.curso c
+        where bh.materia.id = :materiaId
+        group by c.nombre
+        order by c.nombre
+        """)
+    List<BloquesPorCursoProjection> countBloquesPorCursoByMateriaId(@Param("materiaId") UUID materiaId);
 
     List<BloqueHorario> findByCursoIdAndActivoTrueOrderByDiaSemanaAscNumeroBloqueAsc(UUID cursoId);
 

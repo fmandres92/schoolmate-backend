@@ -114,7 +114,7 @@ class ProfesorUseCasesMissingTest {
         when(profesorRepository.existsByRut(request.getRut())).thenReturn(false);
         when(profesorRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(profesorRepository.existsByTelefono(request.getTelefono())).thenReturn(false);
-        when(materiaRepository.findAllById(request.getMateriaIds())).thenReturn(List.of(Materia.builder().id(materiaId).build()));
+        when(materiaRepository.findActivasByIdInForUpdate(anyList())).thenReturn(List.of(Materia.builder().id(materiaId).build()));
         when(usuarioRepository.existsByEmail(request.getEmail())).thenReturn(true);
 
         assertThatThrownBy(() -> crearProfesorConUsuario.execute(request))

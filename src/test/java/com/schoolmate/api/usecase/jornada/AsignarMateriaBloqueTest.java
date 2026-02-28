@@ -157,7 +157,7 @@ class AsignarMateriaBloqueTest {
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 10));
         when(cursoRepository.findById(cursoId)).thenReturn(Optional.of(cursoActivo(cursoId)));
         when(bloqueHorarioRepository.findById(bloque.getId())).thenReturn(Optional.of(bloque));
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.empty());
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> useCase.execute(cursoId, bloque.getId(), materiaId))
             .isInstanceOf(ResourceNotFoundException.class)
@@ -173,7 +173,7 @@ class AsignarMateriaBloqueTest {
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 10));
         when(cursoRepository.findById(cursoId)).thenReturn(Optional.of(cursoActivo(cursoId)));
         when(bloqueHorarioRepository.findById(bloque.getId())).thenReturn(Optional.of(bloque));
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia(materiaId, "Matemática")));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia(materiaId, "Matemática")));
         when(mallaCurricularRepository.findByMateriaIdAndGradoIdAndAnoEscolarIdAndActivoTrue(
             any(),
             any(),
@@ -202,7 +202,7 @@ class AsignarMateriaBloqueTest {
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 10));
         when(cursoRepository.findById(cursoId)).thenReturn(Optional.of(cursoActivo(cursoId)));
         when(bloqueHorarioRepository.findById(bloque.getId())).thenReturn(Optional.of(bloque));
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia(materiaId, "Matemática")));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia(materiaId, "Matemática")));
         when(mallaCurricularRepository.findByMateriaIdAndGradoIdAndAnoEscolarIdAndActivoTrue(
             any(),
             any(),
@@ -238,7 +238,7 @@ class AsignarMateriaBloqueTest {
         when(clockProvider.today()).thenReturn(LocalDate.of(2026, 3, 10));
         when(cursoRepository.findById(cursoId)).thenReturn(Optional.of(cursoActivo(cursoId)));
         when(bloqueHorarioRepository.findById(bloque.getId())).thenReturn(Optional.of(bloque));
-        when(materiaRepository.findById(materiaId)).thenReturn(Optional.of(materia(materiaId, "Matemática")));
+        when(materiaRepository.findByIdAndActivoTrueForUpdate(materiaId)).thenReturn(Optional.of(materia(materiaId, "Matemática")));
         when(mallaCurricularRepository.findByMateriaIdAndGradoIdAndAnoEscolarIdAndActivoTrue(
             any(),
             any(),
